@@ -1,0 +1,360 @@
+/* Component classes ported from the OpenApps design system's React
+   primitives (components/core/*.jsx, components/forms/*.jsx) — plain CSS
+   here since this app is Svelte, but the geometry, states and transitions
+   match the source components exactly. Product code (routes/+page.svelte
+   and friends) composes these instead of hand-rolling button/panel CSS
+   per component. */
+
+/* ---- Button — components/core/Button.jsx ---- */
+.oa-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: var(--control-h-sm);
+  padding: 0 10px;
+  font: var(--weight-medium) var(--text-sm) / 1 var(--font-sans);
+  letter-spacing: var(--tracking-body);
+  border-radius: var(--radius-md);
+  border: var(--border-width) solid transparent;
+  cursor: pointer;
+  white-space: nowrap;
+  user-select: none;
+  transition: var(--transition-control);
+}
+.oa-btn:active:not(:disabled) {
+  transform: translateY(0.5px);
+}
+.oa-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.oa-btn--md {
+  height: var(--control-h-md);
+  padding: 0 14px;
+}
+
+.oa-btn--primary {
+  background: var(--brand);
+  color: var(--brand-contrast);
+}
+.oa-btn--primary:hover:not(:disabled) {
+  background: var(--green-400);
+}
+.oa-btn--primary:active:not(:disabled) {
+  background: var(--green-600);
+}
+
+.oa-btn--secondary {
+  background: var(--surface-card);
+  color: var(--text-strong);
+  border-color: var(--border-strong);
+  box-shadow: var(--shadow-xs);
+}
+.oa-btn--secondary:hover:not(:disabled) {
+  background: var(--surface-hover);
+}
+.oa-btn--secondary:active:not(:disabled) {
+  background: var(--surface-active);
+}
+
+.oa-btn--ghost {
+  background: transparent;
+  color: var(--text-body);
+}
+.oa-btn--ghost:hover:not(:disabled) {
+  background: var(--surface-hover);
+}
+.oa-btn--ghost:active:not(:disabled) {
+  background: var(--surface-active);
+}
+
+.oa-btn--danger {
+  background: var(--red-500);
+  color: var(--white);
+}
+.oa-btn--danger:hover:not(:disabled),
+.oa-btn--danger:active:not(:disabled) {
+  background: var(--red-600);
+}
+
+/* ---- IconButton — components/core/IconButton.jsx ---- */
+.oa-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: var(--control-h-md);
+  height: var(--control-h-md);
+  color: var(--text-muted);
+  background: transparent;
+  border: var(--border-width) solid transparent;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: var(--transition-control);
+}
+.oa-icon-btn:hover:not(:disabled) {
+  background: var(--surface-hover);
+}
+.oa-icon-btn:active:not(:disabled) {
+  background: var(--surface-active);
+}
+.oa-icon-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.oa-icon-btn--sm {
+  width: var(--control-h-sm);
+  height: var(--control-h-sm);
+}
+.oa-icon-btn--selected {
+  color: var(--text-brand);
+  background: var(--surface-selected);
+}
+
+/* Rail buttons carry the product accent instead of brand green when
+   selected — see the workspace kit's AppRail: the rail is the one place
+   an app/tool's own colour, not the family green, marks "active". */
+.oa-rail-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: 0;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--text-faint);
+  cursor: pointer;
+  transition: var(--transition-control);
+}
+.oa-rail-btn:hover:not(:disabled) {
+  background: var(--surface-hover);
+}
+.oa-rail-btn--selected {
+  background: var(--surface-card);
+  box-shadow: var(--shadow-xs);
+  color: var(--app-pdfedit);
+}
+.oa-rail-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* ---- Card — components/core/Card.jsx ---- */
+.oa-card {
+  display: block;
+  background: var(--surface-card);
+  border: var(--border-width) solid var(--border-hairline);
+  border-radius: var(--radius-lg);
+}
+
+/* ---- Badge — components/core/Badge.jsx ---- */
+.oa-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 22px;
+  padding: 0 8px;
+  font: var(--weight-medium) var(--text-xs) / 1 var(--font-sans);
+  border-radius: var(--radius-full);
+  white-space: nowrap;
+  background: var(--bg-sunken);
+  color: var(--text-muted);
+}
+.oa-badge--sm {
+  height: 18px;
+  padding: 0 6px;
+  font-size: var(--text-2xs);
+}
+.oa-badge--warning {
+  background: var(--warning-bg);
+  color: var(--warning-fg);
+}
+.oa-badge--danger {
+  background: var(--danger-bg);
+  color: var(--danger-fg);
+}
+.oa-badge--brand {
+  background: var(--brand-soft);
+  color: var(--text-brand);
+}
+
+/* ---- Tag — a smaller, square-cornered relative of Badge, for inline
+   metadata like "experimental" or a page number. ---- */
+.oa-tag {
+  display: inline-flex;
+  align-items: center;
+  height: 18px;
+  padding: 0 6px;
+  font: var(--weight-medium) var(--text-2xs) / 1 var(--font-sans);
+  letter-spacing: var(--tracking-caps);
+  text-transform: uppercase;
+  border-radius: var(--radius-xs);
+  border: var(--border-width) solid var(--border-strong);
+  color: var(--text-faint);
+}
+
+/* ---- Input — components/forms/Input.jsx ---- */
+.oa-input {
+  width: 100%;
+  height: var(--control-h-sm);
+  padding: 0 10px;
+  background: var(--surface-card);
+  border: var(--border-width) solid var(--border-strong);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-xs);
+  font: var(--weight-regular) var(--text-sm) / 1.2 var(--font-sans);
+  color: var(--text-strong);
+  transition: var(--transition-control);
+}
+.oa-input:disabled {
+  background: var(--bg-subtle);
+  color: var(--text-faint);
+}
+.oa-input:focus-visible {
+  border-color: var(--border-focus);
+}
+
+/* Checkboxes/radios stay black when checked, never green — green means
+   "action", not "on" (readme.md, States). */
+.oa-checkbox,
+.oa-radio {
+  accent-color: var(--text-strong);
+  width: 15px;
+  height: 15px;
+  cursor: pointer;
+}
+
+/* ---- Type role helpers ---- */
+.oa-eyebrow {
+  font: var(--type-eyebrow);
+  letter-spacing: var(--tracking-caps);
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.oa-caption {
+  font: var(--type-caption);
+  color: var(--text-faint);
+}
+.oa-mono {
+  font: var(--type-mono);
+  color: var(--text-muted);
+}
+
+/* ---- Docked panel — the shape Comments/Pages/Forms all share ---- */
+.oa-panel {
+  width: 288px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-subtle);
+  border-left: var(--border-width) solid var(--border-hairline);
+  overflow: hidden;
+}
+.oa-panel__header {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  height: var(--topbar-h);
+  padding: 0 var(--space-3);
+  border-bottom: var(--border-width) solid var(--border-hairline);
+}
+.oa-panel__title {
+  font: var(--type-h3);
+  font-size: var(--text-sm);
+  color: var(--text-strong);
+}
+.oa-panel__body {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.oa-empty {
+  font: var(--type-caption);
+  color: var(--text-faint);
+}
+.oa-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.oa-list-item {
+  background: var(--surface-card);
+  border: var(--border-width) solid var(--border-hairline);
+  border-radius: var(--radius-md);
+  padding: var(--space-2) var(--space-3);
+}
+
+/* ---- Tooltip — lib/tooltip.ts, an instant replacement for native
+   `title` hover tooltips (see that file's module doc for why). ---- */
+.oa-tooltip {
+  position: fixed;
+  z-index: 1000;
+  padding: 4px 8px;
+  font: var(--type-caption);
+  color: var(--text-inverse);
+  background: var(--surface-inverse);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-md);
+  pointer-events: none;
+  max-width: 240px;
+  opacity: 0;
+  transition: opacity var(--duration-fast) var(--ease-standard);
+}
+.oa-tooltip--visible {
+  opacity: 1;
+}
+
+/* ---- Dialog — components/feedback/Dialog.jsx ---- */
+.oa-dialog-scrim {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: var(--space-6);
+  background: var(--scrim);
+  backdrop-filter: blur(2px);
+  z-index: 100;
+}
+.oa-dialog {
+  width: 100%;
+  max-width: 460px;
+  background: var(--surface-card);
+  border: var(--border-width) solid var(--border-hairline);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-xl);
+  overflow: hidden;
+}
+.oa-dialog__header {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-4);
+  padding: var(--space-5) var(--space-5) var(--space-4);
+}
+.oa-dialog__title {
+  font: var(--weight-medium) var(--text-lg) / 1.25 var(--font-sans);
+  letter-spacing: var(--tracking-heading);
+  color: var(--text-strong);
+}
+.oa-dialog__body {
+  padding: 0 var(--space-5) var(--space-5);
+  font: var(--type-body);
+  color: var(--text-muted);
+  white-space: pre-wrap;
+}
+.oa-dialog__footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  padding: var(--space-4) var(--space-5);
+  background: var(--bg-subtle);
+  border-top: var(--border-width) solid var(--border-hairline);
+}

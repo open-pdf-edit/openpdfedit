@@ -1,0 +1,617 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OpenPdfEdit — Edit PDFs. Keep them yours.</title>
+<meta name="description" content="A fast, local PDF editor for macOS, Windows, and Chrome. Annotate, fill forms, organize pages, redact, and compare — your documents never leave your machine.">
+<meta name="theme-color" content="#111111">
+<style>
+/* ---------- Fonts ---------- */
+@font-face{font-family:"Geist";src:url("fonts/Geist-Light.otf") format("opentype");font-weight:300;font-display:swap}
+@font-face{font-family:"Geist";src:url("fonts/Geist-Regular.otf") format("opentype");font-weight:400;font-display:swap}
+@font-face{font-family:"Geist";src:url("fonts/Geist-Medium.otf") format("opentype");font-weight:500;font-display:swap}
+@font-face{font-family:"Geist Mono";src:url("fonts/GeistMono-Regular.otf") format("opentype");font-weight:400;font-display:swap}
+
+/* ---------- Tokens (OpenApps design system, OpenPdfEdit accent slot) ---------- */
+:root{
+  --black:#000000;--white:#ffffff;
+  --red:#ff4d4d;--green:#00c896;
+  --gray-200:#deded9;--gray-300:#c1c0b8;--gray-500:#7c7c7c;--gray-600:#656565;
+  --gray-800:#3d3d3d;--gray-900:#282828;--gray-950:#1a1a1a;
+  --white-70:rgba(255,255,255,.7);--white-60:rgba(255,255,255,.6);
+  --white-40:rgba(255,255,255,.4);--white-20:rgba(255,255,255,.2);
+  --white-10:rgba(255,255,255,.1);--white-04:rgba(255,255,255,.04);
+  --black-04:rgba(0,0,0,.04);
+  --color-font:#020202;
+  --color-background:#f2f2f2;
+  --color-background-alt:#111111;
+  --accent:var(--red);            /* --app-pdfedit */
+  --font-sans:"Geist",-apple-system,"Segoe UI",sans-serif;
+  --font-mono:"Geist Mono",ui-monospace,"SF Mono",monospace;
+  --logo-tracking:-0.04em;
+  --page-pad:clamp(20px,5vw,64px);
+  --max-w:1200px;
+}
+
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{
+  font-family:var(--font-sans);
+  background:var(--color-background-alt);
+  color:var(--white);
+  font-size:16px;line-height:1.55;
+  -webkit-font-smoothing:antialiased;
+  text-rendering:optimizeLegibility;
+}
+a{color:inherit;text-decoration:none}
+img{max-width:100%;display:block}
+.wrap{max-width:var(--max-w);margin:0 auto;padding-left:var(--page-pad);padding-right:var(--page-pad)}
+section{border-top:1px solid var(--white-10)}
+.mono{font-family:var(--font-mono);font-size:12px;letter-spacing:.02em}
+
+/* ---------- Wordmark ---------- */
+.wordmark{font-weight:500;letter-spacing:var(--logo-tracking);font-size:18px;white-space:nowrap}
+.wordmark .dot{color:var(--accent)}
+
+/* ---------- Header ---------- */
+header{
+  position:sticky;top:0;z-index:20;
+  background:rgba(17,17,17,.82);
+  -webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);
+  border-bottom:1px solid var(--white-10);
+}
+.nav{display:flex;align-items:center;justify-content:space-between;height:60px}
+.nav-links{display:flex;gap:28px;align-items:center}
+.nav-links a{font-size:14px;color:var(--white-70);transition:color .15s}
+.nav-links a:hover{color:var(--white)}
+.nav-links a.nav-cta{
+  font-size:14px;font-weight:500;color:var(--black);
+  background:var(--white);border-radius:8px;padding:8px 16px;
+  transition:background .15s;
+}
+.nav-links a.nav-cta:hover{color:var(--black);background:var(--gray-200)}
+@media(max-width:720px){.nav-links a:not(.nav-cta){display:none}}
+
+/* ---------- Hero ---------- */
+.hero{
+  position:relative;overflow:hidden;border-top:none;
+  background-image:
+    linear-gradient(var(--white-04) 1px,transparent 1px),
+    linear-gradient(90deg,var(--white-04) 1px,transparent 1px);
+  background-size:56px 56px;
+}
+.hero .wrap{padding-top:clamp(64px,10vw,128px);padding-bottom:clamp(48px,7vw,96px);text-align:center}
+.hero h1{
+  font-weight:500;letter-spacing:-0.03em;
+  font-size:clamp(38px,6.5vw,72px);line-height:1.05;
+  max-width:16ch;margin:0 auto;
+}
+.hero h1 .accent{color:var(--accent)}
+.hero .sub{
+  margin:24px auto 0;max-width:52ch;
+  font-size:clamp(16px,2vw,19px);color:var(--white-60);font-weight:300;
+}
+.hero-ctas{display:flex;gap:12px;justify-content:center;flex-wrap:wrap;margin-top:36px}
+.btn{
+  display:inline-flex;align-items:center;gap:8px;
+  font-size:15px;font-weight:500;border-radius:10px;padding:12px 22px;
+  transition:transform .15s,background .15s;
+}
+.btn:hover{transform:translateY(-1px)}
+.btn-primary{background:var(--white);color:var(--black)}
+.btn-primary:hover{background:var(--gray-200)}
+.btn-ghost{border:1px solid var(--white-20);color:var(--white)}
+.btn-ghost:hover{background:var(--white-04)}
+.hero-note{margin-top:16px;color:var(--white-40)}
+
+/* Hero visual: stylised editor frame */
+.hero-shot{
+  margin:clamp(40px,6vw,72px) auto 0;max-width:900px;
+  border:1px solid var(--white-10);border-radius:12px;overflow:hidden;
+  background:var(--gray-950);
+  box-shadow:0 24px 80px rgba(0,0,0,.5);
+  text-align:left;
+}
+.shot-bar{display:flex;align-items:center;gap:6px;height:36px;padding:0 14px;border-bottom:1px solid var(--white-10)}
+.shot-bar i{width:10px;height:10px;border-radius:50%;background:var(--white-10)}
+.shot-bar .t{margin-left:10px;color:var(--white-40);font-size:11px}
+.shot-body{display:grid;grid-template-columns:150px 1fr 170px;min-height:340px}
+@media(max-width:720px){.shot-body{grid-template-columns:1fr;min-height:auto}.shot-side{display:none}}
+.shot-side{border-right:1px solid var(--white-10);padding:14px;display:flex;flex-direction:column;gap:10px}
+.shot-side.right{border-right:none;border-left:1px solid var(--white-10)}
+.thumb{aspect-ratio:8.5/11;border-radius:4px;background:var(--gray-900);border:1px solid var(--white-10)}
+.thumb.active{border-color:var(--accent)}
+.shot-page{padding:26px;display:flex;justify-content:center;align-items:flex-start}
+.page-paper{
+  width:min(420px,100%);aspect-ratio:8.5/11;background:#fdfdfc;border-radius:3px;
+  padding:34px 30px;display:flex;flex-direction:column;gap:11px;position:relative;
+}
+.pl{height:8px;border-radius:2px;background:var(--gray-200)}
+.pl.w9{width:90%}.pl.w7{width:72%}.pl.w8{width:83%}.pl.w5{width:55%}.pl.w6{width:64%}
+.pl.head{height:14px;width:46%;background:var(--gray-300);margin-bottom:8px}
+.pl.hl{position:relative}
+.pl.hl::after{content:"";position:absolute;inset:-3px -4px;background:rgba(255,77,77,.28);border-radius:3px}
+.note-pin{
+  position:absolute;right:24px;top:44%;
+  background:var(--accent);color:var(--white);
+  font-size:10px;font-weight:500;font-family:var(--font-mono);
+  padding:4px 8px;border-radius:6px 6px 6px 0;
+  box-shadow:0 4px 14px rgba(255,77,77,.35);
+}
+.comment-card{border:1px solid var(--white-10);border-radius:6px;padding:10px;font-size:11px;color:var(--white-60)}
+.comment-card b{display:block;color:var(--white);font-weight:500;margin-bottom:3px}
+.comment-card .cl{height:6px;border-radius:2px;background:var(--white-10);margin-top:5px}
+
+/* ---------- Mono rail ---------- */
+.rail{overflow:hidden;padding:18px 0;position:relative}
+.rail::before,.rail::after{
+  content:"";position:absolute;top:0;bottom:0;width:80px;z-index:2;pointer-events:none;
+}
+.rail::before{left:0;background:linear-gradient(90deg,var(--color-background-alt),transparent)}
+.rail::after{right:0;background:linear-gradient(-90deg,var(--color-background-alt),transparent)}
+.rail-track{display:flex;gap:10px;width:max-content;animation:marquee 36s linear infinite}
+@keyframes marquee{to{transform:translateX(-50%)}}
+@media(prefers-reduced-motion:reduce){.rail-track{animation:none;flex-wrap:wrap;width:auto;justify-content:center}}
+.capsule{
+  font-family:var(--font-mono);font-size:12px;color:var(--white-60);
+  border:1px solid var(--white-10);border-radius:999px;padding:6px 14px;white-space:nowrap;
+}
+
+/* ---------- Statement ---------- */
+.statement .wrap{padding-top:clamp(64px,9vw,120px);padding-bottom:clamp(64px,9vw,120px)}
+.statement p{
+  font-size:clamp(24px,3.2vw,32px);line-height:1.32;font-weight:500;
+  letter-spacing:-0.015em;max-width:30ch;
+}
+.statement .w{opacity:0;transform:translateY(10px);display:inline-block;transition:opacity .5s,transform .5s}
+.statement.lit .w{opacity:1;transform:none}
+.statement .dim{color:var(--white-40)}
+
+/* ---------- Pillars ---------- */
+.pillar .wrap{
+  display:grid;grid-template-columns:1fr 1fr;gap:clamp(32px,5vw,72px);align-items:center;
+  padding-top:clamp(48px,7vw,88px);padding-bottom:clamp(48px,7vw,88px);
+}
+@media(max-width:860px){.pillar .wrap{grid-template-columns:1fr}}
+.pillar.flip .p-visual{order:-1}
+@media(max-width:860px){.pillar.flip .p-visual{order:0}}
+.p-label{font-family:var(--font-mono);font-size:12px;color:var(--accent);margin-bottom:16px;display:block}
+.p-copy p{font-size:clamp(17px,2vw,20px);line-height:1.5;max-width:44ch}
+.p-copy b{font-weight:500;color:var(--white)}
+.p-copy .cont{color:var(--white-60);font-weight:300}
+.p-links{display:flex;gap:24px;margin-top:22px}
+.p-links a{font-size:14px;font-weight:500;display:inline-flex;align-items:center;gap:6px;color:var(--white)}
+.p-links a svg{transition:transform .15s}
+.p-links a:hover svg{transform:translateX(3px)}
+.p-visual{
+  border:1px solid var(--white-10);border-radius:12px;background:var(--gray-950);
+  min-height:260px;padding:22px;display:flex;align-items:center;justify-content:center;
+}
+
+/* pillar mini-visuals */
+.mini{width:100%;max-width:360px;display:flex;flex-direction:column;gap:10px}
+.mini-row{display:flex;gap:10px;align-items:center}
+.chip{
+  font-family:var(--font-mono);font-size:11px;color:var(--white-60);
+  border:1px solid var(--white-10);border-radius:6px;padding:5px 10px;
+}
+.chip.on{color:var(--white);border-color:var(--accent);background:rgba(255,77,77,.12)}
+.field{border:1px solid var(--white-10);border-radius:8px;padding:10px 12px;font-size:12px;color:var(--white-40);display:flex;justify-content:space-between;align-items:center}
+.field .val{color:var(--white);font-family:var(--font-mono);font-size:11px}
+.field.done{border-color:rgba(0,200,150,.4)}
+.field.done .val{color:var(--green)}
+.pagegrid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;width:100%;max-width:340px}
+.pg{aspect-ratio:8.5/11;border-radius:4px;background:var(--gray-900);border:1px solid var(--white-10);position:relative;display:flex;align-items:center;justify-content:center;font-family:var(--font-mono);font-size:10px;color:var(--white-40)}
+.pg.sel{border-color:var(--accent);color:var(--white)}
+.pg.ghost{border-style:dashed;background:transparent}
+.pg .rot{position:absolute;top:5px;right:5px;color:var(--accent);font-size:9px}
+.redbar{height:12px;border-radius:2px;background:var(--black);width:60%}
+.diff{display:flex;flex-direction:column;gap:8px;width:100%;max-width:340px}
+.dl{display:flex;gap:8px;align-items:center;font-family:var(--font-mono);font-size:11px}
+.dl .m{width:14px;text-align:center}
+.dl .bar{height:9px;border-radius:2px;flex:1}
+.dl.add .m{color:var(--green)}.dl.add .bar{background:rgba(0,200,150,.25)}
+.dl.del .m{color:var(--accent)}.dl.del .bar{background:rgba(255,77,77,.25)}
+.dl.same .bar{background:var(--white-10)}
+
+/* ---------- Showcase ---------- */
+.showcase .wrap{padding-top:clamp(48px,7vw,88px);padding-bottom:clamp(48px,7vw,88px)}
+.tabs{display:flex;gap:10px;margin-bottom:28px;flex-wrap:wrap}
+.tab{
+  display:inline-flex;align-items:center;gap:8px;cursor:pointer;
+  font-size:14px;font-weight:500;color:var(--white-60);
+  border:1px solid var(--white-10);border-radius:999px;padding:9px 18px;
+  background:none;font-family:inherit;transition:color .15s,border-color .15s;
+}
+.tab .dot{width:7px;height:7px;border-radius:50%;background:var(--accent)}
+.tab.active{color:var(--white);border-color:var(--white-40)}
+.pane{display:none;border:1px solid var(--white-10);border-radius:12px;background:var(--gray-950);padding:clamp(24px,4vw,48px)}
+.pane.active{display:grid;grid-template-columns:1fr 1fr;gap:clamp(24px,4vw,56px);align-items:center}
+@media(max-width:860px){.pane.active{grid-template-columns:1fr}}
+.pane h3{font-size:clamp(20px,2.6vw,26px);font-weight:500;letter-spacing:-0.02em;margin-bottom:12px}
+.pane p{color:var(--white-60);font-weight:300;max-width:44ch}
+.pane .meta{margin-top:18px;display:flex;gap:10px;flex-wrap:wrap}
+.pane .btnrow{margin-top:26px;display:flex;gap:12px;flex-wrap:wrap}
+.pane-art{display:flex;justify-content:center}
+
+/* ---------- Value triad ---------- */
+.triad .wrap{
+  display:grid;grid-template-columns:repeat(3,1fr);gap:clamp(28px,4vw,56px);
+  padding-top:clamp(48px,7vw,88px);padding-bottom:clamp(48px,7vw,88px);
+}
+@media(max-width:720px){.triad .wrap{grid-template-columns:1fr}}
+.triad p{font-size:17px;line-height:1.55;max-width:34ch}
+.triad b{font-weight:500;color:var(--white)}
+.triad .cont{color:var(--white-60);font-weight:300}
+
+/* ---------- Light band ---------- */
+.features{background:var(--color-background);color:var(--color-font)}
+.features .wrap{padding-top:clamp(48px,7vw,88px);padding-bottom:clamp(48px,7vw,88px)}
+.features h2{font-size:clamp(24px,3.2vw,32px);font-weight:500;letter-spacing:-0.02em;max-width:24ch}
+.features .sub{color:var(--gray-600);margin-top:10px;font-weight:300}
+.fgrid{
+  margin-top:40px;display:grid;grid-template-columns:repeat(4,1fr);gap:14px;
+}
+@media(max-width:1000px){.fgrid{grid-template-columns:repeat(3,1fr)}}
+@media(max-width:720px){.fgrid{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:460px){.fgrid{grid-template-columns:1fr}}
+.fcard{
+  background:var(--white);border:1px solid var(--gray-200);border-radius:10px;
+  padding:18px;display:flex;flex-direction:column;gap:6px;
+}
+.fcard b{font-weight:500;font-size:15px;display:flex;align-items:center;gap:8px}
+.fcard b::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--accent);flex:none}
+.fcard span{font-size:13px;color:var(--gray-600);font-weight:300;line-height:1.5}
+.fcard.soon{opacity:.62}
+.fcard .tag{font-family:var(--font-mono);font-size:10px;color:var(--gray-500);border:1px solid var(--gray-200);border-radius:4px;padding:2px 6px;width:max-content;margin-top:4px}
+
+/* ---------- CTA ---------- */
+.cta{background:var(--black)}
+.cta .wrap{padding-top:clamp(64px,9vw,110px);padding-bottom:clamp(64px,9vw,110px);text-align:center}
+.cta h2{font-size:clamp(30px,4.5vw,48px);font-weight:500;letter-spacing:-0.025em;max-width:20ch;margin:0 auto}
+.cta .sub{color:var(--white-60);margin:18px auto 0;max-width:46ch;font-weight:300}
+.cta .hero-ctas{margin-top:34px}
+
+/* ---------- Footer ---------- */
+footer{border-top:1px solid var(--white-10);background:var(--color-background-alt)}
+.foot-main{display:flex;justify-content:space-between;gap:40px;padding-top:56px;padding-bottom:48px;flex-wrap:wrap}
+.foot-brand{max-width:280px}
+.foot-brand p{margin-top:12px;font-size:13px;color:var(--white-40);font-weight:300}
+.foot-cols{display:flex;gap:clamp(32px,5vw,80px);flex-wrap:wrap}
+.fcol{display:flex;flex-direction:column;gap:10px;min-width:120px}
+.fcol b{font-size:13px;font-weight:500;margin-bottom:4px}
+.fcol a{font-size:13px;color:var(--white-60);transition:color .15s}
+.fcol a:hover{color:var(--white)}
+.foot-base{
+  border-top:1px solid var(--white-10);
+  display:flex;justify-content:space-between;align-items:center;gap:16px;
+  padding-top:18px;padding-bottom:18px;flex-wrap:wrap;
+  color:var(--white-40);
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap nav">
+    <a class="wordmark" href="#">OpenPdfEdit<span class="dot">.</span></a>
+    <nav class="nav-links">
+      <a href="#features">Features</a>
+      <a href="#extension">Extension</a>
+      <a href="https://www.openapps.network/">OpenApps</a>
+      <a class="nav-cta" href="#download">Download</a>
+    </nav>
+  </div>
+</header>
+
+<!-- Hero -->
+<section class="hero">
+  <div class="wrap">
+    <h1>Edit PDFs<span class="accent">.</span><br>Keep them yours<span class="accent">.</span></h1>
+    <p class="sub">A fast PDF editor with a Rust core, for macOS, Windows, and Chrome. Every page renders and every edit saves on your machine — documents are never uploaded.</p>
+    <div class="hero-ctas">
+      <a class="btn btn-primary" href="#download">Download for desktop</a>
+      <a class="btn btn-ghost" href="#extension">Get the Chrome extension</a>
+    </div>
+    <p class="hero-note mono">Free and open source · MIT or Apache-2.0</p>
+
+    <div class="hero-shot" aria-hidden="true">
+      <div class="shot-bar"><i></i><i></i><i></i><span class="t mono">contract-draft.pdf — OpenPdfEdit</span></div>
+      <div class="shot-body">
+        <div class="shot-side">
+          <div class="thumb active"></div><div class="thumb"></div><div class="thumb"></div>
+        </div>
+        <div class="shot-page">
+          <div class="page-paper">
+            <div class="pl head"></div>
+            <div class="pl w9"></div><div class="pl w7"></div><div class="pl w8"></div>
+            <div class="pl w6 hl"></div>
+            <div class="pl w9"></div><div class="pl w5"></div><div class="pl w8"></div><div class="pl w7"></div>
+            <span class="note-pin">note</span>
+          </div>
+        </div>
+        <div class="shot-side right">
+          <div class="comment-card"><b>Comment</b>Clause 4.2 needs review<div class="cl"></div><div class="cl" style="width:70%"></div></div>
+          <div class="comment-card"><b>Highlight</b>Page 1<div class="cl" style="width:55%"></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Mono rail -->
+<section class="rail" aria-label="Compatibility">
+  <div class="rail-track" id="railTrack">
+    <span class="capsule">macOS</span>
+    <span class="capsule">Windows</span>
+    <span class="capsule">Chrome 103+</span>
+    <span class="capsule">PDF 1.7</span>
+    <span class="capsule">AcroForm</span>
+    <span class="capsule">Incremental save</span>
+    <span class="capsule">PDFium engine</span>
+    <span class="capsule">Rust core</span>
+    <span class="capsule">WebAssembly</span>
+    <span class="capsule">5 MB extension</span>
+    <span class="capsule">MIT / Apache-2.0</span>
+  </div>
+</section>
+
+<!-- Statement -->
+<section class="statement" id="statement">
+  <div class="wrap">
+    <p id="statementText">Your documents are contracts, records, and signatures. An editor should touch them on your machine and nowhere else — <span class="dim">no upload, no account required, no page limit.</span></p>
+  </div>
+</section>
+
+<!-- Pillars -->
+<section class="pillar" id="features">
+  <div class="wrap">
+    <div class="p-copy">
+      <span class="p-label">tools/annotate</span>
+      <p><b>Mark up any page and keep a record.</b> <span class="cont">Highlight, underline, strikeout, shapes, freehand ink, and text notes — each with a comment thread, each undoable, all saved incrementally so the original bytes stay intact.</span></p>
+      <div class="p-links">
+        <a href="#download">Try it <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg></a>
+      </div>
+    </div>
+    <div class="p-visual">
+      <div class="mini">
+        <div class="mini-row">
+          <span class="chip on">Highlight</span><span class="chip">Underline</span><span class="chip">Ink</span><span class="chip">Note</span>
+        </div>
+        <div class="comment-card"><b>Review thread</b>Three comments on page 2<div class="cl"></div><div class="cl" style="width:80%"></div><div class="cl" style="width:60%"></div></div>
+        <div class="mini-row"><span class="chip">Undo</span><span class="chip">Redo</span><span class="chip on">Saved</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="pillar flip">
+  <div class="wrap">
+    <div class="p-copy">
+      <span class="p-label">tools/forms</span>
+      <p><b>Fill forms without a print-sign-scan loop.</b> <span class="cont">AcroForm text fields, checkboxes, and choices fill in place and persist on save. Need a form that doesn't exist yet? Create the fields too.</span></p>
+      <div class="p-links">
+        <a href="#download">Try it <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg></a>
+      </div>
+    </div>
+    <div class="p-visual">
+      <div class="mini">
+        <div class="field done"><span>Full name</span><span class="val">A. Tan</span></div>
+        <div class="field done"><span>Date</span><span class="val">2026-08-16</span></div>
+        <div class="field"><span>Signature</span><span class="val">…</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="pillar">
+  <div class="wrap">
+    <div class="p-copy">
+      <span class="p-label">tools/pages</span>
+      <p><b>Reshape whole documents in seconds.</b> <span class="cont">Rotate, delete, and reorder pages; extract a range into a new file; merge several PDFs into one — including the copy you're editing right now.</span></p>
+      <div class="p-links">
+        <a href="#download">Try it <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg></a>
+      </div>
+    </div>
+    <div class="p-visual">
+      <div class="pagegrid">
+        <div class="pg">1</div><div class="pg sel">2<span class="rot">↻</span></div><div class="pg">3</div><div class="pg ghost">+</div>
+        <div class="pg">4</div><div class="pg sel">5</div><div class="pg">6</div><div class="pg ghost">+</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="pillar flip">
+  <div class="wrap">
+    <div class="p-copy">
+      <span class="p-label">tools/trust</span>
+      <p><b>Redact, sign, and prove what changed.</b> <span class="cont">Black out content before sharing, place signatures and see who signed before you, edit text runs and move images, and compare two versions line by line.</span></p>
+      <div class="p-links">
+        <a href="#download">Try it <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg></a>
+      </div>
+    </div>
+    <div class="p-visual">
+      <div class="diff">
+        <div class="dl same"><span class="m"> </span><span class="bar" style="max-width:85%"></span></div>
+        <div class="dl del"><span class="m">−</span><span class="bar" style="max-width:70%"></span></div>
+        <div class="dl add"><span class="m">+</span><span class="bar" style="max-width:75%"></span></div>
+        <div class="dl same"><span class="m"> </span><span class="bar" style="max-width:60%"></span></div>
+        <div class="mini-row" style="margin-top:6px"><span class="chip"><span style="color:var(--accent)">■</span> Redacted</span><span class="chip">Signed ✓</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Showcase: two surfaces -->
+<section class="showcase" id="extension">
+  <div class="wrap">
+    <div class="tabs" role="tablist">
+      <button class="tab active" role="tab" aria-selected="true" data-pane="desktop"><span class="dot"></span>Desktop</button>
+      <button class="tab" role="tab" aria-selected="false" data-pane="ext"><span class="dot"></span>Chrome extension</button>
+    </div>
+
+    <div class="pane active" id="pane-desktop">
+      <div>
+        <h3>The full editor, native on your desk</h3>
+        <p>A Tauri app with a dedicated render thread and tile cache — smooth zoom and scroll on large documents. Everything on this page, plus OCR for scanned files.</p>
+        <div class="meta">
+          <span class="capsule">macOS · .dmg</span>
+          <span class="capsule">Windows · installer</span>
+          <span class="capsule">OCR included</span>
+        </div>
+        <div class="btnrow">
+          <a class="btn btn-primary" href="#download">Download for desktop</a>
+        </div>
+      </div>
+      <div class="pane-art" aria-hidden="true">
+        <div class="mini">
+          <div class="mini-row"><span class="chip on">Annotate</span><span class="chip">Forms</span><span class="chip">Pages</span><span class="chip">Redact</span></div>
+          <div class="mini-row"><span class="chip">Sign</span><span class="chip">Edit text</span><span class="chip">Compare</span><span class="chip on">OCR</span></div>
+          <div class="field"><span>Render thread</span><span class="val">dedicated</span></div>
+          <div class="field"><span>Tile cache</span><span class="val">LRU</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="pane" id="pane-ext">
+      <div>
+        <h3>The same editor, inside Chrome</h3>
+        <p>The identical interface, compiled to WebAssembly with the PDF engine included — 5 MB installed. It runs entirely inside the browser sandbox: open a file, edit, save back to disk. No server round-trips, ever.</p>
+        <div class="meta">
+          <span class="capsule">Chrome 103+</span>
+          <span class="capsule">5 MB</span>
+          <span class="capsule">WebAssembly</span>
+        </div>
+        <div class="btnrow">
+          <a class="btn btn-primary" href="#download">Get the extension</a>
+        </div>
+      </div>
+      <div class="pane-art" aria-hidden="true">
+        <div class="mini">
+          <div class="field"><span>Processing</span><span class="val">100% local</span></div>
+          <div class="field"><span>Documents uploaded</span><span class="val">0</span></div>
+          <div class="field"><span>Account required</span><span class="val">no</span></div>
+          <div class="field done"><span>Feature parity with desktop</span><span class="val">yes*</span></div>
+          <div class="mini-row"><span class="chip" style="font-size:10px">* OCR stays desktop-only</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Value triad -->
+<section class="triad">
+  <div class="wrap">
+    <p><b>Local.</b> <span class="cont">Rendering, editing, and saving all happen on your machine. The only optional network call is signing in to an OpenApps account — and you never have to.</span></p>
+    <p><b>Careful.</b> <span class="cont">Saves are incremental: edits are appended, the original bytes are preserved, and existing digital signatures survive an annotation.</span></p>
+    <p><b>Open.</b> <span class="cont">The whole editor — engine, document model, and interface — is open source under MIT or Apache-2.0. Read it, build it, extend it.</span></p>
+  </div>
+</section>
+
+<!-- Light band: feature grid -->
+<section class="features">
+  <div class="wrap">
+    <h2>Everything it does today</h2>
+    <p class="sub">One editor, two surfaces. Every feature below works on desktop; all but one work in Chrome.</p>
+    <div class="fgrid">
+      <div class="fcard"><b>View</b><span>Open, zoom, and scroll large PDFs with tiled rendering.</span></div>
+      <div class="fcard"><b>Annotate</b><span>Highlight, underline, strikeout, shapes, ink, and text notes.</span></div>
+      <div class="fcard"><b>Comment</b><span>A thread on every annotation, in a side panel.</span></div>
+      <div class="fcard"><b>Undo / redo</b><span>Every edit steps back and forward cleanly.</span></div>
+      <div class="fcard"><b>Fill forms</b><span>AcroForm fields fill in place and persist on save.</span></div>
+      <div class="fcard"><b>Create forms</b><span>Add text fields, checkboxes, and choices to any page.</span></div>
+      <div class="fcard"><b>Organize pages</b><span>Rotate, delete, reorder, and crop pages.</span></div>
+      <div class="fcard"><b>Extract & merge</b><span>Pull ranges into new files; combine PDFs into one.</span></div>
+      <div class="fcard"><b>Redact</b><span>Remove content before a document leaves your hands.</span></div>
+      <div class="fcard"><b>Signatures</b><span>Place your signature; list who signed before you.</span></div>
+      <div class="fcard"><b>Edit content</b><span>Change text runs and move images on the page.</span></div>
+      <div class="fcard"><b>Compare</b><span>Diff two versions of a document, page by page.</span></div>
+      <div class="fcard"><b>Save & save as</b><span>Incremental saves that preserve the original bytes.</span></div>
+      <div class="fcard"><b>OCR<span class="tag" style="margin:0 0 0 auto">desktop only</span></b><span>Recognize text in scanned documents.</span></div>
+      <div class="fcard"><b>Credits</b><span>Optional OpenApps sign-in for future premium features.</span></div>
+      <div class="fcard soon"><b>Firefox</b><span>Not yet — Chrome first, Firefox is on the list.</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- CTA -->
+<section class="cta" id="download">
+  <div class="wrap">
+    <h2>Your documents never leave<span style="color:var(--accent)">.</span></h2>
+    <p class="sub">Pick a surface. Both are free, open source, and fully local.</p>
+    <div class="hero-ctas">
+      <a class="btn btn-primary" href="https://github.com/openapps/openapps/releases">Download for macOS or Windows</a>
+      <a class="btn btn-ghost" href="https://github.com/openapps/openapps">Get the Chrome extension</a>
+    </div>
+    <p class="hero-note mono">v0.1.0 · builds from source in one command</p>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap foot-main">
+    <div class="foot-brand">
+      <span class="wordmark">OpenPdfEdit<span class="dot">.</span></span>
+      <p>A local-first PDF editor from the OpenApps toolkit. One account, one design, every tool.</p>
+    </div>
+    <div class="foot-cols">
+      <div class="fcol"><b>Product</b>
+        <a href="#features">Features</a>
+        <a href="#extension">Chrome extension</a>
+        <a href="#download">Download</a>
+      </div>
+      <div class="fcol"><b>Source</b>
+        <a href="https://github.com/openapps/openapps">Repository</a>
+        <a href="https://github.com/openapps/openapps/releases">Releases</a>
+        <a href="https://github.com/openapps/openapps/issues">Issues</a>
+      </div>
+      <div class="fcol"><b>OpenApps</b>
+        <a href="https://www.openapps.network/">openapps.network</a>
+        <a href="https://accounts.openapps.network/">Account</a>
+      </div>
+    </div>
+  </div>
+  <div class="wrap foot-base mono">
+    <span>OpenPdfEdit v0.1.0 · MIT or Apache-2.0</span>
+    <span>Part of OpenApps</span>
+  </div>
+</footer>
+
+<script>
+// Marquee: duplicate the capsule set once so translateX(-50%) loops seamlessly.
+(function(){
+  var track=document.getElementById('railTrack');
+  track.innerHTML+=track.innerHTML;
+})();
+
+// Statement: wrap words in spans, fade them up 28ms apart when scrolled into view.
+(function(){
+  var el=document.getElementById('statementText');
+  var dim=el.querySelector('.dim');
+  var dimWords=dim?dim.textContent.trim().split(/\s+/):[];
+  var lead=el.childNodes[0].textContent.trim().split(/\s+/);
+  el.innerHTML=lead.map(function(w){return '<span class="w">'+w+'</span>'}).join(' ')
+    +(dimWords.length?' <span class="dim">'+dimWords.map(function(w){return '<span class="w">'+w+'</span>'}).join(' ')+'</span>':'');
+  var words=el.querySelectorAll('.w');
+  words.forEach(function(w,i){w.style.transitionDelay=(i*28)+'ms'});
+  new IntersectionObserver(function(entries,obs){
+    if(entries[0].isIntersecting){
+      document.getElementById('statement').classList.add('lit');
+      obs.disconnect();
+    }
+  },{threshold:0.4}).observe(el);
+})();
+
+// Showcase tabs
+document.querySelectorAll('.tab').forEach(function(tab){
+  tab.addEventListener('click',function(){
+    document.querySelectorAll('.tab').forEach(function(t){t.classList.remove('active');t.setAttribute('aria-selected','false')});
+    document.querySelectorAll('.pane').forEach(function(p){p.classList.remove('active')});
+    tab.classList.add('active');tab.setAttribute('aria-selected','true');
+    document.getElementById('pane-'+tab.dataset.pane).classList.add('active');
+  });
+});
+</script>
+</body>
+</html>

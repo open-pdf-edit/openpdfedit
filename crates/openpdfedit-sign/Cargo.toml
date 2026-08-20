@@ -1,0 +1,11 @@
+[package]
+name = "openpdfedit-sign"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Digital-signature *inspection* (structural: finds signatures, extracts what the PDF declares, sanity-checks the byte range) — not cryptographic verification. See this crate's module doc for why real PKCS#7/CMS verification is deferred."
+
+[dependencies]
+lopdf.workspace = true
+thiserror.workspace = true

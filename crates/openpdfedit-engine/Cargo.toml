@@ -1,0 +1,20 @@
+[package]
+name = "openpdfedit-engine"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Rendering and text-geometry engine, behind an Engine trait. PDFium is the day-1 backend; hayro (pure Rust) is the planned future backend — see PLAN.md §5/§6. No other crate may reference pdfium-render types directly."
+
+[dependencies]
+pdfium-render.workspace = true
+thiserror.workspace = true
+lru.workspace = true
+
+[dev-dependencies]
+# Only used to hand-build a minimal AcroForm PDF fixture in thread.rs's
+# test module, mirroring openpdfedit-session's forms.rs tests — see that
+# crate's Cargo.toml comment on why the real crate itself never needs
+# lopdf as a runtime dependency (form fill here goes through PDFium's own
+# object model, not lopdf's).
+lopdf.workspace = true

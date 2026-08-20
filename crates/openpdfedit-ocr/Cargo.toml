@@ -1,0 +1,14 @@
+[package]
+name = "openpdfedit-ocr"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "OCR pipeline: renders a page via openpdfedit-engine, runs Tesseract as a subprocess for word-level text + bounding boxes, and appends an invisible 'sandwich' text layer via openpdfedit-doc so a scanned page becomes searchable without changing how it looks."
+
+[dependencies]
+openpdfedit-doc.workspace = true
+openpdfedit-engine.workspace = true
+lopdf.workspace = true
+image.workspace = true
+thiserror.workspace = true

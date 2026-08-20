@@ -1,0 +1,22 @@
+{
+  "name": "openpdfedit-extension",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "build:wasm": "bash scripts/build-wasm.sh",
+    "copy-vendor": "bash scripts/copy-vendor.sh",
+    "build-spa": "bash scripts/build-spa.sh",
+    "build": "npm run build:wasm && npm run typecheck && npm run build-spa",
+    "dev": "npm run build:wasm && vite build --watch",
+    "e2e": "playwright test",
+    "package": "npm run build && bash scripts/package-zip.sh"
+  },
+  "devDependencies": {
+    "vite": "^6.0.3",
+    "typescript": "^5.7.2",
+    "@types/chrome": "^0.0.280",
+    "@playwright/test": "^1.48.0"
+  }
+}

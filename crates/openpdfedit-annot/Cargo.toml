@@ -1,0 +1,15 @@
+[package]
+name = "openpdfedit-annot"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Annotation model and PDF appearance-stream generation. Built on openpdfedit-doc's incremental-save primitives; the appearance-stream pattern (per-annotation Form XObject, self-contained /Resources) follows pdf.js's AnnotationEditorLayer — see docs/research/04-oss-borrow-map.md."
+
+[dependencies]
+openpdfedit-doc.workspace = true
+lopdf.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+openpdfedit-engine.workspace = true

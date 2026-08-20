@@ -1,0 +1,19 @@
+[package]
+name = "openpdfedit-batch"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Batch operations built by composing already-shipped library crates: search-and-redact PII patterns (openpdfedit-textedit + openpdfedit-redact), page-organization batch ops (openpdfedit-doc/-pages). No PDFium needed — nothing here renders."
+
+[dependencies]
+openpdfedit-doc.workspace = true
+openpdfedit-pages.workspace = true
+openpdfedit-redact.workspace = true
+openpdfedit-textedit.workspace = true
+lopdf.workspace = true
+regex.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+openpdfedit-engine.workspace = true

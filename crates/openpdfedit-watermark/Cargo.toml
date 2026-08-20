@@ -1,0 +1,12 @@
+[package]
+name = "openpdfedit-watermark"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Tiled text/logo page watermarks (top/bottom/full bands, 0° or 45°), baked into page content streams as graphics-state-safe incremental overlays. A PDF replication of OpenCapture's watermark tool."
+
+[dependencies]
+openpdfedit-doc.workspace = true
+lopdf.workspace = true
+thiserror.workspace = true

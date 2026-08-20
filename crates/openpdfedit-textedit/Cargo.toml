@@ -1,0 +1,17 @@
+[package]
+name = "openpdfedit-textedit"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "MVP in-place text-run and image-placement editing: 'fix a typo, change a date, move a logo' — not glyph-accurate re-layout. See this crate's module doc for exact scope and honest limitations."
+
+[dependencies]
+openpdfedit-doc.workspace = true
+openpdfedit-redact.workspace = true
+lopdf.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+image.workspace = true
+openpdfedit-engine.workspace = true

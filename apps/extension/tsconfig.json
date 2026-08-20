@@ -1,0 +1,32 @@
+{
+  // Added during the whole-branch review: `vite build`'s esbuild-based
+  // transpilation strips TypeScript types without ever checking them, so
+  // a real type error (like the coordinate-conversion bug that review
+  // found in the old editor.ts) can ship straight through `npm run build`
+  // with zero warning. This file plus package.json's `typecheck` script
+  // give `tsc --noEmit` something to run against, chained into `build` so
+  // it actually gets checked, not just available to run by hand.
+  "compilerOptions": {
+    "target": "es2022",
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "lib": ["es2022", "dom"],
+    "types": ["chrome"],
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": true
+  },
+  // Task 9 retired editor.ts/editor.html (their unique content moved into
+  // apps/desktop/src/lib/backend/wasm.ts — see task-9-report.md), leaving
+  // background.ts as the only source file left in this package. It used
+  // to be excluded here because this workspace had no `@types/chrome` to
+  // resolve the `chrome.*` MV3 API against (a pre-existing gap flagged in
+  // an earlier review) — trivial to close now that background.ts is the
+  // only thing left for `typecheck` to check: `@types/chrome` was added
+  // to package.json's devDependencies (same package/pin openscreenshot's
+  // apps/extension already uses) and wired in above via `"types":
+  // ["chrome"]`, since background.ts has no explicit `/// <reference
+  // types="chrome" />` or import of its own to pull the ambient types in
+  // otherwise.
+  "include": ["background.ts"]
+}

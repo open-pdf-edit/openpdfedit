@@ -1,0 +1,16 @@
+[package]
+name = "openpdfedit-license"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Offline Ed25519 license verification scaffold. Not wired to feature gating yet — see PLAN.md decision log #2/#3 (tiering deferred; all features ship ungated during development)."
+
+[dependencies]
+ed25519-dalek = "3"
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+rand.workspace = true

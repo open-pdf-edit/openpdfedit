@@ -1,0 +1,47 @@
+[package]
+name = "openpdfedit-session"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Engine-generic document session core: open-documents map, undo/redo history, open/save/save-as. Generic over openpdfedit-engine's `Engine` trait so the same code drives the desktop's thread-wrapped EngineHandle and a bare in-process engine for the wasm/extension build. No tauri dependency."
+
+[dependencies]
+openpdfedit-engine.workspace = true
+openpdfedit-doc.workspace = true
+openpdfedit-annot.workspace = true
+# `forms::normalize_button_states_in_bytes` re-parses a just-saved PDF via
+# raw `lopdf` (see that function's doc) — the one non-test spot in this
+# crate that needs `openpdfedit-forms` and `lopdf` directly rather than
+# only through `openpdfedit-doc`'s `Document`.
+openpdfedit-forms.workspace = true
+# `pages::merge_bytes`/`pages::extract_pages_bytes` are thin wrappers over
+# this crate's already-portable, path-free `merge`/`extract_pages` — see
+# `pages.rs`'s module doc for why only that byte-level half is wasm-clean.
+openpdfedit-pages.workspace = true
+# `textedit`/`redact`'s single-document mutations and `compare`'s text
+# mode; `compare` also needs `openpdfedit-compare` itself for both modes,
+# and `signatures` needs `openpdfedit-sign` for its byte-level scan.
+openpdfedit-textedit.workspace = true
+openpdfedit-redact.workspace = true
+# `watermark`'s tiled page stamps; the logo crosses the boundary as
+# base64-encoded raw RGBA, hence the `base64` dep alongside it.
+openpdfedit-watermark.workspace = true
+base64.workspace = true
+openpdfedit-sign.workspace = true
+openpdfedit-compare.workspace = true
+lopdf.workspace = true
+serde.workspace = true
+thiserror.workspace = true
+
+# `lopdf` (via openpdfedit-doc) pulls in `rand`, which pulls in
+# `getrandom`. getrandom's default backend has no wasm32-unknown-unknown
+# support and fails to compile without this; declaring it directly here
+# (even though this crate never calls it) is how Cargo's feature
+# unification turns the "wasm_js" backend on for the transitive copy too
+# — see crates/openpdfedit-wasm/Cargo.toml, which needs the exact same
+# thing for the same reason.
+getrandom = { version = "0.4", features = ["wasm_js"] }
+
+[dev-dependencies]
+serde_json.workspace = true

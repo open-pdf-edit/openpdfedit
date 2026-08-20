@@ -1,0 +1,51 @@
+[package]
+name = "openpdfedit-desktop"
+version.workspace = true
+description = "openpdfedit desktop app (Tauri shell)"
+authors = ["openpdfedit contributors"]
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+# The `_lib` suffix may seem redundant but it is necessary
+# to make the lib name unique and wouldn't conflict with the bin name.
+# This seems to be only an issue on Windows, see https://github.com/rust-lang/cargo/issues/8519
+name = "openpdfedit_desktop_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+# `devtools` is normally only auto-enabled for debug builds; turning it on
+# unconditionally here means a *release* build still gets a right-click
+# "Inspect Element" (Console/Network tabs) — the only real way to diagnose
+# frontend-side bugs (e.g. a `tile://` fetch failing) in this project's
+# pre-1.0 state, given this dev environment has no screen-capture/
+# accessibility access to observe the UI any other way. Revisit before a
+# real 1.0 release — devtools access isn't something to ship to end users.
+tauri = { version = "2", features = ["devtools"] }
+tauri-plugin-opener = "2"
+tauri-plugin-dialog = "2"
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+lopdf.workspace = true
+openpdfedit-engine.workspace = true
+openpdfedit-session.workspace = true
+openpdfedit-doc.workspace = true
+openpdfedit-annot.workspace = true
+openpdfedit-pages.workspace = true
+openpdfedit-ocr.workspace = true
+openpdfedit-sign.workspace = true
+openpdfedit-redact.workspace = true
+openpdfedit-license.workspace = true
+openpdfedit-textedit.workspace = true
+openpdfedit-forms.workspace = true
+openpdfedit-compare.workspace = true
+
+[dev-dependencies]
+

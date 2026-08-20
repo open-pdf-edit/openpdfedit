@@ -1,0 +1,14 @@
+[package]
+name = "openpdfedit-doc"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Document model: object-level editing and incremental saves over lopdf. Preserves existing digital signatures by never rewriting a signed document wholesale."
+
+[dependencies]
+lopdf.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+openpdfedit-engine.workspace = true

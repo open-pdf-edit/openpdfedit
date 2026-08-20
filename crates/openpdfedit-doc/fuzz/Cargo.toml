@@ -1,0 +1,26 @@
+[package]
+name = "openpdfedit-doc-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2021"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+
+[dependencies.openpdfedit-doc]
+path = ".."
+
+[[bin]]
+name = "parse_document"
+path = "fuzz_targets/parse_document.rs"
+test = false
+doc = false
+bench = false
+
+# Isolates this fuzz crate from the enclosing openpdfedit workspace (and
+# the platform workspace above it) — cargo-fuzz's own convention, so the
+# fuzz build's Cargo.lock and target dir don't entangle with either.
+[workspace]

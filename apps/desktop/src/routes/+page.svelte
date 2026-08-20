@@ -1,0 +1,1422 @@
+<script lang="ts">
+  import { backend, backendKind } from "$lib/backend";
+  import type {
+    AnnotationSummaryDto,
+    CompareReportDto,
+    FormFieldDto,
+    OpenedDocument,
+    SignatureInfoDto,
+    TextRunDto,
+    ImagePlacementDto,
+  } from "$lib/backend/types";
+  import Viewer from "$lib/Viewer.svelte";
+  import CommentsPanel from "$lib/CommentsPanel.svelte";
+  import PagesPanel from "$lib/PagesPanel.svelte";
+  import FormsPanel from "$lib/FormsPanel.svelte";
+  import SignaturesPanel from "$lib/SignaturesPanel.svelte";
+  import SignaturePad from "$lib/SignaturePad.svelte";
+  import { savedSignatures, addSignature } from "$lib/signatures.svelte";
+  import DialogHost from "$lib/DialogHost.svelte";
+  import AccountPanel from "$lib/AccountPanel.svelte";
+  import WatermarkPanel from "$lib/WatermarkPanel.svelte";
+  import type { WatermarkChoices } from "$lib/backend/types";
+  import { showAlert, showConfirm, showPrompt } from "$lib/dialog.svelte";
+  import ToastHost from "$lib/ToastHost.svelte";
+  import { showToast } from "$lib/toast.svelte";
+  import { TOOLS, type Tool } from "$lib/tools";
+  import type { AnnotationPayload } from "$lib/PdfPage.svelte";
+  import BrandMark from "$lib/BrandMark.svelte";
+  import Icon from "$lib/Icon.svelte";
+  import { tooltip } from "$lib/tooltip";
+
+  // Milestone M2 scope (PLAN.md): annotations (markup tools + comments
+  // panel), on top of M1's open/scroll/zoom viewer. Pixels come from the
+  // `tile://` custom URI scheme (openpdfedit-engine's dedicated render
+  // thread + LRU cache, served by apps/desktop/src-tauri/src/lib.rs) as
+  // a raw RGBA fetch response per visible page, not JSON IPC.
+  //
+  // Annotation writes go through `add_annotation_cmd`, which returns a
+  // *new* handle every time (the underlying file changed and the render
+  // side reopens it — see annotations.rs's module doc) — `doc` is
+  // reassigned wholesale on every successful edit rather than patched,
+  // so the viewer always renders through the current handle.
+
+  const MIN_ZOOM = 0.25;
+  const MAX_ZOOM = 4;
+  const ZOOM_STEP = 1.25;
+  const PRESET_COLORS: { label: string; value: [number, number, number] }[] = [
+    { label: "Yellow", value: [1, 0.92, 0.23] },
+    { label: "Red", value: [0.96, 0.26, 0.21] },
+    { label: "Black", value: [0, 0, 0] },
+  ];
+
+  let filePath = $state<string | null>(null);
+  let doc = $state<OpenedDocument | null>(null);
+  let error = $state<string | null>(null);
+  let zoom = $state(1);
+  let activeTool = $state<Tool>("select");
+  // Plain (non-reactive) mutable variable, deliberately: it only needs to
+  // remember what the *previous* $effect run saw, not to trigger runs of
+  // its own. Seeded to activeTool's own initial value below.
+  let previousTool: Tool = "select";
+
+  // The Shift-to-constrain-axis gesture on the move tools (see
+  // PdfPage.svelte's onPointerMove) has no other affordance pointing at
+  // it, so remind the user once each time they switch into one of these
+  // tools — not on every keystroke or drag, just on the tool becoming
+  // active, and non-blocking so it never interrupts the drag itself.
+  $effect(() => {
+    const tool = activeTool;
+    if (tool !== previousTool) {
+      if (tool === "moveText" || tool === "moveImage") {
+        showToast("Hold Shift while dragging to move only horizontally or vertically.", {
+          title: tool === "moveText" ? "Move text" : "Move image",
+        });
+      } else if (tool === "signature") {
+        // The Signatures panel is where you pick which saved signature
+        // to place (or draw a new one) — surface it automatically
+        // rather than making the user go find the toggle button too.
+        showSignatures = true;
+        showToast(
+          savedSignatures().length === 0
+            ? "Draw a signature, then drag on the page to place it."
+            : "Pick a saved signature below, then drag on the page to place it.",
+          { title: "Signature" },
+        );
+      }
+    }
+    previousTool = tool;
+  });
+  let color = $state<[number, number, number]>(PRESET_COLORS[0].value);
+  let showComments = $state(false);
+  let showPages = $state(false);
+  let showForms = $state(false);
+  let showSignatures = $state(false);
+  let showSignaturePad = $state(false);
+  let showAccount = $state(false);
+  let showWatermark = $state(false);
+  let armedSignatureId = $state<string | null>(null);
+  let annotations = $state<(AnnotationSummaryDto & { pageIndex: number })[]>([]);
+  let annotationsLoading = $state(false);
+  let pagesBusy = $state(false);
+  let formFields = $state<FormFieldDto[]>([]);
+  let formsBusy = $state(false);
+  let ocrBusy = $state(false);
+  let signatures = $state<SignatureInfoDto[]>([]);
+  let compareBusy = $state(false);
+  let undoRedoBusy = $state(false);
+  let saveBusy = $state(false);
+  // Single flag spanning every handler below that mutates the open
+  // document (annotate/redact/delete-annotation/text-run edit+move/image
+  // move/form-field create/form fill/OCR/page ops/undo/redo/signature
+  // placement/opening a different document) — layered on top of each
+  // handler's own local busy flag where one exists (formsBusy, pagesBusy,
+  // ocrBusy, undoRedoBusy), not a replacement for them. Checked at each
+  // handler's own entry (early-return, same shape undoRedoBusy already
+  // used just for undo/redo) and passed down to PdfPage.svelte to disable
+  // its gesture overlay for as long as it's set. This is a UI-level
+  // mitigation for the store-level write races documented in
+  // openpdfedit-session's lib.rs (see FsWorkingStore::write's
+  // "Concurrent writers to the same key" doc and undo_impl's "Residual"
+  // section): it makes the racing *pairs* those docs describe unreachable
+  // from normal use of this shared UI (desktop and extension alike, since
+  // it's the same component), it does not close the underlying residual
+  // at the store/session level — see those doc comments for what's still
+  // open below the UI.
+  let mutationBusy = $state(false);
+
+  // Edits go to a scratch copy, never the user's file (see OpenDoc in
+  // lib.rs) — so the app has to offer an explicit save, and must not let
+  // the window close with unsaved work still only in that scratch copy.
+  // Entry-gated on `mutationBusy` (Phase 4 closing re-review finding):
+  // every mutating handler below reassigns `doc` to a *new* handle and
+  // retires the old one server-side (see the header comment), so a save
+  // that resolves after a mutation already in flight would overwrite
+  // `doc` with the stale pre-mutation handle it just captured into
+  // `handle` above — a handle the backend has already dropped from
+  // `docs`, cascading into UnknownHandle on the next call. Worse, if the
+  // in-flight mutation is the one that actually produced unsaved
+  // changes, this save's `doc = await backend.saveDocument(handle)`
+  // would stomp `is_dirty` back to clean for an edit that never made it
+  // into the saved file. ⌘S rides this same function (see
+  // `handleKeydown` below), so gating here also covers the keyboard path.
+  async function handleSave(): Promise<boolean> {
+    if (!doc || mutationBusy) return false;
+    const handle = doc.handle;
+    error = null;
+    saveBusy = true;
+    try {
+      doc = await backend.saveDocument(handle);
+      return true;
+    } catch (e) {
+      error = formatError(e);
+      return false;
+    } finally {
+      saveBusy = false;
+    }
+  }
+
+  // Uses the finer-grained `pickSavePath` + `saveDocumentAtPath` pair
+  // rather than `backend.saveDocumentAs()`'s single-call convenience —
+  // same reason as `pickAndOpen` below: the picker has to run *before*
+  // `error`/`saveBusy` bookkeeping, so canceling the dialog leaves any
+  // already-visible error banner untouched, exactly matching this
+  // function's pre-refactor behavior (`error = null` only ever ran after
+  // a target path was chosen).
+  // Same `mutationBusy` gate as `handleSave` above, same reason: a
+  // stale pre-mutation handle stomping `doc`/`is_dirty` once the picker
+  // returns. ⌘⇧S rides this function too (see `handleKeydown` below).
+  async function handleSaveAs(): Promise<boolean> {
+    if (!doc || mutationBusy) return false;
+    const handle = doc.handle;
+    const target = await backend.pickSavePath(doc.file_path);
+    if (!target) return false;
+    error = null;
+    saveBusy = true;
+    try {
+      doc = await backend.saveDocumentAtPath(handle, target);
+      filePath = target;
+      return true;
+    } catch (e) {
+      error = formatError(e);
+      return false;
+    } finally {
+      saveBusy = false;
+    }
+  }
+
+  // Shared "you have unsaved changes" two-step confirm flow: Save (report
+  // whether the save itself actually succeeded) / Discard / Cancel.
+  // Originally inline in the onCloseRequested handler below; extracted
+  // (Phase 2 final-review I3) so pickAndOpen's open-over-current-document
+  // guard can run the exact same logic — same two dialogs, same three
+  // outcomes — rather than duplicating it or (the pre-fix bug) skipping
+  // the guard entirely and silently discarding the current document's
+  // edits. `action` only changes the wording; the control flow (and, in
+  // particular, "a chosen Save that actually fails must abort, not
+  // proceed") is identical for every caller. Returns `true` if the caller
+  // should go ahead with whatever it was about to do (close the window /
+  // replace the open document), `false` if the user backed out.
+  async function confirmProceedDespiteUnsavedChanges(action: "close" | "open a different document"): Promise<boolean> {
+    if (!doc?.is_dirty) return true;
+    const keep = await showConfirm(`You have unsaved changes. Save them before you ${action}?`, {
+      title: "Unsaved changes",
+      confirmLabel: "Save and continue",
+      destructive: false,
+    });
+    if (keep) {
+      // Saving failed — stay put (open window / current document) so
+      // nothing is lost, exactly like the pre-extraction close-requested
+      // behavior this mirrors.
+      return await handleSave();
+    }
+    return await showConfirm("Discard your changes? They will be lost.", {
+      title: "Discard changes?",
+      confirmLabel: "Discard",
+      destructive: true,
+    });
+  }
+
+  // The window manager asks us before closing; decide here, then tell
+  // the backend to finish the close.
+  $effect(() => {
+    const stop = backend.onCloseRequested(async () => {
+      if (!(await confirmProceedDespiteUnsavedChanges("close"))) return;
+      await backend.confirmClose();
+    });
+    return () => {
+      stop.then((un) => un());
+    };
+  });
+
+  // Tauri command errors arrive as the serialized `CommandError` enum,
+  // i.e. an object like `{ "Doc": "page index 3 out of range" }` — so
+  // `String(e)` on it yields the useless "[object Object]" the error
+  // banner was showing. Pull the actual message out, whatever shape it
+  // arrives in.
+  function formatError(e: unknown): string {
+    if (typeof e === "string") return e;
+    if (e instanceof Error) return e.message;
+    if (e && typeof e === "object") {
+      const values = Object.values(e as Record<string, unknown>);
+      const message = values.find((v) => typeof v === "string");
+      if (typeof message === "string") return message;
+      try {
+        return JSON.stringify(e);
+      } catch {
+        return "Unknown error";
+      }
+    }
+    return String(e);
+  }
+
+  // refreshFormFields/refreshSignatures' shared failure logger. Forms and
+  // signatures are both live on the wasm/extension backend now (see
+  // wasm.ts's `listFormFields`/`listSignatures`), so neither call site
+  // actually hits this anymore in practice — but the demotion stays as a
+  // defensive catch-all for a "not yet ported to the extension: ..."
+  // failure, in case a future refactor routes some still-unported call
+  // through one of these refresh functions. Nothing in `wasm.ts` throws
+  // that message today: merge/compare landed in Phase 5 Task 2 (both real
+  // now, same as forms/signatures), and the one remaining gap, OCR, is
+  // deliberately *not* "not yet ported" — `notAvailableInExtension` throws
+  // a distinct "not available in the extension: ..." message instead, on
+  // purpose (see that helper's doc in wasm.ts), so it does NOT get
+  // demoted here — an OCR failure should still log at console.error like
+  // any other real failure. Any future call that genuinely is just
+  // unported, and throws the "not yet ported" message, is expected and
+  // demoted to console.debug rather than console.error, so it doesn't add
+  // noise for an already-known gap. Anything else (a real desktop-backend
+  // failure, say) still logs at console.error so it isn't silently
+  // swallowed.
+  function logRefreshFailure(context: string, e: unknown) {
+    if (formatError(e).includes("not yet ported")) {
+      console.debug(context, e);
+    } else {
+      console.error(context, e);
+    }
+  }
+
+  // Uses the finer-grained `pickOpenPath` + `openDocument` pair rather
+  // than `backend.pickAndOpenDocument()`'s single-call convenience: this
+  // preserves the pre-refactor behavior of showing the attempted path in
+  // the path bar (via `filePath`) even when `openDocument` itself fails,
+  // which the combo method — returning `null` on either cancel or
+  // failure — can't distinguish from the caller's side.
+  //
+  // Close-previous-document lifecycle (Phase 2 Task 2, Phase 1 final-review
+  // finding 7): this is the *only* place `doc` ever gets reassigned to a
+  // document opened from scratch (every edit/undo/redo call site
+  // reassigns `doc` to a fresh handle for the *same* logical document —
+  // see this file's header comment), so it's the one place a "previous
+  // document" ever needs closing. Placed here (UI layer) rather than
+  // inside `tauri.ts`/`wasm.ts`'s own `openDocument` deliberately: `doc`
+  // is the only thing that reliably tracks the *current* handle for an
+  // already-open document across the desktop backend's own handle
+  // rotation (every mutating command — annotations, page edits, undo/redo
+  // — reopens the file under a brand-new `DocHandle`, per
+  // `openpdfedit-session::reopen_after_write`); a backend module has no
+  // subscription to those handle changes and would only ever see the
+  // handle from its own last `openDocument` call, which goes stale the
+  // moment the user makes a single edit. Reading `doc?.handle` right
+  // before this function reassigns `doc` is what keeps this correct.
+  //
+  // Unsaved-changes guard (Phase 2 final-review I3): opening a new
+  // document over a dirty one used to close the previous document
+  // unconditionally — silently destroying its unsaved edits, with no
+  // prompt at all (the window-close path already had one; this one
+  // didn't). Runs `confirmProceedDespiteUnsavedChanges` *before* the file
+  // picker even opens, not after — so "Cancel" here aborts the whole open
+  // attempt cleanly, without ever touching `doc`/`filePath`/the picker, the
+  // same way a failed/canceled `openDocument` call already leaves the
+  // still-current previous document untouched (see the catch block below).
+  async function pickAndOpen() {
+    if (mutationBusy) return;
+    error = null;
+    if (!(await confirmProceedDespiteUnsavedChanges("open a different document"))) return;
+
+    const selected = await backend.pickOpenPath();
+    if (!selected) return;
+
+    const previousHandle = doc?.handle ?? null;
+    filePath = selected;
+    zoom = 1;
+    activeTool = "select";
+    mutationBusy = true;
+    try {
+      doc = await backend.openDocument(selected);
+      // Only reached once the new document has actually opened
+      // successfully — a failed/canceled open must never close the
+      // still-current previous document (see the catch block below,
+      // which never runs this).
+      if (previousHandle !== null && previousHandle !== doc.handle) {
+        try {
+          await backend.closeDocument(previousHandle);
+        } catch (e) {
+          // Best-effort: the new document is already open and usable: a
+          // failure to release the old one's backend-side state is a
+          // (logged) resource leak, not something that should surface as
+          // a user-facing error or undo the successful open.
+          console.error(`closeDocument failed for handle ${previousHandle}:`, e);
+        }
+      }
+      await Promise.all([refreshAnnotations(), refreshFormFields(), refreshSignatures()]);
+    } catch (e) {
+      error = formatError(e);
+      doc = null;
+    } finally {
+      mutationBusy = false;
+    }
+  }
+
+  async function refreshSignatures() {
+    // Re-fetched after open and after a form fill (see handleFillForm) —
+    // NOT after every other mutating command. Corrected (fix-wave
+    // re-review's I3): this used to claim signatures are "preserved
+    // untouched by every mutating command here," on the theory that every
+    // edit here goes through openpdfedit-doc's incremental (append-only)
+    // save, which is true for annotations/pages/redact/textedit/form-field
+    // creation, but false for filling a form — `fill_form_fields_cmd`
+    // writes through PDFium's own form model (`Engine::fill_form_fields` +
+    // `Engine::save_to_bytes`, a full rewrite of the entire file), not the
+    // lopdf incremental path, so it invalidates any existing signature's
+    // `/ByteRange` the same way any other full-rewrite operation would —
+    // see `openpdfedit-session::forms::fill_form_fields_impl`'s doc.
+    // Every *other* handler here still doesn't call this: they really do
+    // go through the incremental-save path, so the list from open/last-
+    // fill time stays accurate for them.
+    if (!doc) return;
+    try {
+      signatures = await backend.listSignatures(doc.handle);
+    } catch (e) {
+      logRefreshFailure("failed to load signatures", e);
+    }
+  }
+
+  async function refreshFormFields() {
+    if (!doc) return;
+    try {
+      formFields = await backend.listFormFields(doc.handle);
+    } catch (e) {
+      logRefreshFailure("failed to load form fields", e);
+    }
+  }
+
+  async function refreshAnnotations() {
+    if (!doc) return;
+    annotationsLoading = true;
+    try {
+      // One IPC round trip per page — fine for the document sizes this
+      // milestone targets. A document with thousands of pages would want
+      // a single "list every annotation" command instead; tracked as a
+      // follow-up once that becomes a real workload, not a hypothetical.
+      const perPage = await Promise.all(
+        Array.from({ length: doc.page_count }, (_, pageIndex) =>
+          backend.listPageAnnotations(doc!.handle, pageIndex).then((list) => list.map((a) => ({ ...a, pageIndex }))),
+        ),
+      );
+      annotations = perPage.flat();
+    } catch (e) {
+      console.error("failed to load annotations", e);
+    } finally {
+      annotationsLoading = false;
+    }
+  }
+
+  async function handleCreateAnnotation(pageIndex: number, payload: AnnotationPayload) {
+    if (!doc || mutationBusy) return;
+    error = null;
+    mutationBusy = true;
+    try {
+      // Highlight/underline/strikeout: the drag gesture in PdfPage.svelte
+      // only ever produces a freehand rectangle (it has no idea where the
+      // real text is) — snap that to the actual characters PDFium finds
+      // under it before creating the annotation, so it marks the real
+      // words dragged over instead of an arbitrary box the user has to
+      // eyeball onto the text themselves.
+      let finalPayload = payload;
+      if (payload.annotation.kind === "highlight" || payload.annotation.kind === "underline" || payload.annotation.kind === "strikeOut") {
+        const [x0, y0, x1, y1] = payload.rect;
+        let quads: [number, number, number, number][];
+        try {
+          quads = await backend.textSelectionQuads({ handle: doc.handle, pageIndex, x0, y0, x1, y1 });
+        } catch (e) {
+          error = formatError(e);
+          return;
+        }
+        if (quads.length === 0) {
+          await showAlert("No text found in that area — try dragging directly over the words you want to mark.");
+          return;
+        }
+        const rectFromQuads: [number, number, number, number] = [
+          Math.min(...quads.map((q) => q[0])),
+          Math.min(...quads.map((q) => q[1])),
+          Math.max(...quads.map((q) => q[2])),
+          Math.max(...quads.map((q) => q[3])),
+        ];
+        finalPayload = { ...payload, rect: rectFromQuads, annotation: { ...payload.annotation, quads } };
+      }
+
+      doc = await backend.addAnnotation({
+        handle: doc.handle,
+        pageIndex,
+        rect: finalPayload.rect,
+        color: finalPayload.color,
+        opacity: finalPayload.opacity,
+        contents: finalPayload.contents ?? null,
+        annotation: finalPayload.annotation,
+      });
+      await Promise.all([refreshAnnotations(), refreshFormFields()]);
+    } catch (e) {
+      error = formatError(e);
+    } finally {
+      mutationBusy = false;
+    }
+  }
+
+  async function handleRedact(pageIndex: number, rect: [number, number, number, number]) {
+    if (!doc || mutationBusy) return;
+    if (!(await showConfirm("The underlying text and images in this area are permanently removed, not just covered over.", { title: "Redact this area?", confirmLabel: "Redact", destructive: true }))) {
+      // The drag gesture that produced `rect` is already over by the
+      // time onRedact fires (PdfPage.svelte only calls it from
+      // onPointerUp), so declining here just means "don't send the
+      // command" — there's no in-progress drag state to roll back.
+      return;
+    }
+    error = null;
+    mutationBusy = true;
+    try {
+      doc = await backend.redactPage({ handle: doc.handle, pageIndex, rect });
+      await Promise.all([refreshAnnotations(), refreshFormFields()]);
+    } catch (e) {
+      error = formatError(e);
+    } finally {
+      mutationBusy = false;
+    }
+  }
+
+  async function handleApplyWatermark(choices: WatermarkChoices) {
+    if (!doc || mutationBusy) return;
+    error = null;
+    mutationBusy = true;
+    try {
+      doc = await backend.applyWatermark({ handle: doc.handle, ...choices });
+      showWatermark = false;
+      // Same post-mutation refresh pair as redact: the handle rotated, so
+      // anything cached against the old one re-fetches.
+      await Promise.all([refreshAnnotations(), refreshFormFields()]);
+    } catch (e) {
+      error = formatError(e);
+    } finally {
+      mutationBusy = false;
+    }
+  }
+
+  function pointInRect(x: number, y: number, rect: [number, number, number, number], pad = 2): boolean {
+    return x >= rect[0] - pad && x <= rect[2] + pad && y >= rect[1] - pad && y <= rect[3] + pad;
+  }
+
+  // "editText" is click-based (see PdfPage.svelte's onPointerDown):
+  // resolve *what* was clicked by re-listing this page's runs fresh (no
+  // stale client-side cache to get out of sync with the document) and
+  // finding the one whose bounding box contains the click point. The
+  // move tools use a drag gesture instead — see handleMoveObject.
+  async function handleToolClick(pageIndex: number, x: number, y: number) {
+    if (!doc || mutationBusy) return;
+    error = null;
+
+    if (activeTool === "select" || activeTool === "erase") {
+      // Click-to-delete: the "select" tool has no drag gesture of its
+      // own (see PdfPage.svelte's onPointerDown), so a plain click here
+      // hit-tests the already-loaded `annotations` list (kept fresh by
+      // refreshAnnotations, called after every edit) rather than a fresh
+      // round trip — this is the same list the comments panel already
+      // renders from. Topmost-last-created annotation wins on overlap,
+      // same as z-order for everything else in this app.
+      const hit = [...annotations].reverse().find((a) => a.pageIndex === pageIndex && pointInRect(x, y, a.rect));
+      if (!hit) return;
+      // The dedicated Erase tool deletes on click without prompting —
+      // confirming every stroke would make erasing several marks
+      // painful, and ⌘Z undoes any mistake. The Select tool still
+      // confirms, since a click there is likelier to be accidental.
+      if (activeTool === "select") {
+        const ok = await showConfirm(
+          `Delete this ${hit.subtype.toLowerCase()} annotation? You can undo this with ⌘Z.`,
+          { title: "Delete annotation?", confirmLabel: "Delete", destructive: true },
+        );
+        if (!ok) return;
+      }
+      mutationBusy = true;
+      try {
+        doc = await backend.deleteAnnotation({ handle: doc.handle, pageIndex, annotationId: hit.id });
+        await Promise.all([refreshAnnotations(), refreshFormFields()]);
+      } catch (e) {
+        error = formatError(e);
+      } finally {
+        mutationBusy = false;
+      }
+      return;
+    }
+
+    if (activeTool === "editText") {
+      mutationBusy = true;
+      try {
+        const runs = await backend.listTextRuns(doc.handle, pageIndex);
+        // Smallest containing box wins — a click inside a long line and
+        // a short one should offer the short one, which is the tighter
+        // match to what's under the cursor.
+        const run = runs.filter((r) => pointInRect(x, y, r.rect)).sort((a, b) => area(a.rect) - area(b.rect))[0];
+        if (!run) {
+          await showAlert("No text found at that spot. Try clicking directly on the characters you want to change.");
+          return;
+        }
+        if (!run.isEditable) {
+          // Subset fonts in general ARE editable now (decoded via their
+          // /ToUnicode table) — this only fires for the rarer case of a
+          // font that ships no such table at all, typically an icon or
+          // symbol font whose glyphs aren't characters in the first
+          // place. Say that specifically rather than blaming subsetting.
+          await showAlert(
+            "This particular text can't be edited.\n\n" +
+              "Its font provides no character mapping (/ToUnicode), which usually means it's an " +
+              "icon or symbol font rather than real text.\n\n" +
+              "Highlight, underline, strikeout and redaction still work on it.",
+          );
+          return;
+        }
+        const newText = await showPrompt("Replace this text with:", { title: "Edit text", defaultValue: run.text, confirmLabel: "Replace" });
+        if (newText === null || newText.trim().length === 0) return;
+        doc = await backend.editTextRun({ handle: doc.handle, pageIndex, runIndex: run.index, newText: newText.trim() });
+        await Promise.all([refreshAnnotations(), refreshFormFields()]);
+      } catch (e) {
+        const message = formatError(e);
+        // The one genuinely-unsupported case left: a character with no
+        // glyph in this document's embedded font subset. Explain it in
+        // terms the user can act on instead of showing a raw error.
+        if (message.includes("no glyph for")) {
+          await showAlert(
+            message.replace(/^.*no glyph for:?/, "Can't use these characters:").trim() +
+              "\n\nThis PDF only embeds the characters its text actually used, so letters that " +
+              "appear nowhere in the document can't be typed into it. Try different wording.",
+          );
+        } else {
+          error = message;
+        }
+      } finally {
+        mutationBusy = false;
+      }
+      return;
+    }
+
+  }
+
+  // Drag-to-move for the "moveText"/"moveImage" tools. `x`/`y` are where
+  // the drag began — that's what identifies which run or image is being
+  // moved — and `dx`/`dy` are the travel. Resolving the target from a
+  // freshly re-listed page (rather than a cached client-side list) is the
+  // same approach handleToolClick uses, for the same reason: the
+  // document's content stream changes under us on every edit.
+  async function handleMoveObject(pageIndex: number, x: number, y: number, dx: number, dy: number) {
+    if (!doc || mutationBusy) return;
+    error = null;
+    mutationBusy = true;
+    try {
+      if (activeTool === "moveText") {
+        const runs = await backend.listTextRuns(doc.handle, pageIndex);
+        // Smallest containing box wins: lines overlap, and the tighter
+        // match is nearly always the one under the cursor.
+        const hits = runs.filter((r) => pointInRect(x, y, r.rect));
+        const run = hits.sort((a, b) => area(a.rect) - area(b.rect))[0];
+        if (!run) {
+          await showAlert("No text found where you started dragging. Press directly on the text you want to move, then drag.");
+          return;
+        }
+        doc = await backend.moveTextRun({ handle: doc.handle, pageIndex, runIndex: run.index, dx, dy });
+      } else {
+        const placements = await backend.listImagePlacements(doc.handle, pageIndex);
+        const hits = placements.filter((p) => pointInRect(x, y, p.rect));
+        const placement = hits.sort((a, b) => area(a.rect) - area(b.rect))[0];
+        if (!placement) {
+          await showAlert("No image found where you started dragging. Press directly on the image you want to move, then drag.");
+          return;
+        }
+        doc = await backend.moveImage({ handle: doc.handle, pageIndex, placementIndex: placement.index, dx, dy });
+      }
+      await Promise.all([refreshAnnotations(), refreshFormFields()]);
+    } catch (e) {
+      error = formatError(e);
+    } finally {
+      mutationBusy = false;
+    }
+  }
+
+  function area(rect: [number, number, number, number]): number {
+    return Math.abs(rect[2] - rect[0]) * Math.abs(rect[3] - rect[1]);
+  }
+
+  async function handleCreateField(pageIndex: number, rect: [number, number, number, number], kind: "text" | "checkbox") {
+    if (!doc || mutationBusy) return;
+    const name = await showPrompt(`Name for the new ${kind === "text" ? "text field" : "checkbox"}:`, { title: "Add form field", placeholder: "e.g. full_name", confirmLabel: "Add" });
+    if (!name || name.trim().length === 0) return;
+    error = null;
+    mutationBusy = true;
+    try {
+      doc = await backend.createFormField({ handle: doc.handle, pageIndex, rect, kind, name: name.trim() });
+      await Promise.all([refreshAnnotations(), refreshFormFields()]);
+    } catch (e) {
+      error = formatError(e);
+    } finally {
+      mutationBusy = false;
+    }
+  }
+
+  // Places the currently-armed saved signature into `rect` (the
+  // drag-rectangle from PdfPage.svelte's "signature" tool gesture),
+  // preserving the signature's own aspect ratio and centering it within
+  // the drag rather than stretching it to fill an arbitrary box — a
+  // signature stretched off-proportion doesn't look like a signature
+  // anymore. Placed as an Ink annotation through the exact same
+  // `add_annotation_cmd` path the Draw tool already uses (see
+  // signatures.svelte.ts's module doc for why this needed no new
+  // backend surface at all): a saved signature is just a reusable
+  // template for that same ink geometry.
+  function handlePlaceSignature(pageIndex: number, rect: [number, number, number, number]) {
+    if (!doc || mutationBusy) return;
+    if (!armedSignatureId) {
+      showAlert("Pick a saved signature in the Signatures panel first (or draw a new one), then drag on the page to place it.", "No signature selected");
+      return;
+    }
+    const sig = savedSignatures().find((s) => s.id === armedSignatureId);
+    if (!sig) {
+      armedSignatureId = null;
+      showAlert("That saved signature is no longer available.");
+      return;
+    }
+
+    const [x0, y0, x1, y1] = rect;
+    const rectW = x1 - x0;
+    const rectH = y1 - y0;
+    const targetAspect = rectW / rectH;
+    // "Contain" fit: shrink to whichever axis the drag rect constrains
+    // more tightly, matching the signature's own proportions.
+    const fitW = sig.aspect > targetAspect ? rectW : rectH * sig.aspect;
+    const fitH = sig.aspect > targetAspect ? rectW / sig.aspect : rectH;
+    const offsetX = x0 + (rectW - fitW) / 2;
+    const offsetY = y0 + (rectH - fitH) / 2;
+
+    // Saved strokes are normalized 0..1 in the pad's canvas space
+    // (y-down); PDF page space is y-up, so a drawing's top (ny=0) has
+    // to land at the *higher* PDF y — the top of the fitted box.
+    const mapped: [number, number][][] = sig.strokes.map((stroke) =>
+      stroke.map(([nx, ny]) => [offsetX + nx * fitW, offsetY + (1 - ny) * fitH] as [number, number]),
+    );
+    const points = mapped.flat();
+    const xs = points.map((p) => p[0]);
+    const ys = points.map((p) => p[1]);
+    const finalRect: [number, number, number, number] = [Math.min(...xs) - 2, Math.min(...ys) - 2, Math.max(...xs) + 2, Math.max(...ys) + 2];
+
+    handleCreateAnnotation(pageIndex, {
+      rect: finalRect,
+      // Always solid black, independent of the highlight/underline
+      // colour swatches — a signature isn't markup, and Adobe's own
+      // default signature ink is black regardless of whatever colour a
+      // user last picked for highlighting.
+      color: [0, 0, 0],
+      opacity: 1,
+      annotation: { kind: "ink", strokes: mapped },
+    });
+  }
+
+  function handleSignatureSaved(name: string, strokes: [number, number][][], aspect: number) {
+    const sig = addSignature(name, strokes, aspect);
+    armedSignatureId = sig.id;
+    showSignaturePad = false;
+  }
+
+  // Shared tail for every page-organization action: page ops (like
+  // annotation writes) return a *new* handle because the underlying file
+  // changed — see pages.rs's module doc — so `doc` is reassigned wholesale,
+  // and annotations/form fields are re-fetched since they're keyed to the
+  // handle that just went stale, even when the edit itself (a page
+  // reorder, say) didn't touch either.
+  async function runPagesOp(fn: () => Promise<OpenedDocument>) {
+    if (mutationBusy) return;
+    error = null;
+    pagesBusy = true;
+    mutationBusy = true;
+    try {
+      doc = await fn();
+      await Promise.all([refreshAnnotations(), refreshFormFields()]);
+    } catch (e) {
+      error = formatError(e);
+    } finally {
+      pagesBusy = false;
+      mutationBusy = false;
+    }
+  }
+
+  function handleRotate(pageIndex: number, deltaDegrees: number) {
+    if (!doc) return;
+    const handle = doc.handle;
+    runPagesOp(() => backend.rotatePage(handle, pageIndex, deltaDegrees));
+  }
+
+  function handleDelete(pageIndex: number) {
+    if (!doc) return;
+    const handle = doc.handle;
+    runPagesOp(() => backend.deletePage(handle, pageIndex));
+  }
+
+  function handleMove(pageIndex: number, direction: "Up" | "Down") {
+    if (!doc) return;
+    const handle = doc.handle;
+    runPagesOp(() => backend.movePage(handle, pageIndex, direction));
+  }
+
+  function handleCrop(pageIndex: number, rect: [number, number, number, number]) {
+    if (!doc) return;
+    const handle = doc.handle;
+    runPagesOp(() => backend.setCropBox(handle, pageIndex, rect));
+  }
+
+  async function handleMerge() {
+    if (!doc) return;
+
+    // The open document's *edited* state only exists in its working
+    // copy, not on disk at its original path — re-picking the same file
+    // from the dialog below would silently merge in the stale, pre-edit
+    // version. Ask up front instead of quietly excluding it.
+    const includeOpen = await showConfirm(
+      doc.is_dirty
+        ? "This document has unsaved changes. Include its current content in the merge?"
+        : "Include the document you currently have open in this merge?",
+      { title: "Merge PDFs", confirmLabel: "Include it" },
+    );
+
+    // The two picker calls below are wrapped in their own try/catch
+    // (rather than left bare, as they used to be) so a backend that
+    // can't fulfil a picker call — the wasm backend's `pickOpenPaths`
+    // was `notImplemented` and threw synchronously until it was ported —
+    // surfaces through the same error banner (`error = formatError(e)`)
+    // every other failure in this flow already uses, instead of an
+    // unhandled promise rejection nothing on screen reflects. On desktop
+    // neither picker call ever rejects outside of this, so this changes
+    // nothing observable there.
+    let sourcePaths: string[];
+    let outputPath: string | null;
+    try {
+      sourcePaths = await backend.pickOpenPaths();
+      // Empty-sources return (fix-round C1): sourcePaths is empty here by
+      // definition, so there is nothing to release — releasePicks is
+      // still called for symmetry with the cancel-of-save-target return
+      // below, and because it's a harmless no-op on an empty array.
+      if (!includeOpen && sourcePaths.length === 0) {
+        await backend.releasePicks(sourcePaths);
+        return;
+      }
+      outputPath = await backend.pickSavePath("merged.pdf");
+    } catch (e) {
+      error = formatError(e);
+      return;
+    }
+    if (!outputPath) {
+      // Cancel-of-save-target return (fix-round C1): sourcePaths was
+      // already picked above (each stashed under a synthetic key on the
+      // wasm backend — see wasm.ts's "Open-document bookkeeping" doc), but
+      // canceling the save dialog means mergeDocuments never runs to
+      // consume them. Without this, those picks sit in pendingOpenPicks
+      // forever — permanently stealing their filenames' un-suffixed pick
+      // keys from every later pick of the same name (the concrete repro:
+      // open a.pdf -> Merge -> pick b.pdf as a source -> cancel the save
+      // dialog -> later "open b.pdf" gets keyed "b.pdf (2)" forever, and
+      // compareDocuments' pathA scan then can't find it).
+      await backend.releasePicks(sourcePaths);
+      return;
+    }
+
+    await runPagesOp(async () => {
+      const result = await backend.mergeDocuments({ openHandle: includeOpen ? doc!.handle : null, sourcePaths, outputPath });
+      filePath = outputPath;
+      return result;
+    });
+  }
+
+  async function handleExtractSelected(pageIndices: number[]) {
+    if (!doc || pageIndices.length === 0) return;
+    const handle = doc.handle;
+    const outputPath = await backend.pickSavePath("extracted.pdf");
+    if (!outputPath) return;
+
+    await runPagesOp(async () => {
+      const result = await backend.extractPages({ handle, pageIndices, outputPath });
+      filePath = outputPath;
+      return result;
+    });
+  }
+
+  async function handleFillForm(values: Record<string, string>) {
+    if (!doc || mutationBusy) return;
+    const handle = doc.handle;
+    error = null;
+    formsBusy = true;
+    mutationBusy = true;
+    try {
+      doc = await backend.fillFormFields({ handle, values });
+      // Also refreshes signatures (unlike every other handler here) — a
+      // fill writes through PDFium's own full-rewrite save path, which
+      // invalidates any existing signature's byte range; see
+      // refreshSignatures' own comment for why this is the one mutating
+      // command that needs it.
+      await Promise.all([refreshAnnotations(), refreshFormFields(), refreshSignatures()]);
+    } catch (e) {
+      error = formatError(e);
+    } finally {
+      formsBusy = false;
+      mutationBusy = false;
+    }
+  }
+
+  async function handleOcrDocument() {
+    if (!doc || mutationBusy) return;
+    const handle = doc.handle;
+    error = null;
+    ocrBusy = true;
+    mutationBusy = true;
+    try {
+      doc = await backend.ocrDocument({ handle });
+      await Promise.all([refreshAnnotations(), refreshFormFields()]);
+    } catch (e) {
+      const message = formatError(e);
+      // "Tesseract not found" is a setup instruction, not an error the
+      // one-line banner can usefully carry — it's multi-line and tells
+      // the user exactly what to install.
+      if (message.includes("Tesseract OCR was not found")) {
+        await showAlert(message, "OCR needs Tesseract installed");
+      } else {
+        error = message;
+      }
+    } finally {
+      ocrBusy = false;
+      mutationBusy = false;
+    }
+  }
+
+  async function handleCompareDocument() {
+    if (!filePath) return;
+    const otherPath = await backend.pickOpenPath();
+    if (!otherPath) return;
+
+    error = null;
+    compareBusy = true;
+    try {
+      const report = await backend.compareDocuments({ pathA: filePath, pathB: otherPath, pixelTargetWidth: 800 });
+      await showCompareReport(report, otherPath);
+    } catch (e) {
+      error = formatError(e);
+    } finally {
+      compareBusy = false;
+    }
+  }
+
+  async function showCompareReport(report: CompareReportDto, otherPath: string) {
+    const lines = [`Comparing the open document against:\n  ${otherPath}`, `Pages: ${report.pageCountA} vs ${report.pageCountB}`];
+
+    if (report.textPages.length === 0) {
+      lines.push("Text: no differences found (see openpdfedit-compare's docs for this mode's limitations — it diffs text runs, not words).");
+    } else {
+      lines.push(`Text: ${report.textPages.length} page(s) with differing text runs:`);
+      for (const p of report.textPages.slice(0, 10)) {
+        lines.push(`  Page ${p.pageIndex + 1}: -${p.removed.length} run(s), +${p.added.length} run(s)`);
+      }
+      if (report.textPages.length > 10) lines.push(`  ...and ${report.textPages.length - 10} more page(s)`);
+    }
+
+    if (report.pixelPages.length > 0) {
+      const changed = report.pixelPages.filter((p) => p.differingPixels > 0);
+      lines.push(
+        changed.length === 0
+          ? "Pixels: no rendering differences found."
+          : `Pixels: ${changed.length} page(s) render differently (of ${report.pixelPages.length} compared).`,
+      );
+    }
+
+    await showAlert(lines.join("\n"), "Compare result");
+  }
+
+  async function handleUndo() {
+    if (!doc || !doc.can_undo || undoRedoBusy || mutationBusy) return;
+    const handle = doc.handle;
+    error = null;
+    undoRedoBusy = true;
+    mutationBusy = true;
+    try {
+      doc = await backend.undo(handle);
+      await Promise.all([refreshAnnotations(), refreshFormFields()]);
+    } catch (e) {
+      error = formatError(e);
+    } finally {
+      undoRedoBusy = false;
+      mutationBusy = false;
+    }
+  }
+
+  async function handleRedo() {
+    if (!doc || !doc.can_redo || undoRedoBusy || mutationBusy) return;
+    const handle = doc.handle;
+    error = null;
+    undoRedoBusy = true;
+    mutationBusy = true;
+    try {
+      doc = await backend.redo(handle);
+      await Promise.all([refreshAnnotations(), refreshFormFields()]);
+    } catch (e) {
+      error = formatError(e);
+    } finally {
+      undoRedoBusy = false;
+      mutationBusy = false;
+    }
+  }
+
+  // Cmd+Z / Cmd+Shift+Z (Ctrl on non-Mac) — the standard shortcut users
+  // reach for before ever looking at a toolbar button. Skipped while an
+  // annotation-comment prompt or similar native dialog might be focused
+  // is not something we can detect from here, but window.prompt/alert are
+  // modal and block the event loop anyway, so this can't fire mid-dialog.
+  function handleKeydown(e: KeyboardEvent) {
+    const meta = e.metaKey || e.ctrlKey;
+    if (meta && e.key.toLowerCase() === "s") {
+      e.preventDefault();
+      if (e.shiftKey) handleSaveAs();
+      else handleSave();
+      return;
+    }
+    if (!meta || e.key.toLowerCase() !== "z") return;
+    e.preventDefault();
+    if (e.shiftKey) {
+      handleRedo();
+    } else {
+      handleUndo();
+    }
+  }
+
+  async function showSignatureDetails() {
+    const lines = signatures.map((s, i) => {
+      const parts = [
+        `Signature ${i + 1}`,
+        `  Signer: ${s.name ?? "(not stated)"}`,
+        `  Reason: ${s.reason ?? "(not stated)"}`,
+        `  Signed: ${s.signingTime ?? "(not stated)"}`,
+        `  Format: ${s.subFilter ?? "(unknown)"}`,
+        `  Byte range looks structurally sound: ${s.byteRangeIsStructurallySound ? "yes" : "no"}`,
+      ];
+      return parts.join("\n");
+    });
+    await showAlert(
+      "NOT CRYPTOGRAPHICALLY VERIFIED — this only shows what the document itself claims.\n" +
+        "OpenPdfEdit does not yet check the signature is genuine, untampered, or trusted.\n\n" +
+        lines.join("\n\n"),
+    );
+  }
+
+  function zoomIn() {
+    zoom = Math.min(MAX_ZOOM, zoom * ZOOM_STEP);
+  }
+  function zoomOut() {
+    zoom = Math.max(MIN_ZOOM, zoom / ZOOM_STEP);
+  }
+  function zoomReset() {
+    zoom = 1;
+  }
+</script>
+
+<svelte:window onkeydown={handleKeydown} />
+
+<DialogHost />
+<ToastHost />
+{#if showSignaturePad}
+  <SignaturePad onSave={handleSignatureSaved} onCancel={() => (showSignaturePad = false)} />
+{/if}
+
+<main class="shell">
+  <header class="topbar">
+    <BrandMark size={17} />
+
+    <button class="oa-btn oa-btn--ghost" onclick={pickAndOpen}>
+      <Icon name="folder-open" size={15} />
+      Open PDF…
+    </button>
+
+    {#if doc}
+      <div class="topbar__group">
+        <button
+          class="oa-icon-btn oa-icon-btn--sm"
+          onclick={handleSave}
+          disabled={!doc.is_dirty || saveBusy || mutationBusy}
+          use:tooltip={doc.is_dirty ? "Save to the original file (⌘S)" : "Saved"}
+          aria-label="Save"
+        >
+          <Icon name="save" size={15} spin={saveBusy} />
+        </button>
+        <button class="oa-icon-btn oa-icon-btn--sm" onclick={handleSaveAs} disabled={saveBusy || mutationBusy} use:tooltip={"Save a copy (⌘⇧S)"} aria-label="Save as">
+          <Icon name="copy" size={15} />
+        </button>
+        <button class="oa-icon-btn oa-icon-btn--sm" onclick={handleUndo} disabled={!doc.can_undo || undoRedoBusy || mutationBusy} use:tooltip={"Undo (⌘Z)"} aria-label="Undo">
+          <Icon name="undo-2" size={15} />
+        </button>
+        <button class="oa-icon-btn oa-icon-btn--sm" onclick={handleRedo} disabled={!doc.can_redo || undoRedoBusy || mutationBusy} use:tooltip={"Redo (⌘⇧Z)"} aria-label="Redo">
+          <Icon name="redo-2" size={15} />
+        </button>
+      </div>
+
+      <div class="topbar__group">
+        <button class="oa-icon-btn oa-icon-btn--sm" onclick={zoomOut} disabled={zoom <= MIN_ZOOM} aria-label="Zoom out">
+          <Icon name="zoom-out" size={15} />
+        </button>
+        <button class="zoom-level oa-mono" onclick={zoomReset} use:tooltip={"Reset zoom"}>{Math.round(zoom * 100)}%</button>
+        <button class="oa-icon-btn oa-icon-btn--sm" onclick={zoomIn} disabled={zoom >= MAX_ZOOM} aria-label="Zoom in">
+          <Icon name="zoom-in" size={15} />
+        </button>
+      </div>
+
+      <span class="oa-caption topbar__meta">{doc.page_count} page{doc.page_count === 1 ? "" : "s"}</span>
+    {/if}
+
+    <div class="topbar__spacer"></div>
+
+    {#if doc}
+      <div class="topbar__group">
+        <button
+          class="oa-icon-btn oa-icon-btn--sm"
+          class:oa-icon-btn--selected={showComments}
+          onclick={() => (showComments = !showComments)}
+          use:tooltip={"Comments"}
+          aria-label="Toggle comments panel"
+        >
+          <Icon name="message-square" size={15} />
+        </button>
+        <button
+          class="oa-icon-btn oa-icon-btn--sm"
+          class:oa-icon-btn--selected={showPages}
+          onclick={() => (showPages = !showPages)}
+          use:tooltip={"Pages"}
+          aria-label="Toggle pages panel"
+        >
+          <Icon name="layout-panel-left" size={15} />
+        </button>
+        {#if formFields.length > 0}
+          <button
+            class="oa-icon-btn oa-icon-btn--sm"
+            class:oa-icon-btn--selected={showForms}
+            onclick={() => (showForms = !showForms)}
+            use:tooltip={"Form fields"}
+            aria-label="Toggle form fields panel"
+          >
+            <Icon name="list-checks" size={15} />
+          </button>
+        {/if}
+        <button
+          class="oa-icon-btn oa-icon-btn--sm"
+          class:oa-icon-btn--selected={showSignatures}
+          onclick={() => (showSignatures = !showSignatures)}
+          use:tooltip={"Saved signatures — draw one, then drag it onto the page"}
+          aria-label="Toggle signatures panel"
+        >
+          <Icon name="signature" size={15} />
+        </button>
+        {#if backendKind !== "wasm"}
+          <button
+            class="oa-icon-btn oa-icon-btn--sm"
+            onclick={handleOcrDocument}
+            disabled={ocrBusy}
+            use:tooltip={"Make a scanned document searchable (requires tesseract installed locally)"}
+            aria-label="OCR document"
+          >
+            <Icon name="scan-text" size={15} spin={ocrBusy} />
+          </button>
+        {/if}
+        <button
+          class="oa-icon-btn oa-icon-btn--sm"
+          onclick={handleCompareDocument}
+          disabled={compareBusy}
+          use:tooltip={"Compare the open document against another PDF (text and rendered-pixel differences)"}
+          aria-label="Compare documents"
+        >
+          <Icon name="git-compare" size={15} spin={compareBusy} />
+        </button>
+        <button
+          class="oa-icon-btn oa-icon-btn--sm"
+          class:oa-icon-btn--selected={showWatermark}
+          onclick={() => (showWatermark = true)}
+          disabled={mutationBusy}
+          use:tooltip={"Watermark — tile text or a logo across every page"}
+          aria-label="Watermark document"
+        >
+          <Icon name="stamp" size={15} />
+        </button>
+        {#if signatures.length > 0}
+          <button class="oa-badge oa-badge--warning topbar__pill-btn" onclick={showSignatureDetails} use:tooltip={"Signature info is structural only — not cryptographically verified"}>
+            <Icon name="shield-alert" size={13} />
+            {signatures.length} signature{signatures.length === 1 ? "" : "s"}
+          </button>
+        {/if}
+      </div>
+    {/if}
+
+    <button
+      class="oa-icon-btn oa-icon-btn--sm"
+      onclick={() => (showAccount = true)}
+      use:tooltip={"Account — sign in, credits"}
+      aria-label="Account"
+    >
+      <Icon name="circle-user" size={15} />
+    </button>
+  </header>
+
+  <AccountPanel open={showAccount} onClose={() => (showAccount = false)} />
+  <WatermarkPanel open={showWatermark} busy={mutationBusy} onApply={handleApplyWatermark} onClose={() => (showWatermark = false)} />
+
+  {#if filePath}
+    <div class="path-bar">
+      <Icon name="file-pen" size={12} />
+      <span class="path-bar__text">{filePath}</span>
+      {#if doc?.is_dirty}<span class="oa-tag path-bar__dirty">Unsaved</span>{/if}
+    </div>
+  {/if}
+
+  {#if error}
+    <div class="banner">
+      <Icon name="triangle-alert" size={15} />
+      <p>{error}</p>
+    </div>
+  {/if}
+
+  <div class="body">
+    {#if doc}
+      <aside class="rail">
+        {#each TOOLS as tool, i (tool.id)}
+          <button
+            class="oa-rail-btn"
+            class:oa-rail-btn--selected={activeTool === tool.id}
+            class:rail__gap={tool.startsGroup && i > 0}
+            onclick={() => (activeTool = tool.id)}
+            use:tooltip={tool.id === "moveText" || tool.id === "moveImage" ? `${tool.label} — hold Shift to constrain to one axis` : tool.label}
+            aria-label={tool.label}
+          >
+            <Icon name={tool.icon} size={18} />
+          </button>
+        {/each}
+        <div class="rail__spacer"></div>
+        <div class="rail__colors">
+          {#each PRESET_COLORS as preset (preset.label)}
+            <button
+              class="swatch"
+              class:swatch--selected={color === preset.value}
+              style="background: rgb({preset.value[0] * 255}, {preset.value[1] * 255}, {preset.value[2] * 255});"
+              aria-label={preset.label}
+              use:tooltip={preset.label}
+              onclick={() => (color = preset.value)}
+            ></button>
+          {/each}
+        </div>
+      </aside>
+
+      <Viewer
+        handle={doc.handle}
+        pageSizes={doc.page_sizes}
+        {zoom}
+        {activeTool}
+        {color}
+        busy={mutationBusy}
+        onCreateAnnotation={handleCreateAnnotation}
+        onRedact={handleRedact}
+        onToolClick={handleToolClick}
+        onCreateField={handleCreateField}
+        onPlaceSignature={handlePlaceSignature}
+        onMoveObject={handleMoveObject}
+      />
+      {#if showComments}
+        <CommentsPanel {annotations} loading={annotationsLoading} />
+      {/if}
+      {#if showPages}
+        <PagesPanel
+          handle={doc.handle}
+          pageSizes={doc.page_sizes}
+          busy={pagesBusy || mutationBusy}
+          onRotate={handleRotate}
+          onDelete={handleDelete}
+          onMove={handleMove}
+          onCrop={handleCrop}
+          onExtractSelected={handleExtractSelected}
+          onMerge={handleMerge}
+        />
+      {/if}
+      {#if showForms}
+        <FormsPanel fields={formFields} busy={formsBusy || mutationBusy} onFill={handleFillForm} />
+      {/if}
+      {#if showSignatures}
+        <SignaturesPanel
+          armedId={armedSignatureId}
+          onArm={(id) => (armedSignatureId = id)}
+          onNew={() => (showSignaturePad = true)}
+        />
+      {/if}
+    {:else}
+      <div class="empty-state">
+        <BrandMark variant="monogram" size={40} />
+        <p>Open a PDF to get started.</p>
+        <button class="oa-btn oa-btn--primary" onclick={pickAndOpen}>
+          <Icon name="folder-open" size={15} />
+          Open PDF…
+        </button>
+      </div>
+    {/if}
+  </div>
+</main>
+
+<style>
+  .shell {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+  }
+
+  /* ---- Topbar — 52px, matches --topbar-h ---- */
+  .topbar {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    height: var(--topbar-h);
+    padding: 0 var(--space-3);
+    background: var(--surface-card);
+    border-bottom: var(--border-width) solid var(--border-hairline);
+    flex-wrap: wrap;
+  }
+
+  .topbar__group {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+  }
+
+  .topbar__spacer {
+    flex: 1;
+  }
+
+  .topbar__meta {
+    white-space: nowrap;
+  }
+
+  .topbar__pill-btn {
+    border: 0;
+    cursor: pointer;
+    transition: var(--transition-control);
+  }
+  .topbar__pill-btn:hover {
+    filter: brightness(0.97);
+  }
+
+  .zoom-level {
+    min-width: 3.2rem;
+    height: var(--control-h-sm);
+    padding: 0 4px;
+    border: 0;
+    background: transparent;
+    cursor: pointer;
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+    border-radius: var(--radius-sm);
+    transition: var(--transition-control);
+  }
+  .zoom-level:hover {
+    background: var(--surface-hover);
+  }
+
+  /* ---- Secondary strip: the open file's path ---- */
+  .path-bar {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    height: 26px;
+    padding: 0 var(--space-3);
+    background: var(--bg-subtle);
+    border-bottom: var(--border-width) solid var(--border-hairline);
+    color: var(--text-faint);
+  }
+  .path-bar :global(.oa-icon) {
+    flex: 0 0 auto;
+  }
+  .path-bar__text {
+    font: var(--type-caption);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .path-bar__dirty {
+    flex: 0 0 auto;
+    color: var(--warning-fg);
+    border-color: color-mix(in oklab, var(--warning-fg) 40%, transparent);
+  }
+
+  .banner {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-2) var(--space-3);
+    background: var(--danger-bg);
+    color: var(--danger-fg);
+    border-bottom: var(--border-width) solid var(--border-hairline);
+  }
+  .banner p {
+    font: var(--type-caption);
+    font-size: var(--text-sm);
+  }
+
+  .body {
+    flex: 1;
+    display: flex;
+    overflow: hidden;
+  }
+
+  /* ---- Tool rail — 56px, matches --rail-w ---- */
+  .rail {
+    flex: 0 0 auto;
+    width: var(--rail-w);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    padding: var(--space-2) 0;
+    background: var(--bg-subtle);
+    border-right: var(--border-width) solid var(--border-hairline);
+    overflow-y: auto;
+  }
+
+  .rail__gap {
+    margin-top: var(--space-2);
+  }
+
+  .rail__spacer {
+    flex: 1;
+    min-height: var(--space-2);
+  }
+
+  .rail__colors {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    padding-bottom: 4px;
+  }
+
+  .swatch {
+    width: 18px;
+    height: 18px;
+    flex: 0 0 auto;
+    border-radius: var(--radius-full);
+    padding: 0;
+    border: 2px solid var(--surface-card);
+    box-shadow: 0 0 0 1px var(--border-hairline);
+    cursor: pointer;
+  }
+
+  .swatch--selected {
+    box-shadow: 0 0 0 1.5px var(--border-focus);
+  }
+
+  .empty-state {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-4);
+  }
+
+  .empty-state p {
+    font: var(--type-body);
+    color: var(--text-muted);
+  }
+</style>

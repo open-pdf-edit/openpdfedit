@@ -1,0 +1,16 @@
+[package]
+name = "openpdfedit-compare"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Document compare (PLAN.md M9): text mode diffs per-page text runs via openpdfedit-textedit (no PDFium needed); pixel mode renders both documents via openpdfedit-engine and reports per-page pixel differences."
+
+[dependencies]
+openpdfedit-doc.workspace = true
+openpdfedit-textedit.workspace = true
+openpdfedit-engine.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+lopdf.workspace = true

@@ -1,0 +1,364 @@
+// The seam between the UI and whatever runs it: a Tauri desktop window
+// today (`tauri.ts`), a Chrome extension WASM sandbox later (`wasm.ts`,
+// Task 8). Every DTO here mirrors a Rust serde shape one-for-one — field
+// names/casing are NOT "improved" or normalized even where they look
+// inconsistent (e.g. `OpenedDocument` stays snake_case while most
+// request/response DTOs are camelCase) — that's exactly what the Rust
+// side emits today, and changing it would break wire compatibility with
+// `tauri.ts` for zero benefit. See index.ts for how `backend` is chosen.
+
+// --- Shared value types -----------------------------------------------
+
+export interface PageSize {
+  width: number;
+  height: number;
+}
+
+/** Returned by every open/save/undo/redo/edit command — see lib.rs's
+ * `OpenedDocument` struct. Field names are snake_case because the Rust
+ * struct has no `#[serde(rename_all = ...)]` attribute. */
+export interface OpenedDocument {
+  handle: number;
+  page_count: number;
+  page_sizes: PageSize[];
+  can_undo: boolean;
+  can_redo: boolean;
+  is_dirty: boolean;
+  file_path: string;
+}
+
+export interface AnnotationSummaryDto {
+  id: [number, number];
+  subtype: string;
+  rect: [number, number, number, number];
+  contents: string | null;
+}
+
+// `isVerified` is always false in this build — see openpdfedit-sign's
+// module doc: no cryptographic signature verification is implemented,
+// only structural inspection (what the PDF declares about a signature,
+// not whether it's genuine or trusted). Never render this as "signed and
+// valid."
+export interface SignatureInfoDto {
+  subFilter: string | null;
+  reason: string | null;
+  name: string | null;
+  signingTime: string | null;
+  byteRangeIsStructurallySound: boolean;
+  isVerified: boolean;
+}
+
+export interface TextRunDto {
+  index: number;
+  text: string;
+  rect: [number, number, number, number];
+  fontSize: number;
+  isEditable: boolean;
+}
+
+export interface ImagePlacementDto {
+  index: number;
+  rect: [number, number, number, number];
+}
+
+export interface TextPageDiffDto {
+  pageIndex: number;
+  added: string[];
+  removed: string[];
+}
+
+export interface PixelPageDiffDto {
+  pageIndex: number;
+  differingPixels: number;
+  totalPixels: number;
+  bbox: [number, number, number, number] | null;
+}
+
+export interface CompareReportDto {
+  pageCountA: number;
+  pageCountB: number;
+  textPages: TextPageDiffDto[];
+  pixelPages: PixelPageDiffDto[];
+}
+
+export interface FormFieldOptionDto {
+  label: string | null;
+  isSelected: boolean;
+}
+
+export type FormFieldKindDto = "text" | "checkbox" | "radioButton" | "comboBox" | "listBox" | "pushButton" | "signature" | "unknown";
+
+export interface FormFieldDto {
+  pageIndex: number;
+  name: string;
+  kind: FormFieldKindDto;
+  value: string | null;
+  isChecked: boolean | null;
+  isReadOnly: boolean;
+  options: FormFieldOptionDto[];
+}
+
+/** The wire shape of `add_annotation_cmd`'s `annotation` field — also
+ * embedded (via PdfPage.svelte's `AnnotationPayload`) in the drag-gesture
+ * payload the UI builds before it has a backend request to send. */
+export type AnnotationKindDto =
+  | { kind: "highlight" | "underline" | "strikeOut"; quads: [number, number, number, number][] }
+  | { kind: "freeText"; text: string; fontSize: number }
+  | { kind: "ink"; strokes: [number, number][][] };
+
+export type PageMoveDirection = "Up" | "Down";
+
+/** Raw RGBA page bitmap — the shared wire format both backends produce.
+ * `tauri.ts` gets it from a `tile://` fetch; the wasm backend (Task 8)
+ * will get it from a direct in-process render call. */
+export interface PageBitmap {
+  width: number;
+  height: number;
+  rgba: Uint8ClampedArray;
+}
+
+// --- Request DTOs (one per command whose args don't fit as plain
+// positional parameters on the Backend method) --------------------------
+
+export interface AddAnnotationRequest {
+  handle: number;
+  pageIndex: number;
+  rect: [number, number, number, number];
+  color: [number, number, number];
+  opacity: number;
+  contents: string | null;
+  annotation: AnnotationKindDto;
+}
+
+export interface DeleteAnnotationRequest {
+  handle: number;
+  pageIndex: number;
+  annotationId: [number, number];
+}
+
+export interface TextSelectionQuadsRequest {
+  handle: number;
+  pageIndex: number;
+  x0: number;
+  y0: number;
+  x1: number;
+  y1: number;
+}
+
+export interface EditTextRunRequest {
+  handle: number;
+  pageIndex: number;
+  runIndex: number;
+  newText: string;
+}
+
+export interface MoveTextRunRequest {
+  handle: number;
+  pageIndex: number;
+  runIndex: number;
+  dx: number;
+  dy: number;
+}
+
+export interface MoveImageRequest {
+  handle: number;
+  pageIndex: number;
+  placementIndex: number;
+  dx: number;
+  dy: number;
+}
+
+export interface CreateFormFieldRequest {
+  handle: number;
+  pageIndex: number;
+  rect: [number, number, number, number];
+  kind: "text" | "checkbox";
+  name: string;
+}
+
+export interface FillFormFieldsRequest {
+  handle: number;
+  values: Record<string, string>;
+}
+
+export interface RedactPageRequest {
+  handle: number;
+  pageIndex: number;
+  rect: [number, number, number, number];
+}
+
+/** Tiled text/logo watermark options — the vocabulary of OpenCapture's
+ * watermark tool, applied per PDF page (see `openpdfedit-watermark`'s
+ * module doc). The optional logo travels as base64-encoded raw RGBA with
+ * explicit dimensions (the UI decodes the picked image via a canvas);
+ * all three logo fields must be present together. */
+export interface ApplyWatermarkRequest {
+  handle: number;
+  /** May be empty when a logo is supplied. */
+  text: string;
+  location: "top" | "bottom" | "top-bottom" | "full";
+  orientationDeg: 0 | 45;
+  /** 0..=1, rides an ExtGState so it hits fills and strokes alike. */
+  opacity: number;
+  /** Multiplier on the automatic font size. */
+  textScale: number;
+  logoRgbaBase64?: string;
+  logoWidth?: number;
+  logoHeight?: number;
+  /** 0-based page indexes; omitted = every page. */
+  pages?: number[];
+}
+
+/** What the watermark dialog collects — everything in
+ * `ApplyWatermarkRequest` except the handle, which the page supplies. */
+export type WatermarkChoices = Omit<ApplyWatermarkRequest, "handle">;
+
+export interface ExtractPagesRequest {
+  handle: number;
+  pageIndices: number[];
+  outputPath: string;
+}
+
+export interface MergeDocumentsRequest {
+  openHandle: number | null;
+  sourcePaths: string[];
+  outputPath: string;
+}
+
+/** compare_documents_cmd takes two file PATHS, not open-document handles
+ * — the desktop UI collects them via a picker (see tauri.ts's
+ * `pickOpenPath`), unlike every other request DTO here which addresses an
+ * already-open document by handle. */
+export interface CompareDocumentsRequest {
+  pathA: string;
+  pathB: string;
+  pixelTargetWidth: number;
+}
+
+export interface OcrDocumentRequest {
+  handle: number;
+}
+
+// --- The Backend interface ---------------------------------------------
+
+/** Everything the UI needs from whatever's running it. One method per
+ * `#[tauri::command]` the frontend calls today (see grep receipt in the
+ * Task 7 brief), camelCased, plus a handful of higher-level conveniences
+ * (`pickAndOpenDocument`, `saveDocumentAs`, the picker primitives, the
+ * close-window handshake, `getPageBitmap`) that bundle a native picker or
+ * a non-IPC data path (the `tile://` fetch) with its matching command —
+ * those are exactly the touchpoints that must be re-implemented, not just
+ * re-wired, for the wasm/extension backend in Task 8. */
+export interface Backend {
+  // --- document lifecycle ---
+  openDocument(path: string): Promise<OpenedDocument>;
+  /** Open picker + open document in one step — path-based on desktop,
+   * bytes-based in the extension. Desktop's own call site uses the
+   * finer-grained `pickOpenPath` + `openDocument` pair instead (see
+   * +page.svelte's `pickAndOpen`), so it can keep showing the attempted
+   * path in the UI even when `openDocument` rejects — this method exists
+   * on the interface for the wasm backend and any future caller that
+   * doesn't need that. */
+  pickAndOpenDocument(): Promise<OpenedDocument | null>;
+  saveDocument(handle: number): Promise<OpenedDocument>;
+  /** Writes the working copy to an already-chosen `path` — the raw
+   * command, no picker. Desktop's own call site uses this directly (via
+   * `pickSavePath` first) rather than the `saveDocumentAs` convenience
+   * below, for the same reason `pickAndOpen` bypasses
+   * `pickAndOpenDocument`: it needs to run the picker *before* clearing
+   * `error`/setting `saveBusy`, so canceling the dialog leaves any
+   * existing error banner alone — the combo method can't expose that
+   * ordering to its caller. */
+  saveDocumentAtPath(handle: number, path: string): Promise<OpenedDocument>;
+  /** Picker inside. `defaultPath` seeds the save dialog's suggested
+   * filename (today: the document's current `file_path`); omit it for no
+   * suggestion. Resolves to `null` if the user cancels the picker. Exists
+   * for the wasm backend and any future caller that doesn't need the
+   * finer-grained `pickSavePath` + `saveDocumentAtPath` ordering
+   * `handleSaveAs` relies on (see that method's doc). */
+  saveDocumentAs(handle: number, defaultPath?: string | null): Promise<OpenedDocument | null>;
+  /** Releases a document's backend-side state (engine handle + session
+   * bookkeeping) without touching any file on disk — the counterpart to
+   * `open_document`/`openDocument`, not to closing the whole window. Added
+   * in Phase 2 Task 2 so a document can be retired when the UI replaces it
+   * with a newly-opened one (see +page.svelte's `pickAndOpen`, the sole
+   * caller); best-effort on both backends — a failure here is logged, not
+   * surfaced, since by the time this runs the *new* document has already
+   * opened successfully. */
+  closeDocument(handle: number): Promise<void>;
+  /** Tells the backend the close-confirmation flow is done and the window
+   * may actually close. */
+  confirmClose(): Promise<void>;
+  /** Registers the "the window/tab wants to close, decide first" hook;
+   * resolves to an unsubscribe function. */
+  onCloseRequested(cb: () => void): Promise<() => void>;
+  undo(handle: number): Promise<OpenedDocument>;
+  redo(handle: number): Promise<OpenedDocument>;
+
+  // --- rendering ---
+  /** `signal` lets a caller (PdfPage.svelte's IntersectionObserver-driven
+   * paint effect) cancel an in-flight fetch when a page scrolls back out
+   * of view before it finishes loading. */
+  getPageBitmap(handle: number, pageIndex: number, targetWidth: number, signal?: AbortSignal): Promise<PageBitmap>;
+
+  // --- annotations ---
+  listPageAnnotations(handle: number, pageIndex: number): Promise<AnnotationSummaryDto[]>;
+  addAnnotation(request: AddAnnotationRequest): Promise<OpenedDocument>;
+  deleteAnnotation(request: DeleteAnnotationRequest): Promise<OpenedDocument>;
+  textSelectionQuads(request: TextSelectionQuadsRequest): Promise<[number, number, number, number][]>;
+
+  // --- text/image editing ---
+  listTextRuns(handle: number, pageIndex: number): Promise<TextRunDto[]>;
+  editTextRun(request: EditTextRunRequest): Promise<OpenedDocument>;
+  moveTextRun(request: MoveTextRunRequest): Promise<OpenedDocument>;
+  listImagePlacements(handle: number, pageIndex: number): Promise<ImagePlacementDto[]>;
+  moveImage(request: MoveImageRequest): Promise<OpenedDocument>;
+
+  // --- forms ---
+  listFormFields(handle: number): Promise<FormFieldDto[]>;
+  fillFormFields(request: FillFormFieldsRequest): Promise<OpenedDocument>;
+  createFormField(request: CreateFormFieldRequest): Promise<OpenedDocument>;
+
+  // --- signatures ---
+  listSignatures(handle: number): Promise<SignatureInfoDto[]>;
+
+  // --- pages ---
+  rotatePage(handle: number, pageIndex: number, deltaDegrees: number): Promise<OpenedDocument>;
+  deletePage(handle: number, pageIndex: number): Promise<OpenedDocument>;
+  movePage(handle: number, pageIndex: number, direction: PageMoveDirection): Promise<OpenedDocument>;
+  setCropBox(handle: number, pageIndex: number, rect: [number, number, number, number]): Promise<OpenedDocument>;
+  extractPages(request: ExtractPagesRequest): Promise<OpenedDocument>;
+  mergeDocuments(request: MergeDocumentsRequest): Promise<OpenedDocument>;
+  redactPage(request: RedactPageRequest): Promise<OpenedDocument>;
+  applyWatermark(request: ApplyWatermarkRequest): Promise<OpenedDocument>;
+
+  // --- document-level tools ---
+  compareDocuments(request: CompareDocumentsRequest): Promise<CompareReportDto>;
+  ocrDocument(request: OcrDocumentRequest): Promise<OpenedDocument>;
+
+  // --- file-picker primitives ---
+  // Back every remaining plugin-dialog `open()`/`save()` call in the
+  // desktop UI (merge's source files + output, extract's output, compare's
+  // second document) that isn't already folded into `pickAndOpenDocument`
+  // or `saveDocumentAs` above. Every call site in this app filters to PDF
+  // only, so that filter is baked into the Tauri implementation rather
+  // than threaded through every call site.
+  pickOpenPath(): Promise<string | null>;
+  pickOpenPaths(): Promise<string[]>;
+  pickSavePath(defaultPath?: string): Promise<string | null>;
+
+  /** Releases picks a `pickOpenPath`/`pickOpenPaths` call returned but
+   * that never got consumed by `openDocument`/`mergeDocuments`/etc. — call
+   * this on any early-return/cancel path *after* a successful pick whose
+   * result is being abandoned, e.g. `handleMerge` picking merge sources
+   * and then the user canceling the save-target dialog. Added in the C1
+   * fix round: on the wasm backend, an abandoned pick otherwise sits
+   * forever in `pendingOpenPicks` (see wasm.ts's "Open-document
+   * bookkeeping" doc), which does not itself corrupt anything but does
+   * permanently consume that filename's un-suffixed key — a later
+   * legitimate pick of the same filename then gets a `" (2)"`-suffixed
+   * key it wouldn't otherwise need. No-op on the desktop backend: paths
+   * there are real filesystem paths, not synthetic keys, so there is no
+   * pending-pick bookkeeping to release. */
+  releasePicks(paths: string[]): Promise<void>;
+}

@@ -1,0 +1,16 @@
+[package]
+name = "openpdfedit-forms"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "AcroForm field CREATION — the opposite of openpdfedit-engine's PDFium-backed form FILL. Pure lopdf object-graph work: builds a Widget annotation + Field dictionary and registers it on the page and in the document's /AcroForm."
+
+[dependencies]
+openpdfedit-doc.workspace = true
+lopdf.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+image.workspace = true
+openpdfedit-engine.workspace = true

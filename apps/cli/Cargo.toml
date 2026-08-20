@@ -1,0 +1,19 @@
+[package]
+name = "openpdfedit-cli"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Headless batch CLI companion to the desktop app — lands with openpdfedit-batch (see PLAN.md milestone M9)."
+
+[[bin]]
+name = "openpdfedit"
+path = "src/main.rs"
+
+[dependencies]
+openpdfedit-doc.workspace = true
+openpdfedit-batch.workspace = true
+openpdfedit-compare.workspace = true
+
+[dev-dependencies]
+lopdf.workspace = true

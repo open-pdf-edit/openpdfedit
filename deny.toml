@@ -1,0 +1,92 @@
+# cargo-deny policy for the openpdfedit workspace.
+#
+# The hard rule from PLAN.md §5/§7/§9: no AGPL/GPL/LGPL code may enter the
+# dependency graph, in either direction. This is what makes the open-core
+# model possible — a copyleft dependency anywhere in the binary would
+# contaminate the whole distributed app, including any proprietary premium
+# features layered on later (PLAN.md decision log #2). This is a release
+# gate (wired into CI as `openpdfedit-license-policy`), not a style lint.
+#
+# The license allow-list below is deliberately an allow-list, not a
+# deny-list: an unrecognized license fails the build instead of silently
+# passing, so a future AGPL/GPL transitive dependency gets caught here
+# before anyone has to remember to check by hand.
+
+[graph]
+targets = [
+    "x86_64-apple-darwin",
+    "aarch64-apple-darwin",
+    "x86_64-pc-windows-msvc",
+    "aarch64-pc-windows-msvc",
+]
+
+[output]
+feature-depth = 1
+
+[advisories]
+# These are all "unmaintained" (not vulnerable) advisories on the unic-*
+# crates, pulled in transitively via Tauri itself (tauri-utils -> urlpattern
+# -> unic-ucd-ident -> unic-ucd-version -> unic-common). Not something this
+# project controls or can route around without vendoring Tauri; revisit if
+# Tauri drops the `unic-*` chain in a future release (they've deprecated it
+# upstream in favor of `icu_properties`/`unicode-ident` per the advisory).
+ignore = [
+    { id = "RUSTSEC-2025-0075", reason = "unmaintained (not vulnerable); transitive via tauri-utils -> urlpattern -> unic-*, not a direct dependency" },
+    { id = "RUSTSEC-2025-0080", reason = "unmaintained (not vulnerable); transitive via tauri-utils -> urlpattern -> unic-*, not a direct dependency" },
+    { id = "RUSTSEC-2025-0081", reason = "unmaintained (not vulnerable); transitive via tauri-utils -> urlpattern -> unic-*, not a direct dependency" },
+    { id = "RUSTSEC-2025-0098", reason = "unmaintained (not vulnerable); transitive via tauri-utils -> urlpattern -> unic-*, not a direct dependency" },
+    { id = "RUSTSEC-2025-0100", reason = "unmaintained (not vulnerable); transitive via tauri-utils -> urlpattern -> unic-*, not a direct dependency" },
+]
+
+[licenses]
+confidence-threshold = 0.8
+allow = [
+    "MIT",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "ISC",
+    "Zlib",
+    "Unicode-3.0",
+    "CC0-1.0",
+    "BSL-1.0",
+    "MPL-2.0",
+    "0BSD",
+    "OpenSSL",
+]
+
+[licenses.private]
+ignore = false
+
+[bans]
+multiple-versions = "warn"
+wildcards = "allow"
+highlight = "all"
+workspace-default-features = "allow"
+external-default-features = "allow"
+allow-workspace = true
+
+# Explicit deny, on top of the allow-list above being exhaustive: belt and
+# suspenders for the crates named as red-listed in
+# docs/research/04-oss-borrow-map.md and PLAN.md §5 "banned in-process".
+# If any of these ever appear (directly or transitively), the build fails
+# with a clear crate name instead of an opaque "unrecognized license".
+deny = [
+    { crate = "mupdf", reason = "AGPL-3.0 — see PLAN.md §5, would contaminate the whole open-core binary" },
+    { crate = "mupdf-sys", reason = "AGPL-3.0 (MuPDF bindings) — see PLAN.md §5" },
+]
+
+skip = []
+skip-tree = []
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+allow-git = []
+
+[sources.allow-org]
+github = []
+gitlab = []
+bitbucket = []

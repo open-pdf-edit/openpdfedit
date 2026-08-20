@@ -1,0 +1,6 @@
+/* Global stylesheet entry point — imports only, mirroring the design
+   system's own styles.css. */
+@import "./lib/styles/fonts.css";
+@import "./lib/styles/tokens.css";
+@import "./lib/styles/base.css";
+@import "./lib/styles/components.css";

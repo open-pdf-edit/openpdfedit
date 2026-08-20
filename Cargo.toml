@@ -1,0 +1,114 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/openpdfedit-engine",
+    "crates/openpdfedit-session",
+    "crates/openpdfedit-doc",
+    "crates/openpdfedit-annot",
+    "crates/openpdfedit-forms",
+    "crates/openpdfedit-pages",
+    "crates/openpdfedit-ocr",
+    "crates/openpdfedit-sign",
+    "crates/openpdfedit-redact",
+    "crates/openpdfedit-watermark",
+    "crates/openpdfedit-textedit",
+    "crates/openpdfedit-compare",
+    "crates/openpdfedit-batch",
+    "crates/openpdfedit-license",
+    "crates/openpdfedit-wasm",
+    "apps/cli",
+    "apps/desktop/src-tauri",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/openpdfedit/openpdfedit"
+
+[workspace.dependencies]
+# --- internal crates ---
+openpdfedit-engine = { path = "crates/openpdfedit-engine" }
+openpdfedit-session = { path = "crates/openpdfedit-session" }
+openpdfedit-doc = { path = "crates/openpdfedit-doc" }
+openpdfedit-annot = { path = "crates/openpdfedit-annot" }
+openpdfedit-forms = { path = "crates/openpdfedit-forms" }
+openpdfedit-pages = { path = "crates/openpdfedit-pages" }
+openpdfedit-ocr = { path = "crates/openpdfedit-ocr" }
+openpdfedit-sign = { path = "crates/openpdfedit-sign" }
+openpdfedit-redact = { path = "crates/openpdfedit-redact" }
+openpdfedit-watermark = { path = "crates/openpdfedit-watermark" }
+openpdfedit-textedit = { path = "crates/openpdfedit-textedit" }
+openpdfedit-compare = { path = "crates/openpdfedit-compare" }
+openpdfedit-batch = { path = "crates/openpdfedit-batch" }
+openpdfedit-license = { path = "crates/openpdfedit-license" }
+
+# --- PDF: rendering / manipulation (MIT/Apache/BSD only — see docs/research/04-oss-borrow-map.md) ---
+pdfium-render = "0.9"
+lopdf = "0.44"
+lru = "0.18"
+rand = "0.10"
+# Already a transitive dependency via pdfium-render; pinned here directly
+# for openpdfedit-ocr's PNG encoding (feeding rendered pages to tesseract).
+image = { version = "0.25", default-features = false, features = ["png"] }
+# Already a transitive dependency (via tauri); pinned here directly for
+# openpdfedit-batch's PII pattern matching.
+regex = "1"
+
+# --- error handling ---
+thiserror = "2"
+anyhow = "1"
+
+# --- serialization ---
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# --- logging ---
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# --- misc ---
+bytes = "1"
+base64 = "0.23"
+
+# --- wasm (browser extension) ---
+# Pinned exact: wasm-bindgen requires the `wasm-bindgen` crate version and
+# the `wasm-bindgen-cli` binary version to match exactly (the JS-glue
+# schema is versioned). opencapture/crates/shot-core pins "=0.2.100" for
+# the same reason, but that version is *older* than what this workspace's
+# Cargo.lock had already unified on (0.2.126, pulled in transitively via
+# tauri -> reqwest's wasm-target deps) — pinning the older version forced
+# Cargo to downgrade reqwest itself (0.13.4 -> 0.13.1) to find a
+# compatible resolution, which reaches apps/desktop through tauri. Pinned
+# to the already-resolved version instead: `reqwest`/`js-sys`/`web-sys`/
+# `wasm-streams` are all back to their exact pre-this-pin versions, but
+# this is *not* a no-op for the rest of the lockfile — re-resolving after
+# the pin change also shifted which already-present `windows-sys` version
+# (0.59.0/0.60.2, vs. the 0.61.2 the graph had mostly unified on) several
+# unrelated Windows-only transitive deps (dirs-sys, errno, muda, rustix,
+# socket2, tempfile, tray-icon, uds_windows, winapi-util) resolve against.
+# An earlier version of this comment claimed the pin change to "0.2.126"
+# was a total no-op — corrected after a whole-branch review caught the
+# discrepancy (checked with `git diff <pre-task-commit> HEAD -- Cargo.lock`).
+# All the affected crates are `cfg(windows)`-gated and don't compile on
+# this workspace's macOS dev environment either way, so this couldn't be
+# verified against a real Windows build; each shifted version was already
+# present in the lockfile beforehand (not a fresh download), and every
+# `windows-sys` version the graph now resolves to is still one some other
+# dependent in the graph was already requesting, so this reads as
+# resolver noise rather than a deliberate or risky downgrade — but "reads
+# as" is doing real work in that sentence, and this has not been proven
+# safe on Windows. The installed `wasm-bindgen-cli` binary must be kept in
+# sync with this value — see `apps/extension/scripts/build-wasm.sh`, which
+# checks the installed version against this one and fails with the
+# install command if they don't match, rather than relying on this
+# comment (or an untracked report under `.superpowers/`, which a fresh
+# clone doesn't even have) being read first.
+wasm-bindgen = "=0.2.126"
+js-sys = "0.3"
+console_error_panic_hook = "0.1"
+
+[profile.wasm-release]
+inherits = "release"
+opt-level = "s"
+panic = "abort"
