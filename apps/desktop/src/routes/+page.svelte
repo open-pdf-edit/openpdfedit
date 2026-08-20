@@ -104,6 +104,7 @@
   let ocrBusy = $state(false);
   let signatures = $state<SignatureInfoDto[]>([]);
   let compareBusy = $state(false);
+  let compressBusy = $state(false);
   let undoRedoBusy = $state(false);
   let saveBusy = $state(false);
   // Single flag spanning every handler below that mutates the open
@@ -881,6 +882,44 @@
     }
   }
 
+  function formatByteSize(n: number): string {
+    if (n >= 1024 * 1024) return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+    if (n >= 1024) return `${Math.round(n / 1024)} KB`;
+    return `${n} B`;
+  }
+
+  // Export-shaped like handleExtractSelected: pick a target, write a
+  // compressed (full-rewrite) copy, never touch the open document. The
+  // signature caveat in the confirm text is real — see
+  // compress_document_to_path_impl's doc.
+  async function handleCompressDocument() {
+    if (!doc || compressBusy) return;
+    if (
+      !(await showConfirm(
+        "Saves a compressed copy: the document is fully rewritten, shedding edit history and unused data. Existing digital signatures will not carry over into the copy. The open document itself is unchanged.",
+        { title: "Save a compressed copy?", confirmLabel: "Choose where to save" },
+      ))
+    ) {
+      return;
+    }
+    const outputPath = await backend.pickSavePath("compressed.pdf");
+    if (!outputPath) return;
+    error = null;
+    compressBusy = true;
+    try {
+      const stats = await backend.compressDocument({ handle: doc.handle, outputPath });
+      const pct =
+        stats.beforeBytes > 0 ? Math.round((1 - stats.afterBytes / stats.beforeBytes) * 100) : 0;
+      showToast(
+        `Compressed copy saved: ${formatByteSize(stats.beforeBytes)} → ${formatByteSize(stats.afterBytes)}${pct > 0 ? ` (${pct}% smaller)` : ""}`,
+      );
+    } catch (e) {
+      error = formatError(e);
+    } finally {
+      compressBusy = false;
+    }
+  }
+
   async function handleCompareDocument() {
     if (!filePath) return;
     const otherPath = await backend.pickOpenPath();
@@ -1132,6 +1171,15 @@
           aria-label="Watermark document"
         >
           <Icon name="stamp" size={15} />
+        </button>
+        <button
+          class="oa-icon-btn oa-icon-btn--sm"
+          onclick={handleCompressDocument}
+          disabled={compressBusy}
+          use:tooltip={"Save a compressed copy — full rewrite, sheds edit history and unused data"}
+          aria-label="Save a compressed copy"
+        >
+          <Icon name="file-archive" size={15} spin={compressBusy} />
         </button>
         {#if signatures.length > 0}
           <button class="oa-badge oa-badge--warning topbar__pill-btn" onclick={showSignatureDetails} use:tooltip={"Signature info is structural only — not cryptographically verified"}>

@@ -1229,6 +1229,52 @@ pub fn open_document_impl<E: Engine>(
     opened_document(&state.engine, &state.docs, &state.history, &working, handle)
 }
 
+/// Before/after byte counts of a [`compress_document_to_path_impl`] run,
+/// serialized camelCase for the IPC boundary like every sibling DTO.
+#[derive(Debug, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CompressStats {
+    pub before_bytes: u64,
+    pub after_bytes: u64,
+}
+
+/// The impl behind the desktop's `compress_document_cmd`: writes a
+/// **compressed copy** of the document's current state to `output_path`
+/// and reports before/after sizes. "Compress" here is a full PDFium
+/// rewrite (`Engine::save_to_bytes`, FPDF_SaveAsCopy): it drops the
+/// incremental-update revision chain this app's own save pipeline
+/// accumulates (every edit only ever appends — see `openpdfedit-doc`'s
+/// module doc) plus any orphaned/unreferenced objects, which is where
+/// real size wins come from on an edited document. The flip side,
+/// deliberately NOT hidden from the UI: a full rewrite does not carry
+/// existing digital signatures over (same trade-off `fill_form_fields`
+/// documents). The open document itself is untouched — this is an
+/// export, not a mutation, so no handle rotation and no dirty change.
+///
+/// Path-based (writes a file), so desktop-only; the extension builds the
+/// same feature UI-side from the already-exported `saveToBytes` +
+/// `workingCopyBytes` wasm methods and the browser save picker — see
+/// `wasm.ts`'s `compressDocument`.
+#[cfg(not(target_arch = "wasm32"))]
+pub fn compress_document_to_path_impl<E: Engine>(
+    state: &SessionState<E>,
+    handle: DocHandle,
+    output_path: &Path,
+) -> Result<CompressStats, SessionError> {
+    let working = {
+        let guard = state.docs.lock().expect("docs lock poisoned");
+        resolve_doc(&guard, handle)?.path.clone()
+    };
+    let before_bytes = state.store.read(&working)?.len() as u64;
+    let bytes = state.engine.save_to_bytes(handle)?;
+    let after_bytes = bytes.len() as u64;
+    std::fs::write(output_path, &bytes)?;
+    Ok(CompressStats {
+        before_bytes,
+        after_bytes,
+    })
+}
+
 /// The impl behind the desktop's `save_document` command: writes the
 /// working copy over the file the user opened. Path-based, so
 /// desktop-only.
@@ -1712,6 +1758,89 @@ mod tests {
 
         state.engine.close(reopened_handle);
         state.engine.close(opened.handle);
+    }
+
+    /// The compress export end-to-end: grow the working copy with two
+    /// real incremental-save mutations (watermarks), then
+    /// `compress_document_to_path_impl` must write a strictly smaller,
+    /// reparseable copy with the page count intact — and must not touch
+    /// the open document (same handle, still dirty-tracked as before).
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn compress_document_writes_a_smaller_reparseable_copy_without_mutating_the_doc() {
+        let Some(engine) = shared_handle() else {
+            return;
+        };
+        let corpus = test_corpus_path();
+        if !corpus.exists() {
+            eprintln!("skipping: {} not present", corpus.display());
+            return;
+        }
+        let bytes = std::fs::read(&corpus).expect("read fixture");
+
+        let state = SessionState {
+            engine: engine.clone(),
+            docs: Mutex::new(HashMap::new()),
+            history: Mutex::new(HashMap::new()),
+            store: Box::new(MemWorkingStore::default()),
+        };
+        let opened =
+            open_document_bytes(&state, "compress-me.pdf", bytes).expect("open should succeed");
+
+        // Two watermark passes: each goes through commit_mutation's
+        // incremental save, so the working copy grows twice — exactly the
+        // revision-chain fat the compress rewrite exists to shed.
+        let mut handle = opened.handle;
+        for text in ["DRAFT", "CONFIDENTIAL"] {
+            let info = crate::watermark::apply_watermark_impl(
+                &state.engine,
+                &state.docs,
+                &state.history,
+                &*state.store,
+                crate::watermark::ApplyWatermarkRequest {
+                    handle,
+                    text: text.into(),
+                    location: "full".into(),
+                    orientation_deg: 45,
+                    opacity: 0.3,
+                    text_scale: 1.0,
+                    logo_rgba_base64: None,
+                    logo_width: None,
+                    logo_height: None,
+                    pages: None,
+                },
+            )
+            .expect("watermark should succeed");
+            handle = info.handle;
+        }
+
+        let out_path = std::env::temp_dir().join(format!(
+            "openpdfedit-session-compress-test-{}.pdf",
+            std::process::id()
+        ));
+        let stats = compress_document_to_path_impl(&state, handle, &out_path)
+            .expect("compress should succeed");
+
+        assert!(
+            stats.after_bytes < stats.before_bytes,
+            "the rewrite must shed the incremental revision chain: before={} after={}",
+            stats.before_bytes,
+            stats.after_bytes
+        );
+        let written = std::fs::read(&out_path).expect("output file must exist");
+        assert_eq!(written.len() as u64, stats.after_bytes);
+        let reopened = lopdf::Document::load_mem(&written).expect("output must reparse");
+        assert_eq!(
+            reopened.get_pages().len() as u32,
+            opened.page_count,
+            "page count must survive compression"
+        );
+
+        // Export, not mutation: the open doc's handle is still live and
+        // unrotated.
+        assert!(state.engine.page_count(handle).is_ok());
+        state.engine.close(handle);
+        let _ = std::fs::remove_file(&out_path);
     }
 
     // Not `#[cfg(not(target_arch = "wasm32"))]`: plain `lopdf` byte

@@ -30,6 +30,8 @@ import type {
   PageMoveDirection,
   RedactPageRequest,
   ApplyWatermarkRequest,
+  CompressDocumentRequest,
+  CompressStats,
   SignatureInfoDto,
   TextRunDto,
   TextSelectionQuadsRequest,
@@ -187,6 +189,10 @@ export const tauriBackend: Backend = {
 
   async extractPages(request: ExtractPagesRequest) {
     return invoke<OpenedDocument>("extract_pages_cmd", { request });
+  },
+
+  async compressDocument(request: CompressDocumentRequest) {
+    return invoke<CompressStats>("compress_document_cmd", { request });
   },
 
   async mergeDocuments(request: MergeDocumentsRequest) {

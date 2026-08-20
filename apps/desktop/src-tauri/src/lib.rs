@@ -43,6 +43,7 @@
 
 mod annotations;
 mod compare;
+mod compress;
 mod field_create;
 mod forms;
 mod license;
@@ -407,6 +408,7 @@ pub fn run() {
             signatures::list_signatures_cmd,
             redact::redact_page_cmd,
             watermark::apply_watermark_cmd,
+            compress::compress_document_cmd,
             license::import_license_cmd,
             license::get_license_status_cmd,
             textedit::list_text_runs_cmd,

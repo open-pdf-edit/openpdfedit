@@ -219,6 +219,24 @@ export interface ExtractPagesRequest {
   outputPath: string;
 }
 
+/** Compress-copy export: writes a full-rewrite (PDFium FPDF_SaveAsCopy)
+ * copy of the document's CURRENT state to `outputPath` — dropping the
+ * incremental revision chain and orphaned objects, which is where the
+ * size wins come from on an edited file. Export, not mutation: the open
+ * document is untouched. Existing digital signatures do not carry over
+ * into the compressed copy (full rewrite) — the UI says so before
+ * running. `outputPath` follows extractPages' convention: a real path on
+ * tauri, a pickSavePath() key on wasm. */
+export interface CompressDocumentRequest {
+  handle: number;
+  outputPath: string;
+}
+
+export interface CompressStats {
+  beforeBytes: number;
+  afterBytes: number;
+}
+
 export interface MergeDocumentsRequest {
   openHandle: number | null;
   sourcePaths: string[];
@@ -333,6 +351,7 @@ export interface Backend {
   applyWatermark(request: ApplyWatermarkRequest): Promise<OpenedDocument>;
 
   // --- document-level tools ---
+  compressDocument(request: CompressDocumentRequest): Promise<CompressStats>;
   compareDocuments(request: CompareDocumentsRequest): Promise<CompareReportDto>;
   ocrDocument(request: OcrDocumentRequest): Promise<OpenedDocument>;
 

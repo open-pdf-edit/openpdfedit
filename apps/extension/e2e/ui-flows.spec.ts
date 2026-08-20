@@ -373,5 +373,21 @@ test("the real UI: open, paint, highlight, save, delete/undo/redo, merge (incl. 
   await expect(page.locator(".banner")).toHaveCount(0);
   await compareDialog.getByRole("button", { name: "OK" }).click();
 
+  // --- 8. Compress: confirm dialog -> picked target -> real full-rewrite
+  //        bytes land in the fake filesystem, and the toast reports sizes.
+  //        Exercises wasm.ts's compressDocument (saveToBytes +
+  //        workingCopyBytes + pendingSavePicks) through the real UI. ------
+  await queueSavePick(page, "compressed.pdf");
+  await page.getByRole("button", { name: "Save a compressed copy" }).click();
+  const compressDialog = page.getByRole("dialog", { name: "Save a compressed copy?" });
+  await expect(compressDialog).toBeVisible();
+  await compressDialog.getByRole("button", { name: "Choose where to save" }).click();
+  await expect(page.getByText(/Compressed copy saved:/)).toBeVisible({ timeout: 10_000 });
+  const compressed = await fakeFileHeader(page, "compressed.pdf");
+  expect(compressed).not.toBeNull();
+  expect(compressed!.header).toBe("%PDF-");
+  expect(compressed!.length).toBeGreaterThan(0);
+  await expect(page.locator(".banner")).toHaveCount(0);
+
   await page.close();
 });

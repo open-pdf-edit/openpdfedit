@@ -45,6 +45,8 @@ import type {
   PageMoveDirection,
   RedactPageRequest,
   ApplyWatermarkRequest,
+  CompressDocumentRequest,
+  CompressStats,
   SignatureInfoDto,
   TextRunDto,
   TextSelectionQuadsRequest,
@@ -1097,6 +1099,31 @@ export const wasmBackend: Backend = {
     const doc = parseOpenedDocument(session.openDocument(request.outputPath, bytes));
     openDocs.set(doc.handle, { fileHandle, doc });
     return doc;
+  },
+
+  /** Compress-copy export, built entirely from already-exported wasm
+   * primitives: `saveToBytes` (the full PDFium rewrite — no revision
+   * chain, no orphans) for the output, `workingCopyBytes` for the
+   * before-size, and the picked save target for the write. Export, not
+   * mutation — no handle rotation, `openDocs` untouched. */
+  async compressDocument(request: CompressDocumentRequest): Promise<CompressStats> {
+    const fileHandle = pendingSavePicks.get(request.outputPath);
+    if (!fileHandle) {
+      throw new Error(
+        `compressDocument: "${request.outputPath}" is not a pending picked save target — must be a key pickSavePath() returned`,
+      );
+    }
+    pendingSavePicks.delete(request.outputPath);
+
+    const session = await ensureSession();
+    const beforeBytes = session.workingCopyBytes(request.handle).byteLength;
+    const bytes = session.saveToBytes(request.handle);
+
+    const writable = await fileHandle.createWritable();
+    await writable.write(bytes);
+    await writable.close();
+
+    return { beforeBytes, afterBytes: bytes.byteLength };
   },
 
   // --- signatures/redact/textedit/image (real, Phase 4 Task 3) ---
