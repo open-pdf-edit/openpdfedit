@@ -64,10 +64,13 @@ cd apps/extension && npm run e2e # Playwright against the packaged build
 
 ## Repository notes
 
-- `vendor/openapps/` holds prebuilt copies of `@openapps/sdk` and
-  `@openapps/ui` (the OpenApps account/credits components), vendored so
-  this repository installs standalone. Their source lives in the
-  OpenApps monorepo.
+- `apps/desktop/vendor/openapps/` holds prebuilt copies of
+  `@openapps/sdk` and `@openapps/ui` (the OpenApps account/credits
+  components), vendored so this repository installs standalone. They
+  live under `apps/desktop` deliberately: Vite resolves their bare
+  imports (`lit`) by walking up from the *real* file path, and only
+  there does the walk-up reach `apps/desktop/node_modules`. Their
+  source lives in the OpenApps monorepo.
 - `site/` is the static marketing page (no build step — open
   `site/index.html`).
 - `docs/` carries the design/research notes and implementation plans the

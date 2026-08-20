@@ -1,7 +1,7 @@
 import { defineConfig } from "vite";
 import { sveltekit } from "@sveltejs/kit/vite";
 
-// @ts-expect-error process is a nodejs global
+// @ts-ignore process is a nodejs global (typed only when the vendored packages pull in @types/node)
 const host = process.env.TAURI_DEV_HOST;
 
 // https://vite.dev/config/
