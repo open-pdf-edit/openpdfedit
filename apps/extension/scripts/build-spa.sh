@@ -93,4 +93,20 @@ node "$SCRIPT_DIR/externalize-inline.mjs"
 echo "build-spa.sh: re-asserting pdfium.js/pdfium.wasm + wasm-gen/* in $DIST_DIR..."
 bash "$SCRIPT_DIR/copy-vendor.sh"
 
+# --- Step 6: reject reserved filenames Chrome refuses to load -------------
+#
+# Chrome will not load an unpacked extension containing any file or
+# directory whose name starts with "_" (reserved; only Chrome's own
+# _locales/_metadata are allowed) — SvelteKit's default "_app" asset dir
+# tripped exactly this, and NOTHING automated catches it: Playwright's
+# --load-extension path skips the check, so the packaged zip only failed
+# at a human's chrome://extensions load-unpacked. svelte.config.js sets
+# appDir: "app" to avoid it; this guard makes the mistake unshippable.
+bad_names="$(find "$DIST_DIR" -name '_*' ! -name '_locales' ! -path '*/_locales/*' -print | head -5)"
+if [ -n "$bad_names" ]; then
+  echo "build-spa.sh: ERROR — dist contains _-prefixed names Chrome refuses to load:" >&2
+  echo "$bad_names" >&2
+  exit 1
+fi
+
 echo "build-spa.sh: done — $DIST_DIR is a loadable unpacked extension"

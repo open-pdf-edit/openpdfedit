@@ -12,6 +12,14 @@ const config = {
     adapter: adapter({
       fallback: "index.html",
     }),
+    // SvelteKit's default asset dir is "_app", but Chrome REFUSES to load
+    // an unpacked extension containing any top-level file/dir starting
+    // with "_" ("reserved for use by the system") — and the same build
+    // output ships as the extension SPA. Playwright's --load-extension
+    // path never enforces that check, so only a human load-unpacked
+    // catches it; build-spa.sh now guards against any _-prefixed root
+    // entry for the same reason. Harmless on the Tauri side.
+    appDir: "app",
   },
 };
 
