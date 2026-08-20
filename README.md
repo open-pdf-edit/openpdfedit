@@ -16,6 +16,15 @@ full-page) · document compare (text + pixel diff) · OCR (desktop only,
 via a local tesseract) · optional OpenApps account panel (sign-in,
 credits — never required, no network without it).
 
+## Downloads
+
+Prebuilt artifacts are attached to each
+[GitHub Release](https://github.com/open-pdf-edit/OpenPdfEdit/releases):
+the macOS app (`.dmg`, Apple Silicon), the Windows installer
+(`…-setup.exe`), and the Chrome extension (`openpdfedit-dist.zip`).
+They're built by [`.github/workflows/release.yml`](.github/workflows/release.yml)
+on every `v*` tag.
+
 ## Test the Chrome extension (fastest path)
 
 A ready-to-load build is committed at
