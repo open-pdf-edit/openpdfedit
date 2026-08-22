@@ -36,6 +36,7 @@ export type {
   PageMoveDirection,
   PageSize,
   PixelPageDiffDto,
+  OutlineEntryDto,
   RedactPageRequest,
   SearchHitDto,
   SearchRequest,

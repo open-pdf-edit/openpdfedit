@@ -5,6 +5,7 @@
     CompareReportDto,
     FormFieldDto,
     OpenedDocument,
+    OutlineEntryDto,
     SearchHitDto,
     SignatureInfoDto,
     TextRunDto,
@@ -16,6 +17,7 @@
   import FormsPanel from "$lib/FormsPanel.svelte";
   import SignaturesPanel from "$lib/SignaturesPanel.svelte";
   import SearchPanel from "$lib/SearchPanel.svelte";
+  import OutlinePanel from "$lib/OutlinePanel.svelte";
   import SignaturePad from "$lib/SignaturePad.svelte";
   import { savedSignatures, addSignature } from "$lib/signatures.svelte";
   import DialogHost from "$lib/DialogHost.svelte";
@@ -56,6 +58,37 @@
   let filePath = $state<string | null>(null);
   let doc = $state<OpenedDocument | null>(null);
   let error = $state<string | null>(null);
+
+  // ---- Contents (bookmarks) ----
+  let showOutline = $state(false);
+  let outline = $state<OutlineEntryDto[]>([]);
+  let outlineLoading = $state(false);
+  let currentPage = $state(0);
+  /** A page-jump request for the viewer. The nonce is what makes clicking
+   * the same bookmark twice scroll again. */
+  let scrollToPage = $state<{ pageIndex: number; nonce: number } | null>(null);
+  let scrollNonce = 0;
+
+  async function refreshOutline() {
+    if (!doc) {
+      outline = [];
+      return;
+    }
+    outlineLoading = true;
+    try {
+      outline = await backend.documentOutline(doc.handle);
+    } catch {
+      // A document whose outline won't read is not a document that
+      // failed to open — show no bookmarks rather than an error banner.
+      outline = [];
+    } finally {
+      outlineLoading = false;
+    }
+  }
+
+  function goToPage(pageIndex: number) {
+    scrollToPage = { pageIndex, nonce: ++scrollNonce };
+  }
 
   // ---- Find in document ----
   // Hidden until asked for (⌘F): this is a low-frequency, task-driven
@@ -177,8 +210,13 @@
       lastSearchedHandle = handle;
       if (handle === null) {
         closeSearch();
+        outline = [];
         return;
       }
+      // Bookmarks are re-read for the same reason search hits are: a
+      // page delete or reorder moves every destination after it, and a
+      // contents list that jumps to the wrong page is worse than none.
+      refreshOutline();
       if (!showSearch || searchQuery.trim() === "") return;
       runSearch();
     });
@@ -1244,7 +1282,9 @@
         </button>
       </div>
 
-      <span class="oa-caption topbar__meta">{doc.page_count} page{doc.page_count === 1 ? "" : "s"}</span>
+      <span class="oa-caption topbar__meta">
+        Page {currentPage + 1} of {doc.page_count}
+      </span>
     {/if}
 
     <div class="topbar__spacer"></div>
@@ -1259,6 +1299,15 @@
           aria-label="Toggle comments panel"
         >
           <Icon name="message-square" size={15} />
+        </button>
+        <button
+          class="oa-icon-btn oa-icon-btn--sm"
+          class:oa-icon-btn--selected={showOutline}
+          onclick={() => (showOutline = !showOutline)}
+          use:tooltip={outline.length > 0 ? "Contents" : "Contents — this document has no bookmarks"}
+          aria-label="Toggle contents panel"
+        >
+          <Icon name="list-tree" size={15} />
         </button>
         <button
           class="oa-icon-btn oa-icon-btn--sm"
@@ -1508,7 +1557,17 @@
         onMoveObject={handleMoveObject}
         {searchHits}
         activeHitIndex={searchActiveIndex}
+        {scrollToPage}
+        onCurrentPageChange={(pageIndex) => (currentPage = pageIndex)}
       />
+      {#if showOutline}
+        <OutlinePanel
+          entries={outline}
+          loading={outlineLoading}
+          {currentPage}
+          onGoToPage={goToPage}
+        />
+      {/if}
       {#if showSearch && showSearchResults}
         <SearchPanel
           hits={searchHits}

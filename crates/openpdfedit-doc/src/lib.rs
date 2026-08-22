@@ -60,6 +60,7 @@
 //! present in the file survives every edit after it: its bytes are never
 //! touched, only appended after.
 
+use std::collections::{HashMap, HashSet};
 use std::path::Path;
 
 use lopdf::{Dictionary, Object, ObjectId};
@@ -2212,5 +2213,287 @@ mod tests {
         let resources = page.get(b"Resources").unwrap().as_dict().unwrap();
         let ext = resources.get(b"ExtGState").unwrap().as_dict().unwrap();
         assert!(ext.has(b"OPEWmGs") && ext.has(b"OPEWmGs1"));
+    }
+}
+
+/// One entry in a document's outline (what readers call bookmarks).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OutlineItem {
+    pub title: String,
+    /// The page it jumps to, if its destination could be resolved to one
+    /// in this document. `None` for an entry that only expands its
+    /// children, or whose destination points somewhere this crate
+    /// doesn't follow (another file, a URI, an unresolvable name).
+    pub page_index: Option<u32>,
+    pub children: Vec<OutlineItem>,
+}
+
+/// Depth and size limits for outline walking.
+///
+/// Not a product opinion about how deep a table of contents may be — a
+/// guard against malformed files. `/Next` and `/First` are raw object
+/// references, so a corrupted or hostile document can describe a cycle,
+/// and a naive walk of one never terminates.
+const MAX_OUTLINE_DEPTH: usize = 32;
+const MAX_OUTLINE_ITEMS: usize = 20_000;
+
+impl Document {
+    /// The document's outline as a tree, in reading order.
+    ///
+    /// Empty when the document has none, which is the common case —
+    /// `/Outlines` is optional and most everyday PDFs (a scan, an
+    /// invoice, an export from a word processor) carry none.
+    ///
+    /// Destinations are resolved as far as a page index, following both
+    /// the direct form (`/Dest`) and the action form (`/A` with `/S
+    /// /GoTo`), and both kinds of named destination: the PDF 1.1
+    /// `/Dests` dictionary and the 1.2+ `/Names /Dests` name tree. An
+    /// entry whose destination can't be resolved is still returned, with
+    /// `page_index: None` — a bookmark you can see but not follow beats
+    /// a table of contents with holes in it.
+    pub fn outline(&self) -> Result<Vec<OutlineItem>, DocError> {
+        let Ok(catalog) = self.current.catalog() else {
+            return Ok(Vec::new());
+        };
+        let Ok(outlines_id) = catalog.get(b"Outlines").and_then(Object::as_reference) else {
+            return Ok(Vec::new());
+        };
+        let Ok(outlines) = self.dict_at(outlines_id) else {
+            return Ok(Vec::new());
+        };
+        let Ok(first) = outlines.get(b"First").and_then(Object::as_reference) else {
+            return Ok(Vec::new());
+        };
+
+        // Page id -> index, built once: resolving each destination
+        // against `get_pages()` separately would be quadratic in a
+        // document with a large table of contents.
+        let page_indices: HashMap<ObjectId, u32> = self
+            .current
+            .get_pages()
+            .into_iter()
+            .map(|(number, id)| (id, number - 1))
+            .collect();
+
+        let mut seen = HashSet::new();
+        let mut budget = MAX_OUTLINE_ITEMS;
+        Ok(self.walk_outline(first, 0, &mut seen, &mut budget, &page_indices))
+    }
+
+    fn walk_outline(
+        &self,
+        first: ObjectId,
+        depth: usize,
+        seen: &mut HashSet<ObjectId>,
+        budget: &mut usize,
+        page_indices: &HashMap<ObjectId, u32>,
+    ) -> Vec<OutlineItem> {
+        let mut items = Vec::new();
+        if depth >= MAX_OUTLINE_DEPTH {
+            return items;
+        }
+
+        let mut current = Some(first);
+        while let Some(id) = current {
+            // A repeat means the `/Next` chain loops. Stopping is the
+            // only correct response; continuing never terminates.
+            if *budget == 0 || !seen.insert(id) {
+                break;
+            }
+            *budget -= 1;
+
+            let Ok(dict) = self.dict_at(id) else { break };
+
+            let children = match dict.get(b"First").and_then(Object::as_reference) {
+                Ok(child) => self.walk_outline(child, depth + 1, seen, budget, page_indices),
+                Err(_) => Vec::new(),
+            };
+
+            items.push(OutlineItem {
+                title: dict
+                    .get(b"Title")
+                    .ok()
+                    .map(|title| self.decode_pdf_text(title))
+                    .unwrap_or_default(),
+                page_index: self.destination_page(dict, page_indices),
+                children,
+            });
+
+            current = dict.get(b"Next").and_then(Object::as_reference).ok();
+        }
+        items
+    }
+
+    /// Resolves an outline entry's destination to a page index.
+    fn destination_page(
+        &self,
+        item: &Dictionary,
+        page_indices: &HashMap<ObjectId, u32>,
+    ) -> Option<u32> {
+        // `/Dest` is the direct form; `/A` is an action, which for a
+        // bookmark is almost always `/GoTo` carrying the same
+        // destination under `/D`. A URI or launch action has no page and
+        // correctly resolves to None.
+        let destination = match item.get(b"Dest") {
+            Ok(dest) => dest,
+            Err(_) => {
+                let action = self.resolve(item.get(b"A").ok()?).as_dict().ok()?;
+                let is_goto = matches!(action.get(b"S"), Ok(Object::Name(s)) if s == b"GoTo");
+                if !is_goto {
+                    return None;
+                }
+                action.get(b"D").ok()?
+            }
+        };
+
+        self.destination_array_page(destination, page_indices, 0)
+    }
+
+    /// A destination is either an explicit array whose first element is
+    /// the target page, or a name standing for one. Resolving a name
+    /// yields another destination, hence the bounded recursion — a name
+    /// that resolves to itself is otherwise an infinite loop.
+    fn destination_array_page(
+        &self,
+        destination: &Object,
+        page_indices: &HashMap<ObjectId, u32>,
+        depth: usize,
+    ) -> Option<u32> {
+        if depth > 4 {
+            return None;
+        }
+        match self.resolve(destination) {
+            Object::Array(array) => match array.first()? {
+                Object::Reference(page_id) => page_indices.get(page_id).copied(),
+                // A remote destination gives a bare page *number*
+                // instead of a reference. Meaningless for another file,
+                // but valid within this one.
+                Object::Integer(page_number) => u32::try_from(*page_number).ok(),
+                _ => None,
+            },
+            Object::Name(name) => {
+                let target = self.named_destination(name)?;
+                self.destination_array_page(&target, page_indices, depth + 1)
+            }
+            Object::String(bytes, _) => {
+                let target = self.named_destination(bytes)?;
+                self.destination_array_page(&target, page_indices, depth + 1)
+            }
+            _ => None,
+        }
+    }
+
+    /// Looks a named destination up in both places it can live: the PDF
+    /// 1.1 `/Dests` dictionary in the catalog, and the 1.2+ `/Names
+    /// /Dests` name tree. Real documents use both, and which one depends
+    /// on the age of the tool that produced the file rather than on
+    /// anything the reader can predict.
+    fn named_destination(&self, name: &[u8]) -> Option<Object> {
+        let catalog = self.current.catalog().ok()?;
+
+        if let Ok(dests) = catalog.get(b"Dests") {
+            if let Ok(dict) = self.resolve(dests).as_dict() {
+                if let Ok(found) = dict.get(name) {
+                    return Some(self.unwrap_destination(found));
+                }
+            }
+        }
+
+        let names = self.resolve(catalog.get(b"Names").ok()?).as_dict().ok()?;
+        let tree_root = names.get(b"Dests").ok()?;
+        self.search_name_tree(tree_root, name, 0)
+            .map(|found| self.unwrap_destination(&found))
+    }
+
+    /// A named destination may be the array itself, or a dictionary
+    /// wrapping it under `/D`.
+    fn unwrap_destination(&self, object: &Object) -> Object {
+        match self.resolve(object) {
+            Object::Dictionary(dict) => dict
+                .get(b"D")
+                .map(|d| self.resolve(d).clone())
+                .unwrap_or_else(|_| Object::Null),
+            other => other.clone(),
+        }
+    }
+
+    /// Walks a PDF name tree looking for `name`.
+    ///
+    /// The tree's `/Names` arrays are sorted, but this scans them
+    /// linearly rather than bisecting: a bookmark lookup happens once
+    /// per outline entry when a document is opened, and a linear scan of
+    /// a sorted array is not what makes that slow. The `/Limits` check
+    /// on each `/Kids` branch is the pruning that actually matters, and
+    /// that is done.
+    fn search_name_tree(&self, node: &Object, name: &[u8], depth: usize) -> Option<Object> {
+        if depth > MAX_OUTLINE_DEPTH {
+            return None;
+        }
+        let dict = self.resolve(node).as_dict().ok()?;
+
+        if let Ok(Object::Array(entries)) = dict.get(b"Names").map(|n| self.resolve(n)) {
+            // Flat [key1, value1, key2, value2, ...] pairs.
+            for pair in entries.chunks(2) {
+                let [key, value] = pair else { continue };
+                if let Ok(key_bytes) = self.resolve(key).as_str() {
+                    if key_bytes == name {
+                        return Some(value.clone());
+                    }
+                }
+            }
+        }
+
+        let Ok(Object::Array(kids)) = dict.get(b"Kids").map(|k| self.resolve(k)) else {
+            return None;
+        };
+        for kid in kids {
+            let kid_dict = self.resolve(kid).as_dict().ok();
+            // `/Limits` is [least, greatest] of the keys below this
+            // branch; skipping branches that can't contain the name is
+            // the whole point of the tree.
+            let in_range = kid_dict
+                .and_then(|d| d.get(b"Limits").ok())
+                .and_then(|l| self.resolve(l).as_array().ok())
+                .map(|limits| match (limits.first(), limits.get(1)) {
+                    (Some(low), Some(high)) => {
+                        let low = self.resolve(low).as_str().unwrap_or(b"");
+                        let high = self.resolve(high).as_str().unwrap_or(&[0xFF]);
+                        low <= name && name <= high
+                    }
+                    _ => true,
+                })
+                .unwrap_or(true);
+            if !in_range {
+                continue;
+            }
+            if let Some(found) = self.search_name_tree(kid, name, depth + 1) {
+                return Some(found);
+            }
+        }
+        None
+    }
+
+    /// Decodes a PDF text string.
+    ///
+    /// Two encodings are possible and the bytes say which: a UTF-16BE
+    /// byte-order mark, or otherwise PDFDocEncoding, whose printable
+    /// range matches Latin-1 closely enough that treating it as such is
+    /// what every reader effectively does. Getting this wrong shows a
+    /// document's table of contents as `\0T\0i\0t\0l\0e`.
+    fn decode_pdf_text(&self, object: &Object) -> String {
+        let Ok(bytes) = self.resolve(object).as_str() else {
+            return String::new();
+        };
+        if bytes.starts_with(&[0xFE, 0xFF]) {
+            let units: Vec<u16> = bytes[2..]
+                .as_chunks::<2>()
+                .0
+                .iter()
+                .map(|pair| u16::from_be_bytes(*pair))
+                .collect();
+            String::from_utf16_lossy(&units)
+        } else {
+            bytes.iter().map(|b| *b as char).collect()
+        }
     }
 }

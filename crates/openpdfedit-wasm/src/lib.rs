@@ -251,6 +251,7 @@ use openpdfedit_session::forms::{
     create_form_field_impl, fill_form_fields_impl, list_form_fields_impl, CreateFormFieldRequest,
     FillFormRequest,
 };
+use openpdfedit_session::outline::document_outline_impl;
 use openpdfedit_session::pages::{
     delete_page_impl, extract_pages_bytes, merge_open_doc_with_bytes, move_page_impl,
     rotate_page_impl, set_crop_box_impl, MoveDirection,
@@ -1036,6 +1037,16 @@ impl WasmSession {
         )
         .map_err(to_js_err)?;
         serde_json::to_string(&results).map_err(to_js_err)
+    }
+
+    /// The document's outline (bookmarks) as a flattened, depth-tagged
+    /// JSON array of `OutlineEntryDto`. Read-only: reads the parsed
+    /// object graph only — no engine, no working copy, no mutation.
+    #[wasm_bindgen(js_name = documentOutline)]
+    pub fn document_outline(&self, handle: u32) -> Result<String, JsValue> {
+        let entries =
+            document_outline_impl(&self.state.docs, handle as DocHandle).map_err(to_js_err)?;
+        serde_json::to_string(&entries).map_err(to_js_err)
     }
 
     /// Permanently removes the content (text and images, not just a black

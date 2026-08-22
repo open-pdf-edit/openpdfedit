@@ -39,6 +39,17 @@ export interface AnnotationSummaryDto {
 // only structural inspection (what the PDF declares about a signature,
 // not whether it's genuine or trusted). Never render this as "signed and
 // valid."
+/** One row of the document's outline. Mirrors `OutlineEntryDto` in
+ * `crates/openpdfedit-session/src/outline.rs`. */
+export interface OutlineEntryDto {
+  title: string;
+  /** `null` for an entry whose destination isn't a page in this document
+   * — still listed, just not clickable. */
+  pageIndex: number | null;
+  depth: number;
+  hasChildren: boolean;
+}
+
 export interface SearchRequest {
   handle: number;
   query: string;
@@ -373,6 +384,10 @@ export interface Backend {
   /** Finds every occurrence of `query` across the whole document.
    * Read-only — no handle rotation. */
   searchDocument(request: SearchRequest): Promise<SearchResultsDto>;
+
+  /** The document's outline (bookmarks), flattened depth-first with a
+   * `depth` tag per entry. Read-only — no handle rotation. */
+  documentOutline(handle: number): Promise<OutlineEntryDto[]>;
 
   // --- pages ---
   rotatePage(handle: number, pageIndex: number, deltaDegrees: number): Promise<OpenedDocument>;

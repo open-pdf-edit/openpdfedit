@@ -241,6 +241,7 @@ use thiserror::Error;
 pub mod annotations;
 pub mod compare;
 pub mod forms;
+pub mod outline;
 pub mod pages;
 pub mod redact;
 pub mod search;

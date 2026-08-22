@@ -48,6 +48,7 @@ mod field_create;
 mod forms;
 mod license;
 mod ocr;
+mod outline;
 mod pages;
 mod redact;
 mod search;
@@ -407,6 +408,7 @@ pub fn run() {
             forms::fill_form_fields_cmd,
             ocr::ocr_document_cmd,
             signatures::list_signatures_cmd,
+            outline::document_outline_cmd,
             redact::redact_page_cmd,
             search::search_document_cmd,
             watermark::apply_watermark_cmd,
