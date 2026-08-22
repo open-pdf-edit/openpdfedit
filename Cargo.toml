@@ -5,6 +5,7 @@ members = [
     "crates/openpdfedit-session",
     "crates/openpdfedit-doc",
     "crates/openpdfedit-annot",
+    "crates/openpdfedit-flatten",
     "crates/openpdfedit-forms",
     "crates/openpdfedit-pages",
     "crates/openpdfedit-ocr",
@@ -32,6 +33,7 @@ openpdfedit-engine = { path = "crates/openpdfedit-engine" }
 openpdfedit-session = { path = "crates/openpdfedit-session" }
 openpdfedit-doc = { path = "crates/openpdfedit-doc" }
 openpdfedit-annot = { path = "crates/openpdfedit-annot" }
+openpdfedit-flatten = { path = "crates/openpdfedit-flatten" }
 openpdfedit-forms = { path = "crates/openpdfedit-forms" }
 openpdfedit-pages = { path = "crates/openpdfedit-pages" }
 openpdfedit-ocr = { path = "crates/openpdfedit-ocr" }

@@ -32,6 +32,7 @@ import type {
   ApplyWatermarkRequest,
   CompressDocumentRequest,
   CompressStats,
+  FlattenResultDto,
   OutlineEntryDto,
   SearchResultsDto,
   SignatureInfoDto,
@@ -177,6 +178,10 @@ export const tauriBackend: Backend = {
 
   async documentOutline(handle) {
     return invoke<OutlineEntryDto[]>("document_outline_cmd", { handle });
+  },
+
+  async flattenDocument(request) {
+    return invoke<FlattenResultDto>("flatten_document_cmd", { request });
   },
 
   // --- pages ---

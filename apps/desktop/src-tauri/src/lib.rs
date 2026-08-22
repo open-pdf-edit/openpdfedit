@@ -45,6 +45,7 @@ mod annotations;
 mod compare;
 mod compress;
 mod field_create;
+mod flatten;
 mod forms;
 mod license;
 mod ocr;
@@ -404,6 +405,7 @@ pub fn run() {
             pages::move_page_cmd,
             pages::merge_documents_cmd,
             pages::extract_pages_cmd,
+            flatten::flatten_document_cmd,
             forms::list_form_fields_cmd,
             forms::fill_form_fields_cmd,
             ocr::ocr_document_cmd,

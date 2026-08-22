@@ -59,6 +59,54 @@
   let doc = $state<OpenedDocument | null>(null);
   let error = $state<string | null>(null);
 
+  // ---- Flatten ----
+  let flattenBusy = $state(false);
+
+  async function handleFlatten() {
+    if (!doc || mutationBusy) return;
+    const handle = doc.handle;
+    const hasFields = formFields.length > 0;
+
+    const confirmed = await showConfirm(
+      hasFields
+        ? "Markup and filled-in form values become part of the page. Afterwards they can't be " +
+            "edited, moved or removed, and the form can't be filled in again.\n\n" +
+            "This is what you want before sending a signed or marked-up document to someone else."
+        : "Markup becomes part of the page. Afterwards it can't be edited, moved or removed.\n\n" +
+            "This is what you want before sending a marked-up document to someone else.",
+      { title: "Flatten", confirmLabel: hasFields ? "Flatten markup and fields" : "Flatten markup" },
+    );
+    if (!confirmed) return;
+
+    error = null;
+    flattenBusy = true;
+    mutationBusy = true;
+    try {
+      const result = await backend.flattenDocument({
+        handle,
+        annotations: true,
+        formFields: hasFields,
+      });
+      doc = result.document;
+      await Promise.all([refreshAnnotations(), refreshFormFields(), refreshSignatures()]);
+      showToast(
+        result.flattened === 0
+          ? "Nothing to flatten — this document has no markup with a visible appearance."
+          : `Flattened ${result.flattened} item${result.flattened === 1 ? "" : "s"}` +
+              (result.skipped > 0
+                ? `, left ${result.skipped} interactive (links and hidden markup)`
+                : "") +
+              ". ⌘Z undoes it.",
+        { title: "Flatten" },
+      );
+    } catch (e) {
+      error = formatError(e);
+    } finally {
+      flattenBusy = false;
+      mutationBusy = false;
+    }
+  }
+
   // ---- Contents (bookmarks) ----
   let showOutline = $state(false);
   let outline = $state<OutlineEntryDto[]>([]);
@@ -1337,6 +1385,15 @@
           aria-label="Toggle signatures panel"
         >
           <Icon name="signature" size={15} />
+        </button>
+        <button
+          class="oa-icon-btn oa-icon-btn--sm"
+          onclick={handleFlatten}
+          disabled={flattenBusy || mutationBusy}
+          use:tooltip={"Flatten — bake markup into the page so it can't be edited or removed"}
+          aria-label="Flatten"
+        >
+          <Icon name="layers" size={15} spin={flattenBusy} />
         </button>
         {#if backendKind !== "wasm"}
           <button

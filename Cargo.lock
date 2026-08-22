@@ -2824,6 +2824,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "openpdfedit-flatten"
+version = "0.1.0"
+dependencies = [
+ "lopdf",
+ "openpdfedit-doc",
+ "openpdfedit-engine",
+ "thiserror 2.0.19",
+]
+
+[[package]]
 name = "openpdfedit-forms"
 version = "0.1.0"
 dependencies = [
@@ -2886,6 +2896,7 @@ dependencies = [
  "openpdfedit-compare",
  "openpdfedit-doc",
  "openpdfedit-engine",
+ "openpdfedit-flatten",
  "openpdfedit-forms",
  "openpdfedit-pages",
  "openpdfedit-redact",

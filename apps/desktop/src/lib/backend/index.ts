@@ -23,6 +23,8 @@ export type {
   EditTextRunRequest,
   ExtractPagesRequest,
   FillFormFieldsRequest,
+  FlattenDocumentRequest,
+  FlattenResultDto,
   FormFieldDto,
   FormFieldKindDto,
   FormFieldOptionDto,

@@ -247,6 +247,7 @@ use openpdfedit_session::annotations::{
     TextSelectionQuadsRequest,
 };
 use openpdfedit_session::compare::compare_bytes;
+use openpdfedit_session::flatten::{flatten_document_impl, FlattenDocumentRequest};
 use openpdfedit_session::forms::{
     create_form_field_impl, fill_form_fields_impl, list_form_fields_impl, CreateFormFieldRequest,
     FillFormRequest,
@@ -1047,6 +1048,24 @@ impl WasmSession {
         let entries =
             document_outline_impl(&self.state.docs, handle as DocHandle).map_err(to_js_err)?;
         serde_json::to_string(&entries).map_err(to_js_err)
+    }
+
+    /// Bakes markup (and optionally filled form values) into the page,
+    /// returning a `FlattenResultDto` JSON string. Mutating: rotates the
+    /// handle like every other mutating method here, and is undoable.
+    #[wasm_bindgen(js_name = flattenDocument)]
+    pub fn flatten_document(&self, request_json: &str) -> Result<String, JsValue> {
+        let request: FlattenDocumentRequest =
+            serde_json::from_str(request_json).map_err(to_js_err)?;
+        let result = flatten_document_impl(
+            &self.state.engine,
+            &self.state.docs,
+            &self.state.history,
+            &*self.state.store,
+            request,
+        )
+        .map_err(to_js_err)?;
+        serde_json::to_string(&result).map_err(to_js_err)
     }
 
     /// Permanently removes the content (text and images, not just a black

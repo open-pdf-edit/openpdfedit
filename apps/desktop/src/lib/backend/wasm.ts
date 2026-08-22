@@ -47,6 +47,7 @@ import type {
   ApplyWatermarkRequest,
   CompressDocumentRequest,
   CompressStats,
+  FlattenResultDto,
   OutlineEntryDto,
   SearchResultsDto,
   SignatureInfoDto,
@@ -358,6 +359,9 @@ interface WasmSessionHandle {
   /** Read-only — no handle rotation. Returns an `OutlineEntryDto[]` JSON
    * string. */
   documentOutline(handle: number): string;
+  /** Mutating/rotates. `requestJson` is a `FlattenDocumentRequest`;
+   * returns a `FlattenResultDto` JSON string. */
+  flattenDocument(requestJson: string): string;
   /** Mutating/rotates, same as `addAnnotation` above. `requestJson` is a
    * `RedactPageRequest`. */
   redactPage(requestJson: string): string;
@@ -1172,6 +1176,12 @@ export const wasmBackend: Backend = {
     const session = await ensureSession();
     const json = session.documentOutline(handle);
     return JSON.parse(json) as OutlineEntryDto[];
+  },
+
+  async flattenDocument(request) {
+    const session = await ensureSession();
+    const json = session.flattenDocument(JSON.stringify(request));
+    return JSON.parse(json) as FlattenResultDto;
   },
 
   async redactPage(request: RedactPageRequest) {

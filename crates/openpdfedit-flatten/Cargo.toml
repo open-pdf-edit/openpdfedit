@@ -1,0 +1,15 @@
+[package]
+name = "openpdfedit-flatten"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Flatten annotations and form fields into page content, so markup and filled values become part of the page itself."
+
+[dependencies]
+openpdfedit-doc.workspace = true
+lopdf.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+openpdfedit-engine.workspace = true

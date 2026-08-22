@@ -9,6 +9,7 @@ description = "Engine-generic document session core: open-documents map, undo/re
 [dependencies]
 openpdfedit-engine.workspace = true
 openpdfedit-doc.workspace = true
+openpdfedit-flatten.workspace = true
 openpdfedit-annot.workspace = true
 # `forms::normalize_button_states_in_bytes` re-parses a just-saved PDF via
 # raw `lopdf` (see that function's doc) — the one non-test spot in this

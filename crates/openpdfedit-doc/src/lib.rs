@@ -368,6 +368,35 @@ impl Document {
         self.dict_at(id)
     }
 
+    /// The dictionary of the object at `id`, whether it is a plain
+    /// dictionary or a stream.
+    ///
+    /// [`Document::dictionary`] deliberately refuses a stream, because a
+    /// caller asking for "the dictionary at this id" and getting a
+    /// stream's would usually be following a corrupted reference.
+    /// Appearance streams are the case where a stream's dictionary is
+    /// exactly what's wanted — `/BBox` and `/Matrix` live there — so they
+    /// get their own accessor rather than loosening the common one.
+    pub fn dictionary_or_stream_dict(&self, id: ObjectId) -> Result<&Dictionary, DocError> {
+        match self.current.get_object(id).map_err(DocError::Load)? {
+            Object::Dictionary(dict) => Ok(dict),
+            Object::Stream(stream) => Ok(&stream.dict),
+            _ => Err(DocError::NotADictionary(id)),
+        }
+    }
+
+    /// Removes `/AcroForm` from the catalog.
+    ///
+    /// Needed after flattening form fields: an `/AcroForm` left behind
+    /// describes fields whose widgets no longer exist, and some readers
+    /// respond by drawing empty field boxes over the very values that
+    /// were just baked into the page.
+    pub fn remove_acroform(&mut self) {
+        if let Ok(catalog) = self.current.catalog_mut() {
+            catalog.remove(b"AcroForm");
+        }
+    }
+
     /// Follows `obj` through one level of indirection if it's a
     /// `Reference`, otherwise hands it back as-is. PDF lets almost any
     /// value be either inline or an indirect reference, so consumers

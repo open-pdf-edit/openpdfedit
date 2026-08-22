@@ -240,6 +240,7 @@ use thiserror::Error;
 
 pub mod annotations;
 pub mod compare;
+pub mod flatten;
 pub mod forms;
 pub mod outline;
 pub mod pages;

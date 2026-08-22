@@ -39,6 +39,20 @@ export interface AnnotationSummaryDto {
 // only structural inspection (what the PDF declares about a signature,
 // not whether it's genuine or trusted). Never render this as "signed and
 // valid."
+export interface FlattenDocumentRequest {
+  handle: number;
+  annotations: boolean;
+  formFields: boolean;
+}
+
+export interface FlattenResultDto {
+  document: OpenedDocument;
+  flattened: number;
+  /** Left interactive — a link, or markup with no appearance to draw. */
+  skipped: number;
+  popupsRemoved: number;
+}
+
 /** One row of the document's outline. Mirrors `OutlineEntryDto` in
  * `crates/openpdfedit-session/src/outline.rs`. */
 export interface OutlineEntryDto {
@@ -388,6 +402,10 @@ export interface Backend {
   /** The document's outline (bookmarks), flattened depth-first with a
    * `depth` tag per entry. Read-only — no handle rotation. */
   documentOutline(handle: number): Promise<OutlineEntryDto[]>;
+
+  /** Bakes markup (and optionally filled form values) into the page.
+   * Mutating — rotates the handle, and is undoable. */
+  flattenDocument(request: FlattenDocumentRequest): Promise<FlattenResultDto>;
 
   // --- pages ---
   rotatePage(handle: number, pageIndex: number, deltaDegrees: number): Promise<OpenedDocument>;
