@@ -228,6 +228,215 @@ pub fn char_range_to_line_quads(chars: &[CharBox], start: u32, end: u32) -> Vec<
     quads
 }
 
+/// How a text search decides whether a candidate matches the query.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct SearchOptions {
+    /// When false (the default), `A` matches `a`.
+    pub match_case: bool,
+    /// When true, a match must be bounded by non-word characters on both
+    /// sides — `pdf` stops matching inside `pdfium`.
+    pub whole_word: bool,
+}
+
+/// One occurrence of a search query in a document.
+#[derive(Debug, Clone, PartialEq)]
+pub struct SearchHit {
+    pub page_index: u32,
+    /// Inclusive character-index range of the match within its page, in
+    /// the same index space as [`Engine::page_char_boxes`] — so a caller
+    /// can turn a hit into a real highlight annotation over exactly the
+    /// matched glyphs, not an eyeballed rectangle.
+    pub char_start: u32,
+    pub char_end: u32,
+    /// One quad per visual line the match spans, as `[x0, y0, x1, y1]` in
+    /// PDF page-space points (origin bottom-left) — the same convention
+    /// as [`char_range_to_line_quads`], which produces them. A match
+    /// broken across a line wrap yields more than one.
+    pub quads: Vec<[f32; 4]>,
+    /// Text just before the match, whitespace-collapsed, for the result list.
+    pub context_before: String,
+    /// The matched run as it actually appears in the document — which can
+    /// differ from the query in case, and in internal whitespace.
+    pub context_match: String,
+    /// Text just after the match, whitespace-collapsed.
+    pub context_after: String,
+}
+
+/// How many characters of surrounding text each [`SearchHit`] carries on
+/// either side of the match. Enough for a result row to show the clause a
+/// hit sits in without wrapping to a second line at a typical panel width.
+const SEARCH_CONTEXT_CHARS: usize = 48;
+
+/// Stand-in for a character PDFium can't map to Unicode. Deliberately a
+/// character that matches nothing and is not whitespace, so an unmappable
+/// glyph neither joins a whitespace run nor silently matches a query —
+/// and, critically, still occupies exactly one slot, keeping this
+/// crate's character indices aligned with [`Engine::page_char_boxes`].
+const UNMAPPABLE_CHAR: char = '\u{FFFD}';
+
+fn is_word_char(c: char) -> bool {
+    c.is_alphanumeric() || c == '_'
+}
+
+/// Builds the whitespace-collapsed, optionally case-folded view of
+/// `chars` that [`find_matches`] actually searches, plus the original
+/// character index each normalized character came from.
+///
+/// Collapsing whitespace is what makes searching a real PDF work at all.
+/// PDFium's character stream carries the document's *layout*, so a
+/// "termination clause" broken across a line wrap arrives as
+/// `termination\r\nclause` — and a naive substring search finds nothing
+/// on the very page a reader can plainly see it on. Here every run of
+/// whitespace in the page (and in the query) becomes a single space, so
+/// a query matches across line wraps, column breaks, and the extra
+/// spacing PDF generators sprinkle between justified words.
+///
+/// Case folding takes only the first character of a multi-character
+/// lowercase mapping (`İ` → `i`, dropping the combining dot). That keeps
+/// the normalized sequence index-for-index alignable with its origins,
+/// which the mapping back to page geometry depends on; the alternative
+/// (a true full-case fold) would need a second index translation layer
+/// to buy correct matching on a handful of Turkish and Greek forms.
+fn normalize_for_search(chars: &[char], match_case: bool) -> (Vec<char>, Vec<u32>) {
+    let mut normalized = Vec::with_capacity(chars.len());
+    let mut origins = Vec::with_capacity(chars.len());
+    let mut in_whitespace_run = false;
+
+    for (index, &c) in chars.iter().enumerate() {
+        if c.is_whitespace() {
+            // Leading whitespace is dropped entirely rather than
+            // normalized to a space: a page that starts with a newline
+            // would otherwise never match a query starting with its
+            // first real word.
+            if !in_whitespace_run && !normalized.is_empty() {
+                normalized.push(' ');
+                origins.push(index as u32);
+            }
+            in_whitespace_run = true;
+            continue;
+        }
+        in_whitespace_run = false;
+        let folded = if match_case {
+            c
+        } else {
+            c.to_lowercase().next().unwrap_or(c)
+        };
+        normalized.push(folded);
+        origins.push(index as u32);
+    }
+
+    (normalized, origins)
+}
+
+/// Collapses a run of page characters into a single-spaced display
+/// string — the same whitespace treatment [`normalize_for_search`]
+/// applies for matching, so a result row reads the way the query that
+/// found it was written.
+///
+/// Whitespace at either edge collapses to a single space rather than
+/// being trimmed away, because the caller splits one continuous piece of
+/// text into three ([`search_context`]) and the UI concatenates them
+/// back: trimming the edges would run the last word of the context
+/// straight into the first character of the match.
+fn collapse_whitespace(chars: &[char]) -> String {
+    let mut out = String::with_capacity(chars.len());
+    let mut pending_space = false;
+    for &c in chars {
+        if c.is_whitespace() {
+            pending_space = true;
+            continue;
+        }
+        if pending_space {
+            out.push(' ');
+            pending_space = false;
+        }
+        out.push(c);
+    }
+    if pending_space {
+        out.push(' ');
+    }
+    out
+}
+
+/// Finds every non-overlapping occurrence of `query` in `chars`,
+/// returning **inclusive** `(start, end)` indices into `chars` — ready to
+/// hand straight to [`char_range_to_line_quads`].
+///
+/// `chars` is a page's characters in `page_char_boxes` index order, and
+/// matching runs over the whitespace-collapsed view of both sides (see
+/// [`normalize_for_search`]), so a query with a single space matches a
+/// line wrap in the document. Deliberately pure and PDFium-free: the
+/// matching rules are the part worth testing exhaustively, and they're
+/// testable here without a render engine.
+///
+/// PDFium ships its own `FPDFText_FindStart`, which this does not use:
+/// it matches the raw character stream, so it misses every query that
+/// spans a line wrap — the common case in the contract/clause searching
+/// this feature exists for — and `pdfium-render` does not surface the
+/// matched character range from it anyway, only opaque rectangles, which
+/// would rule out turning a hit into a real highlight annotation.
+pub fn find_matches(chars: &[char], query: &str, options: SearchOptions) -> Vec<(u32, u32)> {
+    let query_chars: Vec<char> = query.chars().collect();
+    let (needle, _) = normalize_for_search(&query_chars, options.match_case);
+    // `normalize_for_search` can leave one trailing space (it only knows
+    // a whitespace run has ended when a non-space arrives). A query of
+    // nothing but whitespace normalizes away entirely.
+    let needle: &[char] = {
+        let end = needle
+            .iter()
+            .rposition(|c| *c != ' ')
+            .map_or(0, |last| last + 1);
+        &needle[..end]
+    };
+    if needle.is_empty() {
+        return Vec::new();
+    }
+
+    let (haystack, origins) = normalize_for_search(chars, options.match_case);
+    if needle.len() > haystack.len() {
+        return Vec::new();
+    }
+
+    let mut matches = Vec::new();
+    let mut at = 0usize;
+    while at + needle.len() <= haystack.len() {
+        let is_match = haystack[at..at + needle.len()] == *needle;
+        let after = at + needle.len();
+        let boundaries_ok = !options.whole_word
+            || ((at == 0 || !is_word_char(haystack[at - 1]))
+                && (after >= haystack.len() || !is_word_char(haystack[after])));
+
+        if is_match && boundaries_ok {
+            // `needle` is trimmed, so its last character is never the
+            // collapsed space whose origin points at the *first* raw
+            // whitespace character of a run — the inclusive end index is
+            // therefore always a real glyph.
+            matches.push((origins[at], origins[after - 1]));
+            at = after;
+        } else {
+            at += 1;
+        }
+    }
+    matches
+}
+
+/// Splits the text around an inclusive match range into the three pieces
+/// a result row renders: what came before, the match itself, what comes
+/// after.
+fn search_context(chars: &[char], start: u32, end: u32) -> (String, String, String) {
+    let start = (start as usize).min(chars.len());
+    let end = (end as usize).min(chars.len().saturating_sub(1));
+    let before_from = start.saturating_sub(SEARCH_CONTEXT_CHARS);
+    let after_from = (end + 1).min(chars.len());
+    let after_to = (after_from + SEARCH_CONTEXT_CHARS).min(chars.len());
+
+    (
+        collapse_whitespace(&chars[before_from..start]),
+        collapse_whitespace(&chars[start..after_from]),
+        collapse_whitespace(&chars[after_from..after_to]),
+    )
+}
+
 /// Everything the UI needs from a render engine. Object-safe so the
 /// desktop app can hold a `Box<dyn Engine>` and swap implementations
 /// without touching call sites.
@@ -252,6 +461,22 @@ pub trait Engine: Send {
     /// instead of one round trip per page — a viewer needs all of them
     /// up front to lay out a virtualized scroll container.
     fn page_sizes(&self, handle: DocHandle) -> Result<Vec<PageSize>, EngineError>;
+    /// Finds every occurrence of `query` across the whole document,
+    /// stopping once `max_hits` have been collected.
+    ///
+    /// Whole-document rather than per-page on purpose: this runs on the
+    /// single render thread (see [`EngineHandle`]), so a page-at-a-time
+    /// API would interleave hundreds of round trips with tile renders and
+    /// make scrolling stutter for the duration of a search. One bounded
+    /// call blocks tile rendering once, briefly, instead — and `max_hits`
+    /// is what keeps "briefly" true on a 2,000-page document.
+    fn search_document(
+        &self,
+        handle: DocHandle,
+        query: &str,
+        options: SearchOptions,
+        max_hits: usize,
+    ) -> Result<Vec<SearchHit>, EngineError>;
     /// Like `open`, but from an in-memory buffer rather than a filesystem
     /// path — the entry point a browser extension build needs, since
     /// `wasm32-unknown-unknown` has no filesystem at all.
@@ -465,23 +690,7 @@ impl Engine for PdfiumEngine {
             .text()
             .map_err(|e| EngineError::RenderFailed(e.to_string()))?;
 
-        let boxes = text
-            .chars()
-            .iter()
-            .enumerate()
-            .filter_map(|(i, ch)| {
-                let bounds = ch.loose_bounds().ok()?;
-                Some(CharBox {
-                    char_index: i as u32,
-                    left: bounds.left().value,
-                    top: bounds.top().value,
-                    right: bounds.right().value,
-                    bottom: bounds.bottom().value,
-                })
-            })
-            .collect();
-
-        Ok(boxes)
+        Ok(char_boxes_from_text(&text))
     }
 
     fn page_sizes(&self, handle: DocHandle) -> Result<Vec<PageSize>, EngineError> {
@@ -551,6 +760,104 @@ impl Engine for PdfiumEngine {
     ) -> Result<(), EngineError> {
         PdfiumEngine::fill_form_fields(self, handle, &values)
     }
+
+    fn search_document(
+        &self,
+        handle: DocHandle,
+        query: &str,
+        options: SearchOptions,
+        max_hits: usize,
+    ) -> Result<Vec<SearchHit>, EngineError> {
+        let documents = self
+            .documents
+            .lock()
+            .expect("engine document map lock poisoned");
+        let document = documents
+            .get(&handle)
+            .ok_or(EngineError::UnknownHandle(handle))?;
+
+        let mut hits = Vec::new();
+        for (page_index, page) in document.pages().iter().enumerate() {
+            if hits.len() >= max_hits {
+                break;
+            }
+            // A page whose text layer won't load (a pure-image scan, a
+            // damaged content stream) contributes no hits rather than
+            // failing the whole search — one bad page in a long document
+            // shouldn't cost the user every other result.
+            let Ok(text) = page.text() else { continue };
+            let chars = page_chars_from_text(&text);
+            let matches = find_matches(&chars, query, options);
+            if matches.is_empty() {
+                continue;
+            }
+
+            // Only pages that actually matched pay for box extraction.
+            let boxes = char_boxes_from_text(&text);
+            for (char_start, char_end) in matches {
+                if hits.len() >= max_hits {
+                    break;
+                }
+                let (context_before, context_match, context_after) =
+                    search_context(&chars, char_start, char_end);
+                hits.push(SearchHit {
+                    page_index: page_index as u32,
+                    char_start,
+                    char_end,
+                    quads: char_range_to_line_quads(&boxes, char_start, char_end),
+                    context_before,
+                    context_match,
+                    context_after,
+                });
+            }
+        }
+        Ok(hits)
+    }
+}
+
+/// Extracts every glyph's page-space box from an already-open text page.
+///
+/// Shared by [`Engine::page_char_boxes`] and [`Engine::search_document`]:
+/// the latter already holds the document-map lock and its own
+/// `PdfPageText`, so it cannot call the former without deadlocking on
+/// that lock or paying for a second text extraction.
+///
+/// A character whose bounds PDFium won't report (it returns an error for
+/// some marks and control characters) is skipped rather than faked, but
+/// its `char_index` still comes from the *unfiltered* position, so the
+/// indices here stay aligned with the character sequence
+/// [`page_chars_from_text`] produces.
+fn char_boxes_from_text(text: &PdfPageText) -> Vec<CharBox> {
+    text.chars()
+        .iter()
+        .enumerate()
+        .filter_map(|(i, ch)| {
+            let bounds = ch.loose_bounds().ok()?;
+            Some(CharBox {
+                char_index: i as u32,
+                left: bounds.left().value,
+                top: bounds.top().value,
+                right: bounds.right().value,
+                bottom: bounds.bottom().value,
+            })
+        })
+        .collect()
+}
+
+/// The page's characters in PDFium's own index order, one entry per
+/// index with no gaps.
+///
+/// Not `PdfPageText::all()`, which goes through
+/// `FPDFText_GetBoundedText` and filters by *geometry* — its result is
+/// not index-alignable with the character boxes a hit has to be mapped
+/// onto. Building the sequence character by character is what guarantees
+/// index `i` here and `CharBox { char_index: i, .. }` describe the same
+/// glyph.
+fn page_chars_from_text(text: &PdfPageText) -> Vec<char> {
+    text.chars()
+        .iter()
+        .map(|ch| ch.unicode_char().unwrap_or(UNMAPPABLE_CHAR))
+        .collect()
 }
 
 /// Interactive AcroForm operations. `list_form_fields`/`fill_form_fields`
@@ -958,5 +1265,195 @@ mod tests {
     #[test]
     fn char_range_to_line_quads_on_empty_chars_returns_no_quads() {
         assert_eq!(char_range_to_line_quads(&[], 0, 5), Vec::<[f32; 4]>::new());
+    }
+}
+
+#[cfg(test)]
+mod search_tests {
+    use super::*;
+
+    fn chars(s: &str) -> Vec<char> {
+        s.chars().collect()
+    }
+
+    fn matched_text(page: &str, hits: &[(u32, u32)]) -> Vec<String> {
+        let c = chars(page);
+        hits.iter()
+            .map(|(start, end)| c[*start as usize..=*end as usize].iter().collect())
+            .collect()
+    }
+
+    #[test]
+    fn finds_a_plain_case_insensitive_match() {
+        let page = chars("The Termination Clause applies.");
+        let hits = find_matches(&page, "termination", SearchOptions::default());
+        assert_eq!(
+            matched_text("The Termination Clause applies.", &hits),
+            ["Termination"]
+        );
+    }
+
+    #[test]
+    fn match_case_rejects_a_differently_cased_candidate() {
+        let page = chars("The Termination Clause applies.");
+        let options = SearchOptions {
+            match_case: true,
+            whole_word: false,
+        };
+        assert!(find_matches(&page, "termination", options).is_empty());
+        assert_eq!(find_matches(&page, "Termination", options).len(), 1);
+    }
+
+    /// The whole reason this doesn't use PDFium's own `FPDFText_FindStart`:
+    /// a phrase broken across a line wrap is the normal case in the
+    /// contract-reading this feature exists for, and a raw substring
+    /// search over PDFium's character stream misses every one of them.
+    #[test]
+    fn a_query_with_a_space_matches_across_a_line_wrap() {
+        let page = chars("...the termination\r\nclause shall...");
+        let hits = find_matches(&page, "termination clause", SearchOptions::default());
+        assert_eq!(hits.len(), 1);
+        let (start, end) = hits[0];
+        let matched: String = page[start as usize..=end as usize].iter().collect();
+        assert_eq!(matched, "termination\r\nclause");
+        // The inclusive end lands on a real glyph, never inside the wrap.
+        assert_eq!(page[end as usize], 'e');
+    }
+
+    #[test]
+    fn runs_of_spaces_in_the_page_collapse_for_matching() {
+        let page = chars("total    due    now");
+        assert_eq!(
+            find_matches(&page, "total due now", SearchOptions::default()).len(),
+            1
+        );
+    }
+
+    #[test]
+    fn whole_word_stops_a_match_inside_a_longer_word() {
+        let page = chars("pdfium renders pdf files");
+        let options = SearchOptions {
+            match_case: false,
+            whole_word: true,
+        };
+        let hits = find_matches(&page, "pdf", options);
+        assert_eq!(hits.len(), 1);
+        assert_eq!(hits[0].0, 15); // the standalone "pdf", not pdfium's prefix
+    }
+
+    #[test]
+    fn matches_do_not_overlap() {
+        let page = chars("aaaa");
+        let hits = find_matches(&page, "aa", SearchOptions::default());
+        assert_eq!(hits, [(0, 1), (2, 3)]);
+    }
+
+    #[test]
+    fn an_empty_or_whitespace_only_query_matches_nothing() {
+        let page = chars("anything at all");
+        assert!(find_matches(&page, "", SearchOptions::default()).is_empty());
+        assert!(find_matches(&page, "   ", SearchOptions::default()).is_empty());
+        assert!(find_matches(&page, "\r\n", SearchOptions::default()).is_empty());
+    }
+
+    #[test]
+    fn a_query_longer_than_the_page_matches_nothing() {
+        let page = chars("short");
+        assert!(find_matches(
+            &page,
+            "considerably longer than the page",
+            SearchOptions::default()
+        )
+        .is_empty());
+    }
+
+    /// Leading whitespace must not become a space in the normalized page,
+    /// or a query starting with the page's first real word never matches.
+    #[test]
+    fn a_page_starting_with_whitespace_still_matches_its_first_word() {
+        let page = chars("\r\n\r\n  Agreement of Sale");
+        let hits = find_matches(&page, "agreement", SearchOptions::default());
+        assert_eq!(hits.len(), 1);
+        assert_eq!(page[hits[0].0 as usize], 'A');
+    }
+
+    /// PDFium reports some glyphs as unmappable; they must occupy a slot
+    /// (so indices stay aligned with `char_boxes_from_text`) without
+    /// joining a whitespace run or matching anything.
+    #[test]
+    fn an_unmappable_character_neither_matches_nor_shifts_indices() {
+        let page = chars(&format!("ab{UNMAPPABLE_CHAR}cd"));
+        assert!(find_matches(&page, "abcd", SearchOptions::default()).is_empty());
+        let hits = find_matches(&page, "cd", SearchOptions::default());
+        assert_eq!(hits, [(3, 4)]);
+    }
+
+    #[test]
+    fn context_splits_the_page_around_the_match() {
+        let page = chars("Payment is due on the first day of each month.");
+        let hits = find_matches(&page, "first day", SearchOptions::default());
+        let (before, matched, after) = search_context(&page, hits[0].0, hits[0].1);
+        assert_eq!(before, "Payment is due on the ");
+        assert_eq!(matched, "first day");
+        assert_eq!(after, " of each month.");
+    }
+
+    #[test]
+    fn context_collapses_whitespace_and_clamps_at_the_page_edges() {
+        let page = chars("start\r\n\r\nmiddle\r\n\r\nend");
+        let hits = find_matches(&page, "middle", SearchOptions::default());
+        let (before, matched, after) = search_context(&page, hits[0].0, hits[0].1);
+        assert_eq!(before, "start ");
+        assert_eq!(matched, "middle");
+        assert_eq!(after, " end");
+    }
+
+    /// The hit-to-geometry path: a match's inclusive char range has to be
+    /// consumable by `char_range_to_line_quads` unchanged, including when
+    /// the match wraps a line (two quads, not one).
+    #[test]
+    fn a_wrapped_match_maps_to_one_quad_per_line() {
+        let boxes = two_line_boxes();
+        let page = chars("AB\r\nCD");
+        let hits = find_matches(&page, "ab cd", SearchOptions::default());
+        assert_eq!(hits.len(), 1);
+        let quads = char_range_to_line_quads(&boxes, hits[0].0, hits[0].1);
+        assert_eq!(quads.len(), 2);
+    }
+
+    /// `"AB"` on one line, `"CD"` below it, with the `\r\n` between them
+    /// carrying no box (PDFium reports no bounds for them) — exactly the
+    /// shape `char_boxes_from_text` produces for wrapped text.
+    fn two_line_boxes() -> Vec<CharBox> {
+        vec![
+            CharBox {
+                char_index: 0,
+                left: 10.0,
+                top: 110.0,
+                right: 20.0,
+                bottom: 100.0,
+            },
+            CharBox {
+                char_index: 1,
+                left: 20.0,
+                top: 110.0,
+                right: 30.0,
+                bottom: 100.0,
+            },
+            CharBox {
+                char_index: 4,
+                left: 10.0,
+                top: 90.0,
+                right: 20.0,
+                bottom: 80.0,
+            },
+            CharBox {
+                char_index: 5,
+                left: 20.0,
+                top: 90.0,
+                right: 30.0,
+                bottom: 80.0,
+            },
+        ]
     }
 }

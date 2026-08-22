@@ -68,6 +68,18 @@
      * quite apart from being easier, the prompt gave no feedback about
      * which direction was which. */
     onMoveObject: (pageIndex: number, x: number, y: number, dx: number, dy: number) => void;
+    /** Search matches falling on this page, painted as a translucent
+     * overlay. Purely presentational — a search never touches the
+     * document, so these are not annotations and vanish with the search. */
+    searchMatches?: SearchMatchOverlay[];
+  }
+
+  /** One search hit's geometry, in PDF page-space points. `active` marks
+   * the hit the result list is stepped to, drawn differently so it's
+   * findable among the other matches on a busy page. */
+  export interface SearchMatchOverlay {
+    quads: [number, number, number, number][];
+    active: boolean;
   }
 
   export interface AnnotationPayload {
@@ -94,6 +106,7 @@
     onCreateField,
     onPlaceSignature,
     onMoveObject,
+    searchMatches = [],
   }: Props = $props();
 
   const MOVE_TOOLS: Tool[] = ["moveText", "moveImage"];
@@ -373,9 +386,25 @@
   });
 </script>
 
-<div class="page" bind:this={containerEl} style="width: {cssWidth}px; height: {cssHeight}px;">
+<div
+  class="page"
+  bind:this={containerEl}
+  data-page-index={pageIndex} style="width: {cssWidth}px; height: {cssHeight}px;">
   {#if isNearViewport}
     <canvas bind:this={canvasEl} style="width: 100%; height: 100%;"></canvas>
+    <!-- Above the tile, below the interaction layer, and pointer-
+         transparent, so a search overlay never intercepts a markup
+         gesture aimed at the text underneath it. -->
+    {#each searchMatches as match, m (m)}
+      {#each match.quads as quad, q (q)}
+        <div
+          class="search-hit"
+          class:search-hit--active={match.active}
+          style="left: {quad[0] * pxPerPt}px; top: {(heightPt - quad[3]) * pxPerPt}px; width: {(quad[2] - quad[0]) *
+            pxPerPt}px; height: {(quad[3] - quad[1]) * pxPerPt}px;"
+        ></div>
+      {/each}
+    {/each}
     {#if renderError}
       <div class="render-error" title={renderError}>⚠ page failed to render</div>
     {/if}
@@ -444,6 +473,18 @@
     height: 2px;
     background: color-mix(in oklab, var(--red-500) 85%, transparent);
     pointer-events: none;
+  }
+
+  .search-hit {
+    position: absolute;
+    background: color-mix(in oklab, var(--yellow, #f2e863) 55%, transparent);
+    border-radius: 1px;
+    pointer-events: none;
+  }
+
+  .search-hit--active {
+    background: color-mix(in oklab, var(--orange, #ff8c42) 55%, transparent);
+    outline: var(--border-width) solid var(--orange-600, #cc6a2f);
   }
 
   .interaction-layer {

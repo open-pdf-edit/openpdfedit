@@ -362,7 +362,7 @@ fn embed_logo(doc: &mut Document, logo: &LogoRgba) -> Result<ObjectId, Watermark
     let pixel_count = expected / 4;
     let mut rgb = Vec::with_capacity(pixel_count * 3);
     let mut alpha = Vec::with_capacity(pixel_count);
-    for px in logo.rgba.chunks_exact(4) {
+    for px in logo.rgba.as_chunks::<4>().0 {
         rgb.extend_from_slice(&px[..3]);
         alpha.push(px[3]);
     }

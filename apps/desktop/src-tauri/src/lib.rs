@@ -50,6 +50,7 @@ mod license;
 mod ocr;
 mod pages;
 mod redact;
+mod search;
 mod signatures;
 mod textedit;
 mod watermark;
@@ -407,6 +408,7 @@ pub fn run() {
             ocr::ocr_document_cmd,
             signatures::list_signatures_cmd,
             redact::redact_page_cmd,
+            search::search_document_cmd,
             watermark::apply_watermark_cmd,
             compress::compress_document_cmd,
             license::import_license_cmd,
@@ -668,7 +670,9 @@ mod tests {
         );
 
         let non_white_pixels = body
-            .chunks_exact(4)
+            .as_chunks::<4>()
+            .0
+            .iter()
             .filter(|px| !(px[0] == 255 && px[1] == 255 && px[2] == 255))
             .count();
         assert!(

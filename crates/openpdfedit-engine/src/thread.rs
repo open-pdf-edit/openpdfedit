@@ -26,6 +26,7 @@ use lru::LruCache;
 
 use crate::{
     CharBox, DocHandle, Engine, EngineError, FormField, PageSize, PdfiumEngine, RenderedTile,
+    SearchHit, SearchOptions,
 };
 
 /// Default tile cache capacity. 64 tiles at a typical 1000px-wide render
@@ -62,6 +63,13 @@ enum Request {
     PageSizes {
         handle: DocHandle,
         reply: mpsc::Sender<Result<Vec<PageSize>, EngineError>>,
+    },
+    SearchDocument {
+        handle: DocHandle,
+        query: String,
+        options: SearchOptions,
+        max_hits: usize,
+        reply: mpsc::Sender<Result<Vec<SearchHit>, EngineError>>,
     },
     ListFormFields {
         handle: DocHandle,
@@ -196,6 +204,26 @@ impl EngineHandle {
         self.request_reply(|reply| Request::PageSizes { handle, reply })
     }
 
+    /// Searches the whole open document — see [`Engine::search_document`]
+    /// for why this is one bounded call rather than a per-page API, and
+    /// what `max_hits` is protecting.
+    pub fn search_document(
+        &self,
+        handle: DocHandle,
+        query: &str,
+        options: SearchOptions,
+        max_hits: usize,
+    ) -> Result<Vec<SearchHit>, EngineError> {
+        let query = query.to_string();
+        self.request_reply(|reply| Request::SearchDocument {
+            handle,
+            query,
+            options,
+            max_hits,
+            reply,
+        })
+    }
+
     pub fn list_form_fields(&self, handle: DocHandle) -> Result<Vec<FormField>, EngineError> {
         self.request_reply(|reply| Request::ListFormFields { handle, reply })
     }
@@ -250,6 +278,16 @@ impl Engine for EngineHandle {
 
     fn page_count(&self, handle: DocHandle) -> Result<u32, EngineError> {
         EngineHandle::page_count(self, handle)
+    }
+
+    fn search_document(
+        &self,
+        handle: DocHandle,
+        query: &str,
+        options: SearchOptions,
+        max_hits: usize,
+    ) -> Result<Vec<SearchHit>, EngineError> {
+        EngineHandle::search_document(self, handle, query, options, max_hits)
     }
 
     fn render_page(
@@ -381,6 +419,15 @@ fn run_render_loop(engine: PdfiumEngine, rx: mpsc::Receiver<Request>) {
             Request::PageSizes { handle, reply } => {
                 let _ = reply.send(engine.page_sizes(handle));
             }
+            Request::SearchDocument {
+                handle,
+                query,
+                options,
+                max_hits,
+                reply,
+            } => {
+                let _ = reply.send(engine.search_document(handle, &query, options, max_hits));
+            }
             Request::ListFormFields { handle, reply } => {
                 let _ = reply.send(engine.list_form_fields(handle));
             }
@@ -454,6 +501,113 @@ mod tests {
             .parent()
             .unwrap()
             .join("testdata/minimal.pdf")
+    }
+
+    /// A corpus document that actually carries a text layer — `minimal.pdf`
+    /// has an empty content stream, so it can't exercise text search.
+    fn text_corpus_path() -> PathBuf {
+        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .unwrap()
+            .parent()
+            .unwrap()
+            .join("testdata/corpus/hello_world_rotated.pdf")
+    }
+
+    /// End-to-end through real PDFium: the pure matcher is unit-tested in
+    /// `lib.rs`, but only this proves the character sequence PDFium hands
+    /// back is index-aligned with the boxes a hit gets mapped onto — the
+    /// one assumption in the whole search path that can't be checked
+    /// without a render engine.
+    #[test]
+    fn search_finds_real_page_text_and_maps_it_to_page_geometry() {
+        let Some(handle) = shared_handle() else {
+            return;
+        };
+        let corpus = text_corpus_path();
+        if !corpus.exists() {
+            eprintln!("skipping: {} not present", corpus.display());
+            return;
+        }
+        let doc = handle.open(&corpus).expect("open should succeed");
+
+        // The fixture draws the same string at several rotations, so
+        // several hits is the correct answer — the point of asserting on
+        // all of them is that a rotated run maps to geometry just as a
+        // horizontal one does.
+        let hits = handle
+            .search_document(doc, "hello", SearchOptions::default(), 100)
+            .expect("search should succeed");
+        assert!(
+            !hits.is_empty(),
+            "the fixture's text layer should be searchable"
+        );
+
+        let page_count = handle.page_count(doc).expect("page count should succeed");
+        for hit in &hits {
+            assert!(hit.page_index < page_count);
+            assert_eq!(
+                hit.context_match.to_lowercase(),
+                "hello",
+                "the reported match text must be what was actually matched"
+            );
+            assert!(
+                !hit.quads.is_empty(),
+                "a hit on rendered text must carry at least one quad to highlight"
+            );
+            for quad in &hit.quads {
+                let [x0, y0, x1, y1] = *quad;
+                assert!(x1 > x0 && y1 > y0, "quad {quad:?} is not a real rectangle");
+            }
+        }
+
+        // Hits arrive in document order — page first, then position
+        // within the page — which is what lets the UI step through them
+        // with next/previous.
+        assert!(hits
+            .windows(2)
+            .all(|w| (w[0].page_index, w[0].char_start) < (w[1].page_index, w[1].char_start)));
+
+        // Case sensitivity is applied against the document's real casing.
+        let cased = SearchOptions {
+            match_case: true,
+            whole_word: false,
+        };
+        assert!(handle
+            .search_document(doc, "HELLO", cased, 100)
+            .expect("search should succeed")
+            .is_empty());
+
+        handle.close(doc);
+    }
+
+    #[test]
+    fn search_respects_the_hit_cap_and_tolerates_a_document_without_text() {
+        let Some(handle) = shared_handle() else {
+            return;
+        };
+        let corpus = text_corpus_path();
+        if !corpus.exists() {
+            eprintln!("skipping: {} not present", corpus.display());
+            return;
+        }
+        let doc = handle.open(&corpus).expect("open should succeed");
+        // "l" occurs several times in "Hello world"; the cap must bound it.
+        let capped = handle
+            .search_document(doc, "l", SearchOptions::default(), 2)
+            .expect("search should succeed");
+        assert_eq!(capped.len(), 2);
+        handle.close(doc);
+
+        let blank = test_corpus_path();
+        if blank.exists() {
+            let doc = handle.open(&blank).expect("open should succeed");
+            assert!(handle
+                .search_document(doc, "anything", SearchOptions::default(), 100)
+                .expect("a text-free document should search cleanly, not error")
+                .is_empty());
+            handle.close(doc);
+        }
     }
 
     #[test]

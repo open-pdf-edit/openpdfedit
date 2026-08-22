@@ -32,6 +32,7 @@ import type {
   ApplyWatermarkRequest,
   CompressDocumentRequest,
   CompressStats,
+  SearchResultsDto,
   SignatureInfoDto,
   TextRunDto,
   TextSelectionQuadsRequest,
@@ -167,6 +168,10 @@ export const tauriBackend: Backend = {
 
   async listSignatures(handle) {
     return invoke<SignatureInfoDto[]>("list_signatures_cmd", { handle });
+  },
+
+  async searchDocument(request) {
+    return invoke<SearchResultsDto>("search_document_cmd", { request });
   },
 
   // --- pages ---

@@ -5,6 +5,7 @@
     CompareReportDto,
     FormFieldDto,
     OpenedDocument,
+    SearchHitDto,
     SignatureInfoDto,
     TextRunDto,
     ImagePlacementDto,
@@ -14,6 +15,7 @@
   import PagesPanel from "$lib/PagesPanel.svelte";
   import FormsPanel from "$lib/FormsPanel.svelte";
   import SignaturesPanel from "$lib/SignaturesPanel.svelte";
+  import SearchPanel from "$lib/SearchPanel.svelte";
   import SignaturePad from "$lib/SignaturePad.svelte";
   import { savedSignatures, addSignature } from "$lib/signatures.svelte";
   import DialogHost from "$lib/DialogHost.svelte";
@@ -24,6 +26,7 @@
   import ToastHost from "$lib/ToastHost.svelte";
   import { showToast } from "$lib/toast.svelte";
   import { TOOLS, type Tool } from "$lib/tools";
+  import { untrack } from "svelte";
   import type { AnnotationPayload } from "$lib/PdfPage.svelte";
   import BrandMark from "$lib/BrandMark.svelte";
   import Icon from "$lib/Icon.svelte";
@@ -53,6 +56,133 @@
   let filePath = $state<string | null>(null);
   let doc = $state<OpenedDocument | null>(null);
   let error = $state<string | null>(null);
+
+  // ---- Find in document ----
+  // Hidden until asked for (⌘F): this is a low-frequency, task-driven
+  // tool, and a permanently-parked search box would eat topbar width the
+  // markup tools use every session.
+  let showSearch = $state(false);
+  let showSearchResults = $state(false);
+  let searchQuery = $state("");
+  let searchMatchCase = $state(false);
+  let searchWholeWord = $state(false);
+  let searchHits = $state<SearchHitDto[]>([]);
+  let searchActiveIndex = $state(-1);
+  let searchBusy = $state(false);
+  let searchTruncated = $state(false);
+  /** Whether the current query has actually run, so the results panel can
+   * tell "nothing typed yet" apart from "no matches". */
+  let searchRan = $state(false);
+  let searchInputEl = $state<HTMLInputElement | null>(null);
+
+  /** Debounce before a keystroke becomes a query. On the desktop, search
+   * runs on the shared render thread; in the extension it runs on the
+   * page's only thread. Firing per keystroke on a long document queues
+   * full-document scans ahead of the tile renders the viewer needs. */
+  const SEARCH_DEBOUNCE_MS = 200;
+  let searchDebounce: ReturnType<typeof setTimeout> | undefined;
+  /** Guards against an earlier, slower query overwriting a later one — a
+   * real risk here, since a one-character query takes far longer than a
+   * specific one. */
+  let searchGeneration = 0;
+
+  async function runSearch() {
+    const handle = doc?.handle;
+    const query = searchQuery;
+    const generation = ++searchGeneration;
+
+    if (!handle || query.trim() === "") {
+      searchHits = [];
+      searchActiveIndex = -1;
+      searchTruncated = false;
+      searchRan = false;
+      searchBusy = false;
+      return;
+    }
+
+    searchBusy = true;
+    try {
+      const results = await backend.searchDocument({
+        handle,
+        query,
+        matchCase: searchMatchCase,
+        wholeWord: searchWholeWord,
+      });
+      if (generation !== searchGeneration) return;
+      searchHits = results.hits;
+      searchTruncated = results.truncated;
+      searchRan = true;
+      // Jump straight to the first match: the point of typing a query is
+      // to be taken to it, not to then have to press Enter as well.
+      searchActiveIndex = results.hits.length > 0 ? 0 : -1;
+    } catch (e) {
+      if (generation !== searchGeneration) return;
+      error = formatError(e);
+      searchHits = [];
+      searchActiveIndex = -1;
+      searchRan = true;
+    } finally {
+      if (generation === searchGeneration) searchBusy = false;
+    }
+  }
+
+  function scheduleSearch() {
+    clearTimeout(searchDebounce);
+    searchDebounce = setTimeout(runSearch, SEARCH_DEBOUNCE_MS);
+  }
+
+  function openSearch() {
+    if (!doc) return;
+    showSearch = true;
+    // Focus once the bar has rendered. Selecting the existing text makes
+    // reopening behave like every other find box: type to replace, or
+    // press Enter to step through what it already found.
+    queueMicrotask(() => {
+      searchInputEl?.focus();
+      searchInputEl?.select();
+    });
+  }
+
+  function closeSearch() {
+    clearTimeout(searchDebounce);
+    searchGeneration++;
+    showSearch = false;
+    searchHits = [];
+    searchActiveIndex = -1;
+    searchTruncated = false;
+    searchRan = false;
+    searchBusy = false;
+  }
+
+  function stepSearch(delta: number) {
+    if (searchHits.length === 0) return;
+    // Wrap in both directions, the way every find bar does.
+    searchActiveIndex = (searchActiveIndex + delta + searchHits.length) % searchHits.length;
+  }
+
+  /** The handle the currently-displayed hits were found against. */
+  let lastSearchedHandle: number | null = null;
+
+  // Every write rotates the render handle, so a changed handle is exactly
+  // "this document's bytes are different now" — after an edit, an undo, a
+  // page reorder. Character indices and page geometry both move, so stale
+  // hits would point at the wrong text, and quietly highlighting the
+  // wrong words is worse than briefly showing none. `untrack` keeps this
+  // firing on the handle alone: the query has its own debounce, and
+  // re-running it here too would double every search.
+  $effect(() => {
+    const handle = doc?.handle ?? null;
+    untrack(() => {
+      if (handle === lastSearchedHandle) return;
+      lastSearchedHandle = handle;
+      if (handle === null) {
+        closeSearch();
+        return;
+      }
+      if (!showSearch || searchQuery.trim() === "") return;
+      runSearch();
+    });
+  });
   let zoom = $state(1);
   let activeTool = $state<Tool>("select");
   // Plain (non-reactive) mutable variable, deliberately: it only needs to
@@ -1003,6 +1133,23 @@
   // modal and block the event loop anyway, so this can't fire mid-dialog.
   function handleKeydown(e: KeyboardEvent) {
     const meta = e.metaKey || e.ctrlKey;
+    if (meta && e.key.toLowerCase() === "f") {
+      e.preventDefault();
+      openSearch();
+      return;
+    }
+    // ⌘G / ⌘⇧G step through matches from anywhere, so you can leave the
+    // find box and keep going without clicking back into it.
+    if (meta && e.key.toLowerCase() === "g") {
+      e.preventDefault();
+      stepSearch(e.shiftKey ? -1 : 1);
+      return;
+    }
+    if (e.key === "Escape" && showSearch) {
+      e.preventDefault();
+      closeSearch();
+      return;
+    }
     if (meta && e.key.toLowerCase() === "s") {
       e.preventDefault();
       if (e.shiftKey) handleSaveAs();
@@ -1203,6 +1350,104 @@
   <AccountPanel open={showAccount} onClose={() => (showAccount = false)} />
   <WatermarkPanel open={showWatermark} busy={mutationBusy} onApply={handleApplyWatermark} onClose={() => (showWatermark = false)} />
 
+  {#if doc && showSearch}
+    <div class="find-bar">
+      <Icon name="search" size={14} />
+      <input
+        class="find-bar__input"
+        bind:this={searchInputEl}
+        bind:value={searchQuery}
+        oninput={scheduleSearch}
+        onkeydown={(e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            // Enter before the debounce has fired should search now
+            // rather than do nothing and feel broken.
+            if (searchHits.length === 0 && !searchRan) {
+              clearTimeout(searchDebounce);
+              runSearch();
+            } else {
+              stepSearch(e.shiftKey ? -1 : 1);
+            }
+          }
+        }}
+        type="text"
+        placeholder="Find in document"
+        spellcheck="false"
+        aria-label="Find in document"
+      />
+
+      <span class="find-bar__count oa-mono">
+        {#if searchBusy && !searchRan}
+          …
+        {:else if searchHits.length > 0}
+          {searchActiveIndex + 1} of {searchHits.length}{searchTruncated ? "+" : ""}
+        {:else if searchRan}
+          No matches
+        {/if}
+      </span>
+
+      <button
+        class="oa-icon-btn oa-icon-btn--sm"
+        onclick={() => stepSearch(-1)}
+        disabled={searchHits.length === 0}
+        use:tooltip={"Previous match (⇧Enter)"}
+        aria-label="Previous match"
+      >
+        <Icon name="chevron-up" size={15} />
+      </button>
+      <button
+        class="oa-icon-btn oa-icon-btn--sm"
+        onclick={() => stepSearch(1)}
+        disabled={searchHits.length === 0}
+        use:tooltip={"Next match (Enter)"}
+        aria-label="Next match"
+      >
+        <Icon name="chevron-down" size={15} />
+      </button>
+
+      <button
+        class="find-bar__toggle"
+        class:find-bar__toggle--on={searchMatchCase}
+        onclick={() => {
+          searchMatchCase = !searchMatchCase;
+          runSearch();
+        }}
+        use:tooltip={"Match case"}
+        aria-pressed={searchMatchCase}
+      >
+        Aa
+      </button>
+      <button
+        class="find-bar__toggle"
+        class:find-bar__toggle--on={searchWholeWord}
+        onclick={() => {
+          searchWholeWord = !searchWholeWord;
+          runSearch();
+        }}
+        use:tooltip={"Whole word"}
+        aria-pressed={searchWholeWord}
+      >
+        ab|
+      </button>
+
+      <div class="find-bar__spacer"></div>
+
+      <button
+        class="oa-icon-btn oa-icon-btn--sm"
+        class:oa-icon-btn--selected={showSearchResults}
+        onclick={() => (showSearchResults = !showSearchResults)}
+        use:tooltip={"Show all results"}
+        aria-label="Toggle results list"
+      >
+        <Icon name="list-tree" size={15} />
+      </button>
+      <button class="oa-icon-btn oa-icon-btn--sm" onclick={closeSearch} use:tooltip={"Close (Esc)"} aria-label="Close find bar">
+        <Icon name="x" size={15} />
+      </button>
+    </div>
+  {/if}
+
   {#if filePath}
     <div class="path-bar">
       <Icon name="file-pen" size={12} />
@@ -1261,7 +1506,19 @@
         onCreateField={handleCreateField}
         onPlaceSignature={handlePlaceSignature}
         onMoveObject={handleMoveObject}
+        {searchHits}
+        activeHitIndex={searchActiveIndex}
       />
+      {#if showSearch && showSearchResults}
+        <SearchPanel
+          hits={searchHits}
+          activeIndex={searchActiveIndex}
+          busy={searchBusy}
+          searched={searchRan}
+          truncated={searchTruncated}
+          onSelect={(index) => (searchActiveIndex = index)}
+        />
+      {/if}
       {#if showComments}
         <CommentsPanel {annotations} loading={annotationsLoading} />
       {/if}
@@ -1302,6 +1559,69 @@
 </main>
 
 <style>
+  /* ---- Find bar ---- */
+  .find-bar {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    gap: var(--space-1);
+    padding: var(--space-1) var(--space-3);
+    background: var(--surface-card);
+    border-bottom: var(--border-width) solid var(--border-hairline);
+    color: var(--text-muted);
+  }
+
+  .find-bar__input {
+    flex: 0 1 22rem;
+    min-width: 8rem;
+    height: var(--control-h-sm);
+    padding: 0 var(--space-2);
+    border: var(--border-width) solid var(--border-hairline);
+    border-radius: var(--radius-sm);
+    background: var(--bg-page);
+    color: var(--text-strong);
+    font: var(--type-ui);
+  }
+
+  .find-bar__input:focus-visible {
+    outline: none;
+    box-shadow: var(--focus-ring);
+  }
+
+  .find-bar__count {
+    min-width: 6.5rem;
+    font: var(--type-caption);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+
+  .find-bar__toggle {
+    height: var(--control-h-sm);
+    min-width: var(--control-h-sm);
+    padding: 0 6px;
+    border: var(--border-width) solid transparent;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--text-muted);
+    font: var(--type-caption);
+    cursor: pointer;
+    transition: var(--transition-control);
+  }
+
+  .find-bar__toggle:hover {
+    background: var(--surface-hover);
+  }
+
+  .find-bar__toggle--on {
+    background: var(--surface-selected);
+    border-color: var(--border-hairline);
+    color: var(--text-strong);
+  }
+
+  .find-bar__spacer {
+    flex: 1;
+  }
+
   .shell {
     display: flex;
     flex-direction: column;

@@ -256,6 +256,7 @@ use openpdfedit_session::pages::{
     rotate_page_impl, set_crop_box_impl, MoveDirection,
 };
 use openpdfedit_session::redact::{redact_page_impl, RedactPageRequest};
+use openpdfedit_session::search::search_document_impl;
 use openpdfedit_session::signatures::list_signatures_impl;
 use openpdfedit_session::textedit::{
     edit_text_run_impl, list_image_placements_impl, list_text_runs_impl, move_image_impl,
@@ -1010,6 +1011,31 @@ impl WasmSession {
             list_signatures_impl(&self.state.docs, &*self.state.store, handle as DocHandle)
                 .map_err(to_js_err)?;
         serde_json::to_string(&signatures).map_err(to_js_err)
+    }
+
+    /// Finds every occurrence of `query` in the open document, returning
+    /// a `SearchResultsDto` serialized as JSON. Read-only: no mutation,
+    /// no handle rotation, nothing written — see
+    /// `openpdfedit_session::search`'s module doc for why this one is
+    /// engine-only and needed no `WorkingStore` plumbing to become
+    /// portable.
+    #[wasm_bindgen(js_name = searchDocument)]
+    pub fn search_document(
+        &self,
+        handle: u32,
+        query: &str,
+        match_case: bool,
+        whole_word: bool,
+    ) -> Result<String, JsValue> {
+        let results = search_document_impl(
+            &self.state.engine,
+            handle as DocHandle,
+            query,
+            match_case,
+            whole_word,
+        )
+        .map_err(to_js_err)?;
+        serde_json::to_string(&results).map_err(to_js_err)
     }
 
     /// Permanently removes the content (text and images, not just a black

@@ -39,6 +39,36 @@ export interface AnnotationSummaryDto {
 // only structural inspection (what the PDF declares about a signature,
 // not whether it's genuine or trusted). Never render this as "signed and
 // valid."
+export interface SearchRequest {
+  handle: number;
+  query: string;
+  matchCase: boolean;
+  wholeWord: boolean;
+}
+
+/** One occurrence of the current search query. Mirrors `SearchHitDto` in
+ * `crates/openpdfedit-session/src/search.rs`. */
+export interface SearchHitDto {
+  pageIndex: number;
+  /** Inclusive character range of the match on its page, in the same
+   * index space the annotation commands use. */
+  charStart: number;
+  charEnd: number;
+  /** One `[x0, y0, x1, y1]` per visual line the match spans, in PDF
+   * page-space points (origin bottom-left). */
+  quads: [number, number, number, number][];
+  contextBefore: string;
+  contextMatch: string;
+  contextAfter: string;
+}
+
+export interface SearchResultsDto {
+  hits: SearchHitDto[];
+  /** True when the backend stopped at its hit cap and the document holds
+   * more matches than are listed. */
+  truncated: boolean;
+}
+
 export interface SignatureInfoDto {
   subFilter: string | null;
   reason: string | null;
@@ -339,6 +369,10 @@ export interface Backend {
 
   // --- signatures ---
   listSignatures(handle: number): Promise<SignatureInfoDto[]>;
+
+  /** Finds every occurrence of `query` across the whole document.
+   * Read-only — no handle rotation. */
+  searchDocument(request: SearchRequest): Promise<SearchResultsDto>;
 
   // --- pages ---
   rotatePage(handle: number, pageIndex: number, deltaDegrees: number): Promise<OpenedDocument>;

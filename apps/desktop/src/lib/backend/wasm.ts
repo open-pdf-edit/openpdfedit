@@ -47,6 +47,7 @@ import type {
   ApplyWatermarkRequest,
   CompressDocumentRequest,
   CompressStats,
+  SearchResultsDto,
   SignatureInfoDto,
   TextRunDto,
   TextSelectionQuadsRequest,
@@ -344,6 +345,15 @@ interface WasmSessionHandle {
    * array (structural inspection only — `isVerified` is always `false`,
    * see the Rust doc on `WasmSession::list_signatures`). */
   listSignatures(handle: number): string;
+  /** Read-only — no handle rotation. Returns a `SearchResultsDto` JSON
+   * string. Takes plain arguments rather than a request JSON blob
+   * because every one of them is a primitive. */
+  searchDocument(
+    handle: number,
+    query: string,
+    matchCase: boolean,
+    wholeWord: boolean,
+  ): string;
   /** Mutating/rotates, same as `addAnnotation` above. `requestJson` is a
    * `RedactPageRequest`. */
   redactPage(requestJson: string): string;
@@ -1141,6 +1151,17 @@ export const wasmBackend: Backend = {
     const session = await ensureSession();
     const json = session.listSignatures(handle);
     return JSON.parse(json) as SignatureInfoDto[];
+  },
+
+  async searchDocument(request) {
+    const session = await ensureSession();
+    const json = session.searchDocument(
+      request.handle,
+      request.query,
+      request.matchCase,
+      request.wholeWord,
+    );
+    return JSON.parse(json) as SearchResultsDto;
   },
 
   async redactPage(request: RedactPageRequest) {

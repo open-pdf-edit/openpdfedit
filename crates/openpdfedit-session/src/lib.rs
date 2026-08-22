@@ -243,6 +243,7 @@ pub mod compare;
 pub mod forms;
 pub mod pages;
 pub mod redact;
+pub mod search;
 pub mod signatures;
 pub mod textedit;
 pub mod watermark;
