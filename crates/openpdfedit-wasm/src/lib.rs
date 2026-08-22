@@ -265,6 +265,7 @@ use openpdfedit_session::textedit::{
     move_text_run_impl, EditTextRunRequest, MoveImageRequest, MoveTextRunRequest,
 };
 use openpdfedit_session::watermark::{apply_watermark_impl, ApplyWatermarkRequest};
+use openpdfedit_session::xfdf::{export_xfdf_impl, import_xfdf_impl};
 use openpdfedit_session::{
     close_document_impl, redo_impl, undo_impl, MemWorkingStore, PageSize, SessionState,
 };
@@ -1063,6 +1064,35 @@ impl WasmSession {
             &self.state.history,
             &*self.state.store,
             request,
+        )
+        .map_err(to_js_err)?;
+        serde_json::to_string(&result).map_err(to_js_err)
+    }
+
+    /// Every markup annotation on the document, serialized as XFDF —
+    /// returns an `ExportXfdfDto` JSON string carrying the XML plus a
+    /// suggested filename. Read-only. The extension hands the XML to a
+    /// download rather than writing a file, which is why the portable
+    /// half returns a string instead of taking an output path.
+    #[wasm_bindgen(js_name = exportXfdf)]
+    pub fn export_xfdf(&self, handle: u32) -> Result<String, JsValue> {
+        let exported =
+            export_xfdf_impl(&self.state.docs, handle as DocHandle).map_err(to_js_err)?;
+        serde_json::to_string(&exported).map_err(to_js_err)
+    }
+
+    /// Adds every annotation in `xml` this app can draw, returning an
+    /// `ImportXfdfDto` JSON string. Mutating: rotates the handle, and is
+    /// undoable.
+    #[wasm_bindgen(js_name = importXfdf)]
+    pub fn import_xfdf(&self, handle: u32, xml: &str) -> Result<String, JsValue> {
+        let result = import_xfdf_impl(
+            &self.state.engine,
+            &self.state.docs,
+            &self.state.history,
+            &*self.state.store,
+            handle as DocHandle,
+            xml,
         )
         .map_err(to_js_err)?;
         serde_json::to_string(&result).map_err(to_js_err)

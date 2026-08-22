@@ -1,0 +1,16 @@
+[package]
+name = "openpdfedit-xfdf"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "XFDF import and export: move annotations between PDFs and between PDF tools."
+
+[dependencies]
+openpdfedit-annot.workspace = true
+openpdfedit-doc.workspace = true
+lopdf.workspace = true
+thiserror.workspace = true
+quick-xml.workspace = true
+
+[dev-dependencies]

@@ -47,7 +47,9 @@ import type {
   ApplyWatermarkRequest,
   CompressDocumentRequest,
   CompressStats,
+  ExportXfdfResult,
   FlattenResultDto,
+  ImportXfdfResult,
   OutlineEntryDto,
   SearchResultsDto,
   SignatureInfoDto,
@@ -362,6 +364,12 @@ interface WasmSessionHandle {
   /** Mutating/rotates. `requestJson` is a `FlattenDocumentRequest`;
    * returns a `FlattenResultDto` JSON string. */
   flattenDocument(requestJson: string): string;
+  /** Read-only. Returns an `ExportXfdfDto` JSON string carrying the XML
+   * itself plus a suggested filename — the extension downloads it rather
+   * than writing a file. */
+  exportXfdf(handle: number): string;
+  /** Mutating/rotates. Returns an `ImportXfdfResult` JSON string. */
+  importXfdf(handle: number, xml: string): string;
   /** Mutating/rotates, same as `addAnnotation` above. `requestJson` is a
    * `RedactPageRequest`. */
   redactPage(requestJson: string): string;
@@ -789,6 +797,53 @@ async function writeToFileHandle(handle: number, fileHandle: FileSystemFileHandl
   return bytes;
 }
 
+/** Hands the browser a file to save. The extension has no filesystem,
+ * so this is what "export" means there: an object URL clicked once and
+ * revoked. Revoked on a timer rather than immediately because Chrome
+ * needs the URL to still resolve when it starts the download. */
+function downloadTextFile(name: string, contents: string, mimeType: string) {
+  const url = URL.createObjectURL(new Blob([contents], { type: mimeType }));
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = name;
+  anchor.click();
+  setTimeout(() => URL.revokeObjectURL(url), 10_000);
+}
+
+/** Opens a file picker and resolves to the chosen file's text, or `null`
+ * if the user cancelled.
+ *
+ * Cancellation can't be detected directly — `<input type=file>` fires no
+ * event for it — so this resolves on whichever comes first: a `change`
+ * with a file, or the window regaining focus without one. */
+function readTextFileFromPicker(accept: string): Promise<string | null> {
+  return new Promise((resolve) => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = accept;
+    let settled = false;
+    const finish = (value: string | null) => {
+      if (settled) return;
+      settled = true;
+      window.removeEventListener("focus", onFocus);
+      resolve(value);
+    };
+    const onFocus = () => {
+      // The focus event arrives before `change` does, so give the file a
+      // moment to show up before calling it a cancellation.
+      setTimeout(() => {
+        if (!input.files?.length) finish(null);
+      }, 500);
+    };
+    input.addEventListener("change", async () => {
+      const file = input.files?.[0];
+      finish(file ? await file.text() : null);
+    });
+    window.addEventListener("focus", onFocus);
+    input.click();
+  });
+}
+
 export const wasmBackend: Backend = {
   // --- document lifecycle (real) ---
 
@@ -1182,6 +1237,26 @@ export const wasmBackend: Backend = {
     const session = await ensureSession();
     const json = session.flattenDocument(JSON.stringify(request));
     return JSON.parse(json) as FlattenResultDto;
+  },
+
+  // No filesystem here, so "export" means hand the browser a download
+  // and "import" means read a file the user picked through an <input>.
+  async exportXfdf(handle) {
+    const session = await ensureSession();
+    const dto = JSON.parse(session.exportXfdf(handle)) as {
+      xml: string;
+      exported: number;
+      suggestedName: string;
+    };
+    downloadTextFile(dto.suggestedName, dto.xml, "application/vnd.adobe.xfdf");
+    return { exported: dto.exported };
+  },
+
+  async importXfdf(handle) {
+    const xml = await readTextFileFromPicker(".xfdf,.xml,application/vnd.adobe.xfdf,text/xml");
+    if (xml === null) return null;
+    const session = await ensureSession();
+    return JSON.parse(session.importXfdf(handle, xml)) as ImportXfdfResult;
   },
 
   async redactPage(request: RedactPageRequest) {

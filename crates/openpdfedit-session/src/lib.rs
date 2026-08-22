@@ -249,6 +249,7 @@ pub mod search;
 pub mod signatures;
 pub mod textedit;
 pub mod watermark;
+pub mod xfdf;
 
 /// The write-side state for one open document: its editable object graph
 /// plus the path edits get saved back to. See `apps/desktop/src-tauri`'s

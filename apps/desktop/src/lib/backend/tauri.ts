@@ -32,7 +32,9 @@ import type {
   ApplyWatermarkRequest,
   CompressDocumentRequest,
   CompressStats,
+  ExportXfdfResult,
   FlattenResultDto,
+  ImportXfdfResult,
   OutlineEntryDto,
   SearchResultsDto,
   SignatureInfoDto,
@@ -182,6 +184,30 @@ export const tauriBackend: Backend = {
 
   async flattenDocument(request) {
     return invoke<FlattenResultDto>("flatten_document_cmd", { request });
+  },
+
+  // The picker lives in the backend rather than the page, because where
+  // an XFDF file comes from and goes to is exactly what differs between
+  // a desktop app with a filesystem and an extension without one.
+  async exportXfdf(handle) {
+    const outputPath = await save({
+      filters: [{ name: "XFDF", extensions: ["xfdf"] }],
+    });
+    if (!outputPath) return null;
+    return invoke<ExportXfdfResult>("export_xfdf_cmd", {
+      request: { handle, outputPath },
+    });
+  },
+
+  async importXfdf(handle) {
+    const picked = await open({
+      multiple: false,
+      filters: [{ name: "XFDF", extensions: ["xfdf", "xml"] }],
+    });
+    if (!picked || Array.isArray(picked)) return null;
+    return invoke<ImportXfdfResult>("import_xfdf_cmd", {
+      request: { handle, inputPath: picked },
+    });
   },
 
   // --- pages ---

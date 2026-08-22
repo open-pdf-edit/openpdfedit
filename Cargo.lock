@@ -2903,6 +2903,7 @@ dependencies = [
  "openpdfedit-sign",
  "openpdfedit-textedit",
  "openpdfedit-watermark",
+ "openpdfedit-xfdf",
  "serde",
  "serde_json",
  "thiserror 2.0.19",
@@ -2948,6 +2949,17 @@ version = "0.1.0"
 dependencies = [
  "lopdf",
  "openpdfedit-doc",
+ "thiserror 2.0.19",
+]
+
+[[package]]
+name = "openpdfedit-xfdf"
+version = "0.1.0"
+dependencies = [
+ "lopdf",
+ "openpdfedit-annot",
+ "openpdfedit-doc",
+ "quick-xml",
  "thiserror 2.0.19",
 ]
 

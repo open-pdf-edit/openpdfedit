@@ -56,6 +56,7 @@ mod search;
 mod signatures;
 mod textedit;
 mod watermark;
+mod xfdf;
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -424,6 +425,8 @@ pub fn run() {
             textedit::move_image_cmd,
             field_create::create_form_field_cmd,
             compare::compare_documents_cmd,
+            xfdf::export_xfdf_cmd,
+            xfdf::import_xfdf_cmd,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

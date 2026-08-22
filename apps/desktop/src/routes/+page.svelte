@@ -59,6 +59,62 @@
   let doc = $state<OpenedDocument | null>(null);
   let error = $state<string | null>(null);
 
+  // ---- XFDF (markup as a portable file) ----
+  let xfdfBusy = $state(false);
+
+  async function handleExportXfdf() {
+    if (!doc) return;
+    error = null;
+    xfdfBusy = true;
+    try {
+      // The backend owns the picker: where an XFDF goes is exactly what
+      // differs between a desktop app and an extension.
+      const result = await backend.exportXfdf(doc.handle);
+      if (!result) return;
+      showToast(
+        result.exported === 0
+          ? "This document has no markup to export."
+          : `Exported ${result.exported} annotation${result.exported === 1 ? "" : "s"}.`,
+        { title: "Export markup" },
+      );
+    } catch (e) {
+      error = formatError(e);
+    } finally {
+      xfdfBusy = false;
+    }
+  }
+
+  async function handleImportXfdf() {
+    if (!doc || mutationBusy) return;
+    error = null;
+    xfdfBusy = true;
+    mutationBusy = true;
+    try {
+      const result = await backend.importXfdf(doc.handle);
+      if (!result) return;
+      doc = result.document;
+      await Promise.all([refreshAnnotations(), refreshFormFields()]);
+
+      // Every count is reported, including the ones that didn't make it:
+      // silently bringing across 38 of someone's 40 comments is worse
+      // than saying which two were left behind.
+      const notes: string[] = [];
+      if (result.skipped > 0) notes.push(`${result.skipped} of a kind this app can't draw`);
+      if (result.outOfRange > 0)
+        notes.push(`${result.outOfRange} for pages this document doesn't have`);
+      showToast(
+        `Imported ${result.imported} annotation${result.imported === 1 ? "" : "s"}` +
+          (notes.length > 0 ? `. Left out: ${notes.join(", ")}.` : ". ⌘Z undoes it."),
+        { title: "Import markup" },
+      );
+    } catch (e) {
+      error = formatError(e);
+    } finally {
+      xfdfBusy = false;
+      mutationBusy = false;
+    }
+  }
+
   // ---- Flatten ----
   let flattenBusy = $state(false);
 
@@ -1385,6 +1441,24 @@
           aria-label="Toggle signatures panel"
         >
           <Icon name="signature" size={15} />
+        </button>
+        <button
+          class="oa-icon-btn oa-icon-btn--sm"
+          onclick={handleExportXfdf}
+          disabled={xfdfBusy}
+          use:tooltip={"Export markup as an XFDF file — comments without the document"}
+          aria-label="Export markup"
+        >
+          <Icon name="file-output" size={15} spin={xfdfBusy} />
+        </button>
+        <button
+          class="oa-icon-btn oa-icon-btn--sm"
+          onclick={handleImportXfdf}
+          disabled={xfdfBusy || mutationBusy}
+          use:tooltip={"Import markup from an XFDF file"}
+          aria-label="Import markup"
+        >
+          <Icon name="plus" size={15} />
         </button>
         <button
           class="oa-icon-btn oa-icon-btn--sm"

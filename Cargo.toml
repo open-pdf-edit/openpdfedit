@@ -13,6 +13,7 @@ members = [
     "crates/openpdfedit-redact",
     "crates/openpdfedit-watermark",
     "crates/openpdfedit-textedit",
+    "crates/openpdfedit-xfdf",
     "crates/openpdfedit-compare",
     "crates/openpdfedit-batch",
     "crates/openpdfedit-license",
@@ -41,6 +42,7 @@ openpdfedit-sign = { path = "crates/openpdfedit-sign" }
 openpdfedit-redact = { path = "crates/openpdfedit-redact" }
 openpdfedit-watermark = { path = "crates/openpdfedit-watermark" }
 openpdfedit-textedit = { path = "crates/openpdfedit-textedit" }
+openpdfedit-xfdf = { path = "crates/openpdfedit-xfdf" }
 openpdfedit-compare = { path = "crates/openpdfedit-compare" }
 openpdfedit-batch = { path = "crates/openpdfedit-batch" }
 openpdfedit-license = { path = "crates/openpdfedit-license" }
@@ -56,6 +58,9 @@ image = { version = "0.25", default-features = false, features = ["png"] }
 # Already a transitive dependency (via tauri); pinned here directly for
 # openpdfedit-batch's PII pattern matching.
 regex = "1"
+# XFDF is XML; a hand-rolled parser for it would be exactly the kind of
+# subtly-wrong code this project deletes rather than ships.
+quick-xml = "0.41"
 
 # --- error handling ---
 thiserror = "2"

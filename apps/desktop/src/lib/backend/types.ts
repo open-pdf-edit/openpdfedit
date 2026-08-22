@@ -39,6 +39,20 @@ export interface AnnotationSummaryDto {
 // only structural inspection (what the PDF declares about a signature,
 // not whether it's genuine or trusted). Never render this as "signed and
 // valid."
+export interface ExportXfdfResult {
+  exported: number;
+}
+
+export interface ImportXfdfResult {
+  document: OpenedDocument;
+  imported: number;
+  /** Annotation kinds this app can't draw — counted rather than
+   * approximated with something the sender didn't draw. */
+  skipped: number;
+  /** Annotations addressed to pages this document doesn't have. */
+  outOfRange: number;
+}
+
 export interface FlattenDocumentRequest {
   handle: number;
   annotations: boolean;
@@ -406,6 +420,16 @@ export interface Backend {
   /** Bakes markup (and optionally filled form values) into the page.
    * Mutating — rotates the handle, and is undoable. */
   flattenDocument(request: FlattenDocumentRequest): Promise<FlattenResultDto>;
+
+  /** Writes the document's markup out as an XFDF file, picking a
+   * destination the way this backend does. Resolves to `null` if the
+   * user cancelled. Read-only. */
+  exportXfdf(handle: number): Promise<ExportXfdfResult | null>;
+
+  /** Reads an XFDF file the user picks and adds every annotation this
+   * app can draw. Resolves to `null` if the user cancelled. Mutating —
+   * rotates the handle, and is undoable. */
+  importXfdf(handle: number): Promise<ImportXfdfResult | null>;
 
   // --- pages ---
   rotatePage(handle: number, pageIndex: number, deltaDegrees: number): Promise<OpenedDocument>;
