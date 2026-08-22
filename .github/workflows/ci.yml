@@ -1,0 +1,125 @@
+# Tests and lints on every push and pull request.
+#
+# Companion to release.yml, which only runs on a v* tag: until this
+# existed, nothing checked that the workspace compiled, tested or linted
+# before a release was cut, and two clippy failures had accumulated
+# unnoticed as a result.
+#
+# Linux is in the matrix even though it isn't a release target: the
+# Rust/Tauri stack makes it nearly free, and the point of keeping it
+# green is that it *stays* nearly free. Acrobat has no Linux client at
+# all, so it's a gap worth being able to walk into.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  test:
+    name: test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-22.04, macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      # Tauri's Linux backend needs the system webview and its headers;
+      # macOS and Windows ship theirs.
+      - name: Install Linux system dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libappindicator3-dev \
+            librsvg2-dev \
+            libgtk-3-dev \
+            patchelf
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - uses: Swatinem/rust-cache@v2
+
+      # PDFium is not vendored in git (see scripts/fetch-pdfium.sh). The
+      # engine tests bind to whatever this drops in .vendor/ and skip
+      # themselves cleanly if it's missing, so a failed fetch would turn
+      # into silently-skipped tests rather than a red build — hence no
+      # `continue-on-error` here.
+      - name: Fetch PDFium
+        shell: bash
+        run: ./scripts/fetch-pdfium.sh
+
+      # Several tests assert against real-world PDFs from the pdfium,
+      # pdf.js and pdfbox suites and skip without them — including both
+      # end-to-end search tests.
+      - name: Fetch test corpus
+        shell: bash
+        run: ./scripts/fetch-test-corpus.sh
+
+      - name: Check formatting
+        run: cargo fmt --all --check
+
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+      - name: Test
+        run: cargo test --workspace
+
+  # The extension shares every crate with the desktop build but compiles
+  # for a target with no filesystem and no threads, so it breaks in ways
+  # the matrix above cannot see.
+  wasm:
+    name: wasm build
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo check -p openpdfedit-wasm --target wasm32-unknown-unknown
+
+  frontend:
+    name: frontend
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/desktop/package-lock.json
+      - run: npm ci
+        working-directory: apps/desktop
+      - run: npm run check
+        working-directory: apps/desktop
+      - run: npm run build
+        working-directory: apps/desktop
+
+  # The rule deny.toml has described as a release gate since before this
+  # workflow existed: no AGPL/GPL/LGPL anywhere in the dependency graph,
+  # in either direction, because a copyleft dependency would contaminate
+  # the whole distributed app. An allow-list, so an unrecognized licence
+  # fails rather than silently passing.
+  licenses:
+    name: licence policy
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          command: check licenses bans sources
