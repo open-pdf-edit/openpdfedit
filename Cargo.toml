@@ -8,6 +8,7 @@ members = [
     "crates/openpdfedit-flatten",
     "crates/openpdfedit-forms",
     "crates/openpdfedit-pages",
+    "crates/openpdfedit-numbering",
     "crates/openpdfedit-ocr",
     "crates/openpdfedit-sign",
     "crates/openpdfedit-redact",
@@ -37,6 +38,7 @@ openpdfedit-annot = { path = "crates/openpdfedit-annot" }
 openpdfedit-flatten = { path = "crates/openpdfedit-flatten" }
 openpdfedit-forms = { path = "crates/openpdfedit-forms" }
 openpdfedit-pages = { path = "crates/openpdfedit-pages" }
+openpdfedit-numbering = { path = "crates/openpdfedit-numbering" }
 openpdfedit-ocr = { path = "crates/openpdfedit-ocr" }
 openpdfedit-sign = { path = "crates/openpdfedit-sign" }
 openpdfedit-redact = { path = "crates/openpdfedit-redact" }

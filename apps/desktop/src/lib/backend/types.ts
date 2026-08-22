@@ -53,6 +53,25 @@ export interface ImportXfdfResult {
   outOfRange: number;
 }
 
+/** Everything the numbering panel decides. `handle` is added by the
+ * backend, matching how `WatermarkChoices` is shaped. */
+export interface NumberPagesChoices {
+  prefix: string;
+  suffix: string;
+  startAt: number;
+  /** Zero-pad the number to this width; 0 leaves it unpadded. */
+  digits: number;
+  anchor: string;
+  font: string;
+  fontSize: number;
+  /** `[r, g, b]`, each 0..=1. */
+  color: [number, number, number];
+  opacity: number;
+  margin: number;
+  /** `null` numbers every page. 0-based page indices otherwise. */
+  pages: number[] | null;
+}
+
 export interface FlattenDocumentRequest {
   handle: number;
   annotations: boolean;
@@ -420,6 +439,10 @@ export interface Backend {
   /** Bakes markup (and optionally filled form values) into the page.
    * Mutating — rotates the handle, and is undoable. */
   flattenDocument(request: FlattenDocumentRequest): Promise<FlattenResultDto>;
+
+  /** Stamps page numbers or Bates numbering into a margin of each page.
+   * Mutating — rotates the handle, and is undoable. */
+  numberPages(handle: number, choices: NumberPagesChoices): Promise<OpenedDocument>;
 
   /** Writes the document's markup out as an XFDF file, picking a
    * destination the way this backend does. Resolves to `null` if the

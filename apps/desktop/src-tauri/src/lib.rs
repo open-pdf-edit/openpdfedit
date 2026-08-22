@@ -48,6 +48,7 @@ mod field_create;
 mod flatten;
 mod forms;
 mod license;
+mod numbering;
 mod ocr;
 mod outline;
 mod pages;
@@ -411,6 +412,7 @@ pub fn run() {
             forms::fill_form_fields_cmd,
             ocr::ocr_document_cmd,
             signatures::list_signatures_cmd,
+            numbering::number_pages_cmd,
             outline::document_outline_cmd,
             redact::redact_page_cmd,
             search::search_document_cmd,

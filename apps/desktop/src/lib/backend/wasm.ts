@@ -364,6 +364,8 @@ interface WasmSessionHandle {
   /** Mutating/rotates. `requestJson` is a `FlattenDocumentRequest`;
    * returns a `FlattenResultDto` JSON string. */
   flattenDocument(requestJson: string): string;
+  /** Mutating/rotates. `requestJson` is a `NumberPagesRequest`. */
+  numberPages(requestJson: string): string;
   /** Read-only. Returns an `ExportXfdfDto` JSON string carrying the XML
    * itself plus a suggested filename — the extension downloads it rather
    * than writing a file. */
@@ -1237,6 +1239,12 @@ export const wasmBackend: Backend = {
     const session = await ensureSession();
     const json = session.flattenDocument(JSON.stringify(request));
     return JSON.parse(json) as FlattenResultDto;
+  },
+
+  async numberPages(handle, choices) {
+    const session = await ensureSession();
+    const json = session.numberPages(JSON.stringify({ handle, ...choices }));
+    return JSON.parse(json) as OpenedDocument;
   },
 
   // No filesystem here, so "export" means hand the browser a download

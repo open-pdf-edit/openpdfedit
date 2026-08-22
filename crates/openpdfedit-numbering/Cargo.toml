@@ -1,0 +1,15 @@
+[package]
+name = "openpdfedit-numbering"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Page numbers and Bates numbering: an incrementing label stamped into a corner of each page."
+
+[dependencies]
+openpdfedit-doc.workspace = true
+lopdf.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+openpdfedit-engine.workspace = true

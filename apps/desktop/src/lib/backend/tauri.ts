@@ -186,6 +186,10 @@ export const tauriBackend: Backend = {
     return invoke<FlattenResultDto>("flatten_document_cmd", { request });
   },
 
+  async numberPages(handle, choices) {
+    return invoke<OpenedDocument>("number_pages_cmd", { request: { handle, ...choices } });
+  },
+
   // The picker lives in the backend rather than the page, because where
   // an XFDF file comes from and goes to is exactly what differs between
   // a desktop app with a filesystem and an extension without one.

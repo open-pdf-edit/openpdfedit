@@ -23,7 +23,8 @@
   import DialogHost from "$lib/DialogHost.svelte";
   import AccountPanel from "$lib/AccountPanel.svelte";
   import WatermarkPanel from "$lib/WatermarkPanel.svelte";
-  import type { WatermarkChoices } from "$lib/backend/types";
+  import NumberingPanel from "$lib/NumberingPanel.svelte";
+  import type { NumberPagesChoices, WatermarkChoices } from "$lib/backend/types";
   import { showAlert, showConfirm, showPrompt } from "$lib/dialog.svelte";
   import ToastHost from "$lib/ToastHost.svelte";
   import { showToast } from "$lib/toast.svelte";
@@ -58,6 +59,28 @@
   let filePath = $state<string | null>(null);
   let doc = $state<OpenedDocument | null>(null);
   let error = $state<string | null>(null);
+
+  // ---- Page numbers / Bates ----
+  let showNumbering = $state(false);
+
+  async function handleNumberPages(choices: NumberPagesChoices) {
+    if (!doc || mutationBusy) return;
+    const handle = doc.handle;
+    error = null;
+    mutationBusy = true;
+    try {
+      doc = await backend.numberPages(handle, choices);
+      showNumbering = false;
+      await Promise.all([refreshAnnotations(), refreshFormFields()]);
+      showToast("Pages numbered — ⌘Z undoes it.", { title: "Number pages" });
+    } catch (e) {
+      // The panel stays open on failure: an unsupported character in a
+      // Bates prefix is something to correct in place.
+      error = formatError(e);
+    } finally {
+      mutationBusy = false;
+    }
+  }
 
   // ---- XFDF (markup as a portable file) ----
   let xfdfBusy = $state(false);
@@ -1444,6 +1467,15 @@
         </button>
         <button
           class="oa-icon-btn oa-icon-btn--sm"
+          class:oa-icon-btn--selected={showNumbering}
+          onclick={() => (showNumbering = !showNumbering)}
+          use:tooltip={"Add page numbers or Bates numbering"}
+          aria-label="Number pages"
+        >
+          <Icon name="hash" size={15} />
+        </button>
+        <button
+          class="oa-icon-btn oa-icon-btn--sm"
           onclick={handleExportXfdf}
           disabled={xfdfBusy}
           use:tooltip={"Export markup as an XFDF file — comments without the document"}
@@ -1528,6 +1560,13 @@
   </header>
 
   <AccountPanel open={showAccount} onClose={() => (showAccount = false)} />
+  <NumberingPanel
+    open={showNumbering}
+    busy={mutationBusy}
+    pageCount={doc?.page_count ?? 0}
+    onApply={handleNumberPages}
+    onClose={() => (showNumbering = false)}
+  />
   <WatermarkPanel open={showWatermark} busy={mutationBusy} onApply={handleApplyWatermark} onClose={() => (showWatermark = false)} />
 
   {#if doc && showSearch}

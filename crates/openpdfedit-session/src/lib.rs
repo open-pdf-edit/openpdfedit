@@ -242,6 +242,7 @@ pub mod annotations;
 pub mod compare;
 pub mod flatten;
 pub mod forms;
+pub mod numbering;
 pub mod outline;
 pub mod pages;
 pub mod redact;

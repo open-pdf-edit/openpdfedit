@@ -2856,6 +2856,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "openpdfedit-numbering"
+version = "0.1.0"
+dependencies = [
+ "lopdf",
+ "openpdfedit-doc",
+ "openpdfedit-engine",
+ "thiserror 2.0.19",
+]
+
+[[package]]
 name = "openpdfedit-ocr"
 version = "0.1.0"
 dependencies = [
@@ -2898,6 +2908,7 @@ dependencies = [
  "openpdfedit-engine",
  "openpdfedit-flatten",
  "openpdfedit-forms",
+ "openpdfedit-numbering",
  "openpdfedit-pages",
  "openpdfedit-redact",
  "openpdfedit-sign",

@@ -252,6 +252,7 @@ use openpdfedit_session::forms::{
     create_form_field_impl, fill_form_fields_impl, list_form_fields_impl, CreateFormFieldRequest,
     FillFormRequest,
 };
+use openpdfedit_session::numbering::{number_pages_impl, NumberPagesRequest};
 use openpdfedit_session::outline::document_outline_impl;
 use openpdfedit_session::pages::{
     delete_page_impl, extract_pages_bytes, merge_open_doc_with_bytes, move_page_impl,
@@ -1096,6 +1097,23 @@ impl WasmSession {
         )
         .map_err(to_js_err)?;
         serde_json::to_string(&result).map_err(to_js_err)
+    }
+
+    /// Stamps page numbers or Bates numbering into a margin of each
+    /// page, returning the resulting `OpenedDocumentInfo` DTO as JSON.
+    /// Mutating: rotates the handle, and is undoable.
+    #[wasm_bindgen(js_name = numberPages)]
+    pub fn number_pages(&self, request_json: &str) -> Result<String, JsValue> {
+        let request: NumberPagesRequest = serde_json::from_str(request_json).map_err(to_js_err)?;
+        let info = number_pages_impl(
+            &self.state.engine,
+            &self.state.docs,
+            &self.state.history,
+            &*self.state.store,
+            request,
+        )
+        .map_err(to_js_err)?;
+        serde_json::to_string(&info).map_err(to_js_err)
     }
 
     /// Permanently removes the content (text and images, not just a black

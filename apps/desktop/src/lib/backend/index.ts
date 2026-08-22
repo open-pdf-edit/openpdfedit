@@ -40,6 +40,7 @@ export type {
   PageMoveDirection,
   PageSize,
   PixelPageDiffDto,
+  NumberPagesChoices,
   OutlineEntryDto,
   RedactPageRequest,
   SearchHitDto,
