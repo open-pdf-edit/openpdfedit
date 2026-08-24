@@ -64,6 +64,18 @@ export const tauriBackend: Backend = {
     return false;
   },
 
+  /** Always false today — see `Backend.canPrint`. Printing from the
+   * desktop needs a native path, because the webview has no
+   * `window.print()`; when that lands this flips to true and the UI
+   * picks the control up with no change of its own. */
+  canPrint() {
+    return false;
+  },
+
+  async printDocument() {
+    throw new Error("printDocument: the desktop build has no print path yet — see Backend.canPrint");
+  },
+
   async saveDocument(handle) {
     return invoke<OpenedDocument>("save_document", { handle });
   },

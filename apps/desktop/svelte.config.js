@@ -4,6 +4,9 @@
 // See: https://v2.tauri.app/start/frontend/sveltekit/ for more info
 import adapter from "@sveltejs/adapter-static";
 import { vitePreprocess } from "@sveltejs/vite-plugin-svelte";
+import { createRequire } from "node:module";
+
+const { version } = createRequire(import.meta.url)("./package.json");
 
 /** @type {import('@sveltejs/kit').Config} */
 const config = {
@@ -20,6 +23,17 @@ const config = {
     // catches it; build-spa.sh now guards against any _-prefixed root
     // entry for the same reason. Harmless on the Tauri side.
     appDir: "app",
+
+    // Pinned, because SvelteKit's default is `Date.now()` — which lands
+    // in a chunk, changes its content hash, and cascades into every
+    // importer's hash. Two builds of identical source would then emit
+    // wholly different filenames, which is what makes the web app's
+    // service worker treat an unchanged rebuild as a new release and
+    // re-download ~9 MB of WebAssembly for every returning visitor (see
+    // apps/webapp/scripts/build.sh, which derives its cache name from a
+    // digest of the build). Nothing here uses SvelteKit's own
+    // version-change detection, which is what that default exists for.
+    version: { name: version },
   },
 };
 

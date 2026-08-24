@@ -90,6 +90,27 @@
     doc ? backend.savesByDownloading(doc.handle) : false,
   );
 
+  // ---- Print ----
+  /** Whether this build can print at all. A capability of the backend
+   * rather than of the build kind, so the desktop picks the control up
+   * on its own once it grows a native print path — see
+   * `Backend.canPrint`. */
+  const canPrint = backend.canPrint();
+  let printBusy = $state(false);
+
+  async function handlePrint() {
+    if (!doc || printBusy) return;
+    error = null;
+    printBusy = true;
+    try {
+      await backend.printDocument(doc.handle);
+    } catch (e) {
+      error = formatError(e);
+    } finally {
+      printBusy = false;
+    }
+  }
+
   // ---- Protect with a password ----
   let showEncrypt = $state(false);
   let encryptBusy = $state(false);
@@ -1563,6 +1584,14 @@
       else handleSave();
       return;
     }
+    if (meta && canPrint && e.key.toLowerCase() === "p") {
+      // Preventing the default matters: the browser's own ⌘P would
+      // print the *editor* — toolbars, panels and all — rather than the
+      // document being edited.
+      e.preventDefault();
+      handlePrint();
+      return;
+    }
     if (!meta || e.key.toLowerCase() !== "z") return;
     e.preventDefault();
     if (e.shiftKey) {
@@ -1637,6 +1666,11 @@
         <button class="oa-icon-btn oa-icon-btn--sm" onclick={handleSaveAs} disabled={saveBusy || mutationBusy} use:tooltip={"Save a copy (⌘⇧S)"} aria-label="Save as">
           <Icon name="copy" size={15} />
         </button>
+        {#if canPrint}
+          <button class="oa-icon-btn oa-icon-btn--sm" onclick={handlePrint} disabled={printBusy || mutationBusy} use:tooltip={"Print (⌘P)"} aria-label="Print">
+            <Icon name="printer" size={15} spin={printBusy} />
+          </button>
+        {/if}
         <button class="oa-icon-btn oa-icon-btn--sm" onclick={handleUndo} disabled={!doc.can_undo || undoRedoBusy || mutationBusy} use:tooltip={"Undo (⌘Z)"} aria-label="Undo">
           <Icon name="undo-2" size={15} />
         </button>

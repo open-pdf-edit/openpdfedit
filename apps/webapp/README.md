@@ -33,7 +33,7 @@ It is the extension's build minus its two extension-only steps: the MV3
 CSP workaround (`externalize-inline.mjs`), and `background.js` /
 `manifest.json`.
 
-## Two ways this differs from the desktop app
+## Three ways this differs from the desktop app
 
 **Saving.** Where the browser supports the File System Access API
 (Chromium today), Save writes back over the file you opened, exactly
@@ -48,6 +48,18 @@ a browser cannot do. The tool is hidden in this build. Running Tesseract
 in WebAssembly is possible (`tesseract.js`) and would be a lazy-loaded
 addition; doing it server-side is not an option, because it would mean
 uploading the document.
+
+**Print works here and not on the desktop** — the one difference that
+runs the other way. The desktop's webview has never implemented
+`window.print()`, so printing there needs a native path this build
+doesn't ship; a browser needs nothing. Print sends the document itself
+to the browser's PDF viewer rather than putting a print stylesheet over
+the page canvases, which hold screen-resolution pixels at the current
+zoom and would print as a blurry raster. In Chromium that opens the
+print dialog directly; elsewhere the document opens in a tab, because
+printing an embedded PDF is only dependable in Chromium and a dialog
+that prints a blank sheet is worse than one keystroke. See
+`Backend.canPrint`.
 
 Everything else — annotation, redaction, text and image editing, forms,
 signing, page operations, watermarks, numbering, encryption, search,

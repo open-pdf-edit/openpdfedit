@@ -74,8 +74,24 @@ done
 # A service worker, so the app keeps working with no network at all —
 # which is the whole claim, and only demonstrable if it's true offline.
 log "Adding the offline service worker"
-cp "$WEBAPP_DIR/service-worker.js" "$DIST_DIR/service-worker.js"
 cp "$WEBAPP_DIR/manifest.webmanifest" "$DIST_DIR/manifest.webmanifest"
+
+# The cache name carries a digest of everything in dist/, so it changes
+# exactly when the build does. Deriving it rather than hand-bumping a
+# version string is what keeps a second build of an unchanged version
+# number from serving the first build's index.html and wasm forever —
+# and equally, keeps a rebuild that changed nothing from pointlessly
+# evicting a returning visitor's 9 MB of cached binaries.
+BUILD_ID=$(
+  find "$DIST_DIR" -type f -print0 |
+    LC_ALL=C sort -z |
+    xargs -0 shasum -a 256 |
+    shasum -a 256 |
+    cut -c1-12
+)
+sed "s/__BUILD_ID__/$BUILD_ID/" "$WEBAPP_DIR/service-worker.js" > "$DIST_DIR/service-worker.js"
+grep -q "__BUILD_ID__" "$DIST_DIR/service-worker.js" &&
+  { echo "build.sh: service-worker.js still has an unstamped __BUILD_ID__" >&2; exit 1; }
 
 # Injected here rather than in apps/desktop/src/app.html, because that
 # file is shared with the Tauri and extension builds: a manifest link

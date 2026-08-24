@@ -13,10 +13,14 @@
 // bundles, and for the handful of unhashed ones (index.html, the wasm
 // binaries) a new CACHE name is what replaces them.
 //
-// Bumping CACHE is what ships an update: the activate handler deletes
+// A new CACHE name is what ships an update: the activate handler deletes
 // every other cache, so a released build never serves a mix of old and
-// new chunks.
-const CACHE = "openpdfedit-v0.1.4";
+// new chunks. The name is stamped by scripts/build.sh with a digest of
+// the build it belongs to — not the release version, which would leave
+// two different builds of the same version sharing a cache and serving
+// whichever got there first. `__BUILD_ID__` is the unstamped value, and
+// only appears if this file is served straight from the source tree.
+const CACHE = "openpdfedit-__BUILD_ID__";
 
 // The unhashed entry points. Everything else (hashed JS/CSS chunks,
 // fonts, icons) is added on first use by the fetch handler below —

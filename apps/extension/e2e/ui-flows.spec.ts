@@ -353,12 +353,21 @@ test("the real UI: open, paint, highlight, save, delete/undo/redo, merge (incl. 
   // moment that either shows "b.pdf" (fixed) or "b.pdf (2)" (the bug).
   await queueOpenPick(page, ["b.pdf"]);
   await openPdfButton.click();
-  // a.pdf is dirty again (the delete/undo/redo chain above) — save it and
-  // proceed, rather than adding a second "discard changes?" dialog leg
-  // that isn't this test's point.
-  const unsavedDialog = page.getByRole("dialog", { name: "Unsaved changes" });
-  await expect(unsavedDialog).toBeVisible();
-  await unsavedDialog.getByRole("button", { name: "Save and continue" }).click();
+
+  // Opening a document adds a tab rather than replacing the open one, so
+  // there is no unsaved-changes prompt to answer — a.pdf is still open,
+  // still dirty from the delete/undo/redo chain above, and nothing about
+  // it was at risk. (This leg used to answer a "Save and continue"
+  // dialog; the tab strip is what removed it. See `pickAndOpen`.)
+  const tabs = page.getByRole("tab");
+  await expect(tabs).toHaveCount(2);
+  await expect(tabs.nth(0)).toContainText("a.pdf");
+  await expect(tabs.nth(1)).toContainText("b.pdf");
+  await expect(tabs.nth(1)).toHaveAttribute("aria-selected", "true");
+  // The dot on a.pdf's tab: its unsaved edits survived the open, which is
+  // the actual guarantee that made dropping the prompt safe.
+  await expect(tabs.nth(0).locator(".tab__dirty")).toBeVisible();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
 
   await expect(pathBarText).toHaveText("b.pdf");
 
@@ -387,6 +396,34 @@ test("the real UI: open, paint, highlight, save, delete/undo/redo, merge (incl. 
   expect(compressed).not.toBeNull();
   expect(compressed!.header).toBe("%PDF-");
   expect(compressed!.length).toBeGreaterThan(0);
+  await expect(page.locator(".banner")).toHaveCount(0);
+
+  // --- 9. Print: the hand-off, which is as far as a test can follow -------
+  //
+  // No browser exposes what happens after the print dialog opens, so what
+  // is checkable is everything up to it: that Print builds a print target
+  // from the *working copy* (edits included), that the target holds real
+  // PDF bytes, and that nothing errors. That covers the whole of
+  // `printBytes` except the one call this side of the boundary can't
+  // observe — see wasm.ts's `printDocument`.
+  //
+  // Chromium is what runs here, so this takes the embedded path
+  // (`embeddedPrintIsReliable`) and the frame is the observable.
+  await page.getByRole("button", { name: "Print" }).click();
+
+  const printFrame = page.locator('iframe[src^="blob:"]');
+  await expect(printFrame).toHaveCount(1, { timeout: 10_000 });
+
+  // The bytes actually behind that blob, not merely the fact of a frame:
+  // a frame pointing at an empty or non-PDF blob would print a blank
+  // sheet, which is the failure this is here to catch.
+  const printed = await page.evaluate(async () => {
+    const frame = document.querySelector('iframe[src^="blob:"]') as HTMLIFrameElement;
+    const bytes = new Uint8Array(await (await fetch(frame.src)).arrayBuffer());
+    return { length: bytes.length, header: new TextDecoder().decode(bytes.slice(0, 5)) };
+  });
+  expect(printed.header).toBe("%PDF-");
+  expect(printed.length).toBeGreaterThan(0);
   await expect(page.locator(".banner")).toHaveCount(0);
 
   await page.close();

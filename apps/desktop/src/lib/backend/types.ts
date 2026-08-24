@@ -402,6 +402,20 @@ export interface Backend {
    * File System Access API exists (Chromium today). The UI uses this to
    * label the action honestly. */
   savesByDownloading(handle: number): boolean;
+  /** Whether this backend can print at all, checked once to decide
+   * whether the Print control exists. False on the desktop today: the
+   * webview it runs in has never implemented `window.print()`, so
+   * printing there needs a native path (CUPS on macOS/Linux, the shell
+   * verb on Windows) that this build doesn't ship yet. A browser needs
+   * no such thing, which is the whole reason print is a web-first
+   * feature here rather than a desktop-first one. */
+  canPrint(): boolean;
+  /** Sends the document as it stands — edits included, not the file on
+   * disk — to the browser's print path. Resolves once the print dialog
+   * has been handed off, not once anything has been printed: no browser
+   * reports back what the user did with the dialog, so there is nothing
+   * truthful to resolve *to*. Throws if `canPrint()` is false. */
+  printDocument(handle: number): Promise<void>;
 
   saveDocument(handle: number): Promise<OpenedDocument>;
   /** Writes the working copy to an already-chosen `path` — the raw

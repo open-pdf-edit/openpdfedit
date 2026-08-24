@@ -740,6 +740,109 @@ function downloadBytes(name: string, bytes: Uint8Array, mimeType: string) {
   setTimeout(() => URL.revokeObjectURL(url), 10_000);
 }
 
+/** How long a print target stays alive. The print dialog is modal to the
+ * user, not to us: there is no event for "they finished", so the frame
+ * and its object URL are held long enough for any realistic dialog and
+ * then dropped. Leaking them instead would keep a whole document's bytes
+ * resident for the rest of the session, once per print. */
+const PRINT_TARGET_LIFETIME_MS = 60_000;
+
+/** Whether the browser will render an embedded PDF at all, as opposed to
+ * downloading it. Where this is false — a user who has turned the
+ * built-in viewer off, or a browser without one — an embedded print
+ * target would never render, so there is nothing to print and saying so
+ * beats a dialog that prints a blank sheet. */
+function rendersPdfInline(): boolean {
+  // Standard `Navigator` member, but newer than this project's TS DOM
+  // lib; browsers old enough not to expose it did render PDFs inline.
+  return (navigator as { pdfViewerEnabled?: boolean }).pdfViewerEnabled ?? true;
+}
+
+/** Whether `contentWindow.print()` on an embedded PDF can be relied on.
+ * Only Chromium's PDF viewer implements it dependably; elsewhere the
+ * call is liable to do nothing or print a blank page, which is worse
+ * than not offering it, so those browsers get a visible tab instead.
+ *
+ * `userAgentData` is a Chromium-only API, which makes its presence the
+ * signal — no user-agent string parsing. It is also secure-context-only,
+ * so a page served over plain http takes the tab path as well; that
+ * still prints, it just costs the user one keystroke. */
+function embeddedPrintIsReliable(): boolean {
+  return "userAgentData" in navigator;
+}
+
+/** Prints `bytes` through the browser, rather than through a rendering
+ * of the page canvases. Printing the document itself is both simpler and
+ * sharper: the canvases hold screen-resolution pixels at the current
+ * zoom, so a print stylesheet over them would put a blurry raster on
+ * paper, where the browser's own PDF viewer prints from the vectors.
+ *
+ * Two paths, because embedded printing is only dependable in Chromium
+ * (see `embeddedPrintIsReliable`). Neither can report what the user did
+ * with the dialog — no browser exposes that — so this resolves at
+ * hand-off. Note that the fallback path's own `print()` call is
+ * best-effort: if it doesn't take, the document is still sitting in a
+ * tab where the browser's print command works. Nothing here fails
+ * silently; the worst case is one extra keystroke. */
+async function printBytes(bytes: Uint8Array): Promise<void> {
+  if (!rendersPdfInline()) {
+    throw new Error(
+      "This browser is set to download PDFs rather than display them, so it has nothing to print from. Save a copy and print that, or re-enable the built-in PDF viewer.",
+    );
+  }
+
+  const url = URL.createObjectURL(new Blob([bytes as BufferSource], { type: "application/pdf" }));
+
+  if (!embeddedPrintIsReliable()) {
+    const tab = window.open(url, "_blank");
+    if (!tab) {
+      URL.revokeObjectURL(url);
+      throw new Error("The browser blocked the print window. Allow pop-ups for this page and try again.");
+    }
+    // Best-effort — see this function's doc. A cross-origin guard can
+    // reject the call outright in some browsers, hence the catch.
+    tab.addEventListener("load", () => {
+      try {
+        tab.print();
+      } catch {
+        /* the tab is open; the browser's own print command still works */
+      }
+    });
+    setTimeout(() => URL.revokeObjectURL(url), PRINT_TARGET_LIFETIME_MS);
+    return;
+  }
+
+  const frame = document.createElement("iframe");
+  // Not `display: none`: a frame with no box isn't laid out, and an
+  // unlaid-out PDF viewer has nothing to print.
+  frame.style.cssText = "position:fixed;right:0;bottom:0;width:1px;height:1px;border:0;opacity:0;";
+  frame.src = url;
+
+  await new Promise<void>((resolve, reject) => {
+    frame.addEventListener("load", () => resolve());
+    frame.addEventListener("error", () => reject(new Error("The print preview failed to load.")));
+    document.body.append(frame);
+  }).catch((error) => {
+    frame.remove();
+    URL.revokeObjectURL(url);
+    throw error;
+  });
+
+  try {
+    frame.contentWindow?.focus();
+    frame.contentWindow?.print();
+  } catch (error) {
+    frame.remove();
+    URL.revokeObjectURL(url);
+    throw error;
+  }
+
+  setTimeout(() => {
+    frame.remove();
+    URL.revokeObjectURL(url);
+  }, PRINT_TARGET_LIFETIME_MS);
+}
+
 /** Opens a file picker and resolves to the chosen files, or an empty
  * array if the user cancelled.
  *
@@ -984,6 +1087,20 @@ export const wasmBackend: Backend = {
   savesByDownloading(handle) {
     const entry = openDocs.get(handle);
     return entry ? !canWriteBack(entry.target) : !supportsFileSystemAccess();
+  },
+
+  canPrint() {
+    return true;
+  },
+
+  /** Prints the working copy, not the file that was opened, so what
+   * comes out of the printer includes the edits on screen — the same
+   * bytes `saveDocument` would write (see `writeDocumentTo` for why
+   * `workingCopyBytes` rather than a PDFium rewrite). */
+  async printDocument(handle) {
+    if (!openDocs.has(handle)) throw new Error(`printDocument: unknown document handle ${handle}`);
+    const session = await ensureSession();
+    await printBytes(session.workingCopyBytes(handle));
   },
 
   async saveDocument(handle) {
