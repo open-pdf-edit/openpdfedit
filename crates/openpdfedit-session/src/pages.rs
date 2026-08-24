@@ -402,6 +402,7 @@ mod tests {
                 original_path: tmp_path.clone(),
                 dirty: false,
                 doc,
+                encryption: None,
             },
         );
         (handle, tmp_path)
@@ -883,6 +884,7 @@ mod tests {
                 original_path: path,
                 dirty: true,
                 doc,
+                encryption: None,
             },
         );
 
@@ -917,6 +919,7 @@ mod tests {
                 original_path: path,
                 dirty: false,
                 doc,
+                encryption: None,
             },
         );
 

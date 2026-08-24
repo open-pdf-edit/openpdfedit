@@ -64,6 +64,23 @@ export type {
 // — there's no re-import needed, as long as call sites read `backend.foo`
 // live rather than destructuring it into a local at import time (every
 // call site in this app does).
+/** Whether a failed `openDocument` was refused for want of a password,
+ * as opposed to genuinely failing. The Tauri backend serializes
+ * `CommandError::PasswordRequired` as the string `"password required"`;
+ * matching on that rather than on any message the parser produced keeps
+ * the check from drifting when unrelated error text changes. */
+export function isPasswordRequired(error: unknown): boolean {
+  const text =
+    typeof error === "string"
+      ? error
+      : error instanceof Error
+        ? error.message
+        : typeof error === "object" && error !== null
+          ? Object.values(error as Record<string, unknown>).find((v) => typeof v === "string") ?? ""
+          : "";
+  return String(text).toLowerCase().includes("password required");
+}
+
 export let backend: Backend = tauriBackend;
 
 /** Which `Backend` implementation this build ships, decided at build time

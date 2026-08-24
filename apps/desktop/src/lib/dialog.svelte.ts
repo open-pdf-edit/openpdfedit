@@ -27,6 +27,9 @@ interface DialogRequest {
   placeholder: string;
   confirmLabel: string;
   destructive: boolean;
+  /** Mask the input. A password typed into a plain field is visible to
+   * anyone near the screen and can be captured by a screenshot. */
+  masked: boolean;
 }
 
 // `null` when nothing is open. A single active dialog at a time is
@@ -64,6 +67,7 @@ export function showAlert(message: string, title = "OpenPdfEdit"): Promise<void>
     defaultValue: "",
     placeholder: "",
     confirmLabel: "OK",
+    masked: false,
     destructive: false,
   }).then(() => undefined);
 }
@@ -79,6 +83,7 @@ export async function showConfirm(
     defaultValue: "",
     placeholder: "",
     confirmLabel: options.confirmLabel ?? "OK",
+    masked: false,
     destructive: options.destructive ?? false,
   });
   return result !== null;
@@ -86,7 +91,14 @@ export async function showConfirm(
 
 export async function showPrompt(
   message: string,
-  options: { title?: string; defaultValue?: string; placeholder?: string; confirmLabel?: string } = {},
+  options: {
+    title?: string;
+    defaultValue?: string;
+    placeholder?: string;
+    confirmLabel?: string;
+    /** Mask what's typed — for passwords. */
+    password?: boolean;
+  } = {},
 ): Promise<string | null> {
   return open({
     kind: "prompt",
@@ -95,6 +107,7 @@ export async function showPrompt(
     defaultValue: options.defaultValue ?? "",
     placeholder: options.placeholder ?? "",
     confirmLabel: options.confirmLabel ?? "OK",
+    masked: options.password ?? false,
     destructive: false,
   });
 }

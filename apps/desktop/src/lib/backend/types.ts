@@ -381,7 +381,11 @@ export interface OcrDocumentRequest {
  * re-wired, for the wasm/extension backend in Task 8. */
 export interface Backend {
   // --- document lifecycle ---
-  openDocument(path: string): Promise<OpenedDocument>;
+  /** Opens `path`. A password-protected document rejects a call with no
+   * `password` by throwing something `isPasswordRequired` recognises, so
+   * the caller can prompt and retry rather than surfacing a parser
+   * message about something the user already knows. */
+  openDocument(path: string, password?: string): Promise<OpenedDocument>;
   /** Open picker + open document in one step — path-based on desktop,
    * bytes-based in the extension. Desktop's own call site uses the
    * finer-grained `pickOpenPath` + `openDocument` pair instead (see

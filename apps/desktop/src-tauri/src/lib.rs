@@ -120,6 +120,11 @@ enum CommandError {
     UnknownHandle(DocHandle),
     #[error("I/O error: {0}")]
     Io(String),
+    /// Kept a distinct variant so the front-end can open a password
+    /// prompt instead of showing a parser message about something the
+    /// user already knows.
+    #[error("password required")]
+    PasswordRequired,
 }
 
 impl From<EngineError> for CommandError {
@@ -165,6 +170,7 @@ impl From<SessionError> for CommandError {
             SessionError::Annot(s) => CommandError::Annot(s),
             SessionError::UnknownHandle(h) => CommandError::UnknownHandle(h),
             SessionError::Io(s) => CommandError::Io(s),
+            SessionError::PasswordRequired => CommandError::PasswordRequired,
         }
     }
 }
@@ -204,8 +210,17 @@ fn redo_cmd(state: State<'_, AppState>, handle: DocHandle) -> Result<OpenedDocum
 
 /// Thin wrapper over `openpdfedit_session::open_document_impl`.
 #[tauri::command]
-fn open_document(state: State<'_, AppState>, path: String) -> Result<OpenedDocument, CommandError> {
-    openpdfedit_session::open_document_impl(&state, std::path::Path::new(&path)).map_err(Into::into)
+fn open_document(
+    state: State<'_, AppState>,
+    path: String,
+    password: Option<String>,
+) -> Result<OpenedDocument, CommandError> {
+    openpdfedit_session::open_document_with_password_impl(
+        &state,
+        std::path::Path::new(&path),
+        password.as_deref(),
+    )
+    .map_err(Into::into)
 }
 
 /// Closes the window for real, after the front-end has resolved the

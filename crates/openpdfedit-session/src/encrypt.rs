@@ -21,7 +21,12 @@ use crate::{resolve_doc, SessionError, SessionState};
 
 impl From<openpdfedit_crypt::CryptError> for SessionError {
     fn from(e: openpdfedit_crypt::CryptError) -> Self {
-        SessionError::Doc(e.to_string())
+        match e {
+            // Kept distinct all the way to the front-end, which turns it
+            // into a password prompt rather than an error banner.
+            openpdfedit_crypt::CryptError::PasswordRequired => SessionError::PasswordRequired,
+            other => SessionError::Doc(other.to_string()),
+        }
     }
 }
 
@@ -110,4 +115,116 @@ pub fn encrypt_document_to_path_impl<E: Engine>(
     Ok(EncryptStats {
         bytes: bytes.len() as u64,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{FsWorkingStore, OpenDoc};
+    use std::collections::HashMap;
+    use std::sync::Mutex;
+
+    /// The dangerous direction: a document opened *with* a password must
+    /// not be written back without one. The working copy is stored
+    /// decrypted so the edit paths can ignore encryption, which makes
+    /// saving the single place that has to put it back — and a silent
+    /// failure here strips protection off the user's own file.
+    #[test]
+    fn saving_a_protected_document_writes_it_back_protected() {
+        let Some(engine) = crate::test_support::shared_handle() else {
+            return;
+        };
+
+        let plain = crate::test_support::text_page_pdf_bytes("secret contents", 72.0, 700.0, 24.0);
+        let protected = openpdfedit_crypt::encrypt_document(
+            &plain,
+            "hunter2",
+            "hunter2",
+            openpdfedit_crypt::Permissions::default(),
+        )
+        .expect("fixture should encrypt");
+
+        let dir = std::env::temp_dir();
+        let original = dir.join(format!(
+            "openpdfedit-save-protected-{}.pdf",
+            std::process::id()
+        ));
+        std::fs::write(&original, &protected).expect("should write the fixture");
+
+        let (handle, open_doc) =
+            OpenDoc::open_with_working_copy_password(&original, engine, Some("hunter2"))
+                .expect("should open with the password");
+        assert_eq!(
+            open_doc.encryption.as_deref(),
+            Some("hunter2"),
+            "the password wasn't remembered, so saving can't restore protection"
+        );
+
+        // The working copy itself is plaintext — that's the point.
+        let working = open_doc.path.clone();
+        assert!(
+            !openpdfedit_crypt::is_encrypted(&std::fs::read(&working).unwrap()),
+            "the working copy should be decrypted for the edit paths"
+        );
+
+        let docs: Mutex<HashMap<openpdfedit_engine::DocHandle, OpenDoc>> =
+            Mutex::new(HashMap::new());
+        docs.lock().unwrap().insert(handle, open_doc);
+        let history = Mutex::new(HashMap::new());
+        let state = crate::SessionState {
+            engine: engine.clone(),
+            docs,
+            history,
+            store: Box::new(FsWorkingStore),
+        };
+
+        crate::save_document_impl(&state, handle).expect("save should succeed");
+
+        let saved = std::fs::read(&original).expect("the saved file should exist");
+        assert!(
+            openpdfedit_crypt::is_encrypted(&saved),
+            "Save wrote the document back WITHOUT its password protection"
+        );
+        // ...and it's still the same password, not some new one.
+        assert!(
+            openpdfedit_crypt::decrypt_document(&saved, "hunter2").is_ok(),
+            "the re-protected file doesn't open with the original password"
+        );
+
+        engine.close(handle);
+        let _ = std::fs::remove_file(&original);
+        let _ = std::fs::remove_file(&working);
+    }
+
+    /// Opening a protected document with no password is a distinct
+    /// signal, so the UI can prompt rather than show a parser message.
+    #[test]
+    fn opening_without_a_password_asks_for_one() {
+        let Some(engine) = crate::test_support::shared_handle() else {
+            return;
+        };
+        let plain = crate::test_support::text_page_pdf_bytes("secret", 72.0, 700.0, 24.0);
+        let protected = openpdfedit_crypt::encrypt_document(
+            &plain,
+            "pw",
+            "pw",
+            openpdfedit_crypt::Permissions::default(),
+        )
+        .expect("fixture should encrypt");
+        let path = std::env::temp_dir().join(format!(
+            "openpdfedit-open-noprompt-{}.pdf",
+            std::process::id()
+        ));
+        std::fs::write(&path, &protected).expect("should write the fixture");
+
+        // `OpenDoc` isn't Debug (it holds a whole Document), so match on
+        // the result rather than unwrapping the error out of it.
+        match OpenDoc::open_with_working_copy_password(&path, engine, None) {
+            Err(SessionError::PasswordRequired) => {}
+            Err(other) => panic!("expected PasswordRequired, got {other:?}"),
+            Ok(_) => panic!("opening a protected document with no password must fail"),
+        }
+
+        let _ = std::fs::remove_file(&path);
+    }
 }

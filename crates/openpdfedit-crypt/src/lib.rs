@@ -41,7 +41,7 @@
 //! It also sidesteps the upstream bug that broke `lopdf`'s own attempt.
 
 use aes::cipher::{BlockCipherEncrypt, BlockModeEncrypt, KeyInit, KeyIvInit};
-use lopdf::{Dictionary, Document, Object, SaveOptions};
+use lopdf::{Dictionary, Document, LoadOptions, Object, SaveOptions};
 use rand::rngs::SysRng;
 use rand::TryRng;
 use sha2::{Digest, Sha256, Sha384, Sha512};
@@ -69,6 +69,10 @@ pub enum CryptError {
     Random(String),
     #[error("encryption failed: {0}")]
     Internal(String),
+    #[error("this document is password-protected")]
+    PasswordRequired,
+    #[error("that password didn't open the document")]
+    WrongPassword,
 }
 
 /// What the recipient may do without the owner password.
@@ -431,12 +435,62 @@ fn encrypt_dictionary(dict: Dictionary, file_key: &[u8; 32]) -> Result<Dictionar
 /// True if `pdf` carries a `/Encrypt` entry — i.e. a password is needed
 /// to open it.
 pub fn is_encrypted(pdf: &[u8]) -> bool {
-    // Checked on the raw bytes rather than by parsing: `lopdf` cannot
-    // load an encrypted document's object graph at all (its objects live
-    // in encrypted object streams it won't expand), so a parse-based
-    // answer would be unreliable on exactly the files this question is
-    // asked about.
+    // A raw byte scan rather than a parse, because the answer is needed
+    // *before* deciding how to parse: loading without a password throws
+    // away the object graph of exactly the files this question is asked
+    // about.
     find_subslice(pdf, b"/Encrypt").is_some()
+}
+
+/// Removes the password protection from `pdf`, returning a plaintext
+/// document that opens with no password.
+///
+/// Unlike encryption, this leans on `lopdf`, which decrypts correctly
+/// when asked properly — via `LoadOptions::with_password` at *load*
+/// time. (Loading without a password and calling `decrypt()` afterwards
+/// does not work: it returns `Ok` on a document whose objects have all
+/// been discarded, because they live in encrypted object streams that
+/// the passwordless load couldn't expand. That failure mode is why this
+/// module's own encryption is hand-written, and it's worth being
+/// precise that the fault is in *that* call sequence, not in lopdf's
+/// decryption itself.)
+///
+/// Written back with a classic cross-reference table for the same reason
+/// [`encrypt_document`] is — see its doc.
+pub fn decrypt_document(pdf: &[u8], password: &str) -> Result<Vec<u8>, CryptError> {
+    if !is_encrypted(pdf) {
+        // Nothing to remove; hand the bytes back rather than making the
+        // caller special-case it.
+        return Ok(pdf.to_vec());
+    }
+
+    let mut doc = Document::load_mem_with_options(pdf, LoadOptions::with_password(password))
+        .map_err(|e| {
+            // lopdf reports a bad password as an ordinary load failure,
+            // so the distinction the UI needs (ask again vs. this file is
+            // broken) has to be recovered from the message.
+            let text = e.to_string();
+            if text.contains("password") {
+                CryptError::WrongPassword
+            } else {
+                CryptError::Load(text)
+            }
+        })?;
+
+    // The document is decrypted in memory now; dropping the dictionary
+    // is what makes the *written* copy plaintext.
+    doc.trailer.remove(b"Encrypt");
+
+    let mut out = Vec::with_capacity(pdf.len());
+    doc.save_with_options(
+        &mut out,
+        SaveOptions::builder()
+            .use_object_streams(false)
+            .use_xref_streams(false)
+            .build(),
+    )
+    .map_err(|e| CryptError::Save(e.to_string()))?;
+    Ok(out)
 }
 
 fn find_subslice(haystack: &[u8], needle: &[u8]) -> Option<usize> {

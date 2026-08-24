@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { backend, backendKind } from "$lib/backend";
+  import { backend, backendKind, isPasswordRequired } from "$lib/backend";
   import type {
     AnnotationSummaryDto,
     CompareReportDto,
@@ -765,6 +765,41 @@
     await openInNewTab(selected);
   }
 
+  /** How many times to re-ask before giving up, so a wrong password
+   * doesn't turn into an unclosable loop. */
+  const PASSWORD_ATTEMPTS = 3;
+
+  /** Opens `path`, asking for a password if the document turns out to be
+   * protected. Returns `null` if the user cancelled the prompt — which
+   * is not an error and shouldn't leave a banner behind. */
+  async function openPossiblyProtected(path: string): Promise<OpenedDocument | null> {
+    try {
+      return await backend.openDocument(path);
+    } catch (e) {
+      if (!isPasswordRequired(e)) throw e;
+    }
+
+    const name = path.split(/[/\\]/).pop();
+    for (let attempt = 0; attempt < PASSWORD_ATTEMPTS; attempt++) {
+      const password = await showPrompt(
+        attempt === 0
+          ? `"${name}" is password-protected. Enter its password to open it:`
+          : `That password didn't open "${name}". Try again:`,
+        { title: "Password required", confirmLabel: "Open", password: true },
+      );
+      if (password === null) return null;
+      try {
+        return await backend.openDocument(path, password);
+      } catch (e) {
+        // Anything that isn't a rejected password is a real failure and
+        // shouldn't be retried as though the user mistyped.
+        const text = String(e).toLowerCase();
+        if (!text.includes("password")) throw e;
+      }
+    }
+    throw new Error(`Couldn't open "${name}" — the password wasn't accepted.`);
+  }
+
   /** Opens `path` in a new tab and makes it active. Documents already
    * open are focused rather than opened twice — two tabs over one
    * backend document would each hold a handle that the other's edits
@@ -778,7 +813,8 @@
 
     mutationBusy = true;
     try {
-      const opened = await backend.openDocument(path);
+      const opened = await openPossiblyProtected(path);
+      if (!opened) return;
       tabs.push({ doc: opened, filePath: path, zoom: 1, currentPage: 0 });
       activeTabIndex = tabs.length - 1;
       doc = opened;

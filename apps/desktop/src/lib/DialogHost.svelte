@@ -68,6 +68,8 @@
             class="oa-input"
             bind:this={inputEl}
             bind:value
+            type={dialog.masked ? "password" : "text"}
+            autocomplete={dialog.masked ? "current-password" : "off"}
             placeholder={dialog.placeholder}
             autofocus
             spellcheck="false"

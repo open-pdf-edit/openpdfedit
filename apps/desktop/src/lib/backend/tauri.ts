@@ -49,8 +49,8 @@ const PDF_FILTERS = [{ name: "PDF", extensions: ["pdf"] }];
 export const tauriBackend: Backend = {
   // --- document lifecycle ---
 
-  async openDocument(path) {
-    return invoke<OpenedDocument>("open_document", { path });
+  async openDocument(path, password) {
+    return invoke<OpenedDocument>("open_document", { path, password: password ?? null });
   },
 
   async pickAndOpenDocument() {

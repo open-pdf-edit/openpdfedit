@@ -183,6 +183,7 @@ mod tests {
                 original_path: tmp_path.clone(),
                 dirty: false,
                 doc,
+                encryption: None,
             },
         );
 

@@ -282,6 +282,11 @@ pub struct OpenDoc {
     /// `original_path`.
     pub dirty: bool,
     pub doc: Document,
+    /// The password this document was opened with, when it was
+    /// password-protected. The working copy is stored decrypted (see
+    /// [`OpenDoc::open_with_working_copy_password`]); this is what lets
+    /// a save put the protection back rather than silently removing it.
+    pub encryption: Option<String>,
 }
 
 impl OpenDoc {
@@ -294,6 +299,24 @@ impl OpenDoc {
         original: &Path,
         engine: &E,
     ) -> Result<(DocHandle, OpenDoc), SessionError> {
+        Self::open_with_working_copy_password(original, engine, None)
+    }
+
+    /// As [`OpenDoc::open_with_working_copy`], but for a document that
+    /// needs a password.
+    ///
+    /// The working copy is written **decrypted**. That's what lets every
+    /// edit path downstream stay exactly as it is — none of them know
+    /// about encryption, and none of them should have to. The password
+    /// is kept on the returned [`OpenDoc`] so that saving can put the
+    /// protection back; a Save that quietly stripped the password off
+    /// the user's own file would be a serious surprise.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn open_with_working_copy_password<E: Engine>(
+        original: &Path,
+        engine: &E,
+        password: Option<&str>,
+    ) -> Result<(DocHandle, OpenDoc), SessionError> {
         let stem = original
             .file_stem()
             .map(|s| s.to_string_lossy().into_owned())
@@ -304,7 +327,18 @@ impl OpenDoc {
             std::process::id(),
             NEXT_WORKING_ID.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
         ));
-        copy_with_lock_retry(original, &working)?;
+        let source = std::fs::read(original)?;
+        let encryption = if openpdfedit_crypt::is_encrypted(&source) {
+            let Some(password) = password else {
+                return Err(SessionError::PasswordRequired);
+            };
+            let plain = openpdfedit_crypt::decrypt_document(&source, password)?;
+            std::fs::write(&working, &plain)?;
+            Some(password.to_string())
+        } else {
+            copy_with_lock_retry(original, &working)?;
+            None
+        };
 
         let handle = engine.open(&working)?;
         let doc = Document::open(&working)?;
@@ -315,6 +349,7 @@ impl OpenDoc {
                 original_path: original.to_path_buf(),
                 dirty: false,
                 doc,
+                encryption,
             },
         ))
     }
@@ -411,6 +446,8 @@ pub enum SessionError {
     Engine(String),
     #[error("{0}")]
     Doc(String),
+    #[error("this document is password-protected")]
+    PasswordRequired,
     #[error("{0}")]
     Annot(String),
     #[error("unknown document handle {0}")]
@@ -876,12 +913,12 @@ pub fn reopen_after_write<E: Engine>(
     // Carry the user-facing identity across the rotation: which file a
     // save targets, and the fact that reaching here means the working
     // copy now differs from it.
-    let original_path = {
+    let (original_path, encryption) = {
         let mut guard = docs.lock().expect("docs lock poisoned");
         guard
             .remove(&old_handle)
-            .map(|d| d.original_path)
-            .unwrap_or_else(|| path.clone())
+            .map(|d| (d.original_path, d.encryption))
+            .unwrap_or_else(|| (path.clone(), None))
     };
     engine.close(old_handle);
 
@@ -906,6 +943,10 @@ pub fn reopen_after_write<E: Engine>(
             original_path,
             dirty: true,
             doc,
+            // Carried across the handle rotation every edit performs —
+            // losing it here would mean the next save silently dropped
+            // the document's password protection.
+            encryption,
         },
     );
 
@@ -1225,7 +1266,24 @@ pub fn open_document_impl<E: Engine>(
     state: &SessionState<E>,
     path: &Path,
 ) -> Result<OpenedDocumentInfo, SessionError> {
-    let (handle, open_doc) = OpenDoc::open_with_working_copy(path, &state.engine)?;
+    open_document_with_password_impl(state, path, None)
+}
+
+/// As [`open_document_impl`], but supplies a password for a
+/// password-protected document.
+///
+/// Opening one without a password fails with
+/// [`SessionError::PasswordRequired`] rather than a generic error, so
+/// the front-end can ask for the password instead of showing the user a
+/// raw parser message about something they already know.
+#[cfg(not(target_arch = "wasm32"))]
+pub fn open_document_with_password_impl<E: Engine>(
+    state: &SessionState<E>,
+    path: &Path,
+    password: Option<&str>,
+) -> Result<OpenedDocumentInfo, SessionError> {
+    let (handle, open_doc) =
+        OpenDoc::open_with_working_copy_password(path, &state.engine, password)?;
     let working = open_doc.path.clone();
     state
         .docs
@@ -1281,6 +1339,34 @@ pub fn compress_document_to_path_impl<E: Engine>(
     })
 }
 
+/// Writes the working copy to `target`, restoring password protection
+/// if the document had any.
+///
+/// The working copy is stored decrypted so every edit path can ignore
+/// encryption (see [`OpenDoc::open_with_working_copy_password`]). That
+/// makes this the one place the protection has to be put back — a Save
+/// that quietly returned an unprotected file, over the user's own
+/// password-protected document, would be a serious and silent loss.
+#[cfg(not(target_arch = "wasm32"))]
+fn write_working_copy_to(
+    working: &Path,
+    target: &Path,
+    password: Option<&str>,
+) -> Result<(), SessionError> {
+    let Some(password) = password else {
+        return copy_with_lock_retry(working, target);
+    };
+    let plain = std::fs::read(working)?;
+    let protected = openpdfedit_crypt::encrypt_document(
+        &plain,
+        password,
+        password,
+        openpdfedit_crypt::Permissions::default(),
+    )?;
+    std::fs::write(target, protected)?;
+    Ok(())
+}
+
 /// The impl behind the desktop's `save_document` command: writes the
 /// working copy over the file the user opened. Path-based, so
 /// desktop-only.
@@ -1289,12 +1375,16 @@ pub fn save_document_impl<E: Engine>(
     state: &SessionState<E>,
     handle: DocHandle,
 ) -> Result<OpenedDocumentInfo, SessionError> {
-    let (working, original) = {
+    let (working, original, encryption) = {
         let guard = state.docs.lock().expect("docs lock poisoned");
         let d = resolve_doc(&guard, handle)?;
-        (d.path.clone(), d.original_path.clone())
+        (
+            d.path.clone(),
+            d.original_path.clone(),
+            d.encryption.clone(),
+        )
     };
-    copy_with_lock_retry(&working, &original)?;
+    write_working_copy_to(&working, &original, encryption.as_deref())?;
     if let Some(d) = state
         .docs
         .lock()
@@ -1315,11 +1405,15 @@ pub fn save_document_as_impl<E: Engine>(
     handle: DocHandle,
     path: &Path,
 ) -> Result<OpenedDocumentInfo, SessionError> {
-    let working = {
+    let (working, encryption) = {
         let guard = state.docs.lock().expect("docs lock poisoned");
-        resolve_doc(&guard, handle)?.path.clone()
+        let d = resolve_doc(&guard, handle)?;
+        (d.path.clone(), d.encryption.clone())
     };
-    copy_with_lock_retry(&working, path)?;
+    // Save As carries the protection too: "save a copy" of a
+    // password-protected document should not quietly produce an
+    // unprotected one.
+    write_working_copy_to(&working, path, encryption.as_deref())?;
     if let Some(d) = state
         .docs
         .lock()
@@ -1389,6 +1483,9 @@ pub fn open_document_bytes<E: Engine>(
             original_path,
             dirty: false,
             doc,
+            // The bytes-based open (the extension) has no
+            // password-protected entry point yet.
+            encryption: None,
         },
     );
     opened_document(&state.engine, &state.docs, &state.history, &path, handle)
@@ -2289,6 +2386,7 @@ mod tests {
                 original_path: tmp_path.clone(),
                 dirty: false,
                 doc,
+                encryption: None,
             },
         );
         let history: Mutex<HashMap<PathBuf, DocHistory>> = Mutex::new(HashMap::new());
@@ -2337,6 +2435,7 @@ mod tests {
                 original_path: tmp_path.clone(),
                 dirty: false,
                 doc,
+                encryption: None,
             },
         );
         let state = SessionState {
@@ -2506,6 +2605,7 @@ mod tests {
                 original_path: tmp_path.clone(),
                 dirty: false,
                 doc,
+                encryption: None,
             },
         );
         let state = SessionState {

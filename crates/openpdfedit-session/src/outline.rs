@@ -143,6 +143,7 @@ mod tests {
                 original_path: path,
                 dirty: false,
                 doc,
+                encryption: None,
             },
         );
         (docs, 1)

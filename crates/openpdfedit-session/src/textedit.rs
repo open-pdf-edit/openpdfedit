@@ -307,6 +307,7 @@ mod tests {
                 original_path: tmp_path.clone(),
                 dirty: false,
                 doc,
+                encryption: None,
             },
         );
         let history: Mutex<HashMap<PathBuf, DocHistory>> = Mutex::new(HashMap::new());
@@ -366,6 +367,7 @@ mod tests {
                 original_path: tmp_path.clone(),
                 dirty: false,
                 doc,
+                encryption: None,
             },
         );
         let history: Mutex<HashMap<PathBuf, DocHistory>> = Mutex::new(HashMap::new());

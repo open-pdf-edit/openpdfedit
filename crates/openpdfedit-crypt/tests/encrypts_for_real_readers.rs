@@ -274,3 +274,93 @@ fn real_world_documents_from_the_corpus_encrypt_and_still_render() {
     );
     eprintln!("encrypted and re-rendered {checked} real-world documents");
 }
+
+/// The round trip in full: encrypt, then decrypt with the same password,
+/// and check the result opens with *no* password and looks like the
+/// original. This is what "the tool works" means for a user — not that
+/// each half succeeds in isolation.
+#[test]
+fn encrypt_then_decrypt_returns_an_unprotected_document() {
+    let Some(engine) = pdfium() else { return };
+
+    let plain = source_pdf();
+    let before = render(engine, &plain, None).expect("the source should render");
+
+    let encrypted = encrypt_document(&plain, "round-trip", "round-trip", Permissions::default())
+        .expect("encryption should succeed");
+    assert!(
+        !opens(engine, &encrypted, None),
+        "encrypted copy needs no password?"
+    );
+
+    let decrypted = openpdfedit_crypt::decrypt_document(&encrypted, "round-trip")
+        .expect("decryption should succeed");
+    assert!(
+        !is_encrypted(&decrypted),
+        "the decrypted copy still declares /Encrypt"
+    );
+
+    let after = render(engine, &decrypted, None)
+        .expect("the decrypted copy should open with no password at all");
+    assert_eq!(after, before, "the page changed across encrypt/decrypt");
+}
+
+#[test]
+fn decrypting_with_the_wrong_password_is_reported_as_such() {
+    let encrypted =
+        encrypt_document(&source_pdf(), "correct", "correct", Permissions::default()).unwrap();
+    let err = openpdfedit_crypt::decrypt_document(&encrypted, "incorrect").unwrap_err();
+    // The UI needs to tell "ask again" apart from "this file is broken".
+    assert!(
+        matches!(err, openpdfedit_crypt::CryptError::WrongPassword),
+        "expected WrongPassword, got {err:?}"
+    );
+}
+
+/// Decrypting something that was never encrypted is a no-op rather than
+/// an error — callers shouldn't have to check first.
+#[test]
+fn decrypting_an_unprotected_document_returns_it_unchanged() {
+    let plain = source_pdf();
+    let out = openpdfedit_crypt::decrypt_document(&plain, "anything").expect("should succeed");
+    assert_eq!(out, plain);
+}
+
+/// Real AES-256 documents produced by other tools — the ones this
+/// module's own encryption can't vouch for, since it wrote neither.
+#[test]
+fn real_encrypted_documents_from_other_tools_decrypt() {
+    let Some(engine) = pdfium() else { return };
+    let fixtures = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .unwrap()
+        .parent()
+        .unwrap()
+        .join("testdata/encrypted");
+    if !fixtures.exists() {
+        eprintln!("skipping: no encrypted fixtures at {}", fixtures.display());
+        return;
+    }
+
+    let mut checked = 0;
+    for (name, password) in [("pr6531_1.pdf", "asdfasdf"), ("pr6531_2.pdf", "asdfasdf")] {
+        let path = fixtures.join(name);
+        let Ok(bytes) = std::fs::read(&path) else {
+            continue;
+        };
+        assert!(is_encrypted(&bytes), "{name}: fixture isn't encrypted");
+        assert!(
+            !opens(engine, &bytes, None),
+            "{name}: opened without a password"
+        );
+
+        let decrypted = openpdfedit_crypt::decrypt_document(&bytes, password)
+            .unwrap_or_else(|e| panic!("{name}: decryption failed: {e}"));
+        assert!(
+            render(engine, &decrypted, None).is_some(),
+            "{name}: decrypted copy wouldn't open unprotected"
+        );
+        checked += 1;
+    }
+    assert!(checked > 0, "no encrypted fixtures were exercised");
+}
