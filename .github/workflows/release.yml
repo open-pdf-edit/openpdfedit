@@ -131,6 +131,10 @@ jobs:
     needs: [extension, macos-dmg, windows-exe]
     runs-on: ubuntu-latest
     steps:
+      # Needed only to read the tag's annotation for the release notes.
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/download-artifact@v4
         with:
           path: artifacts
@@ -140,9 +144,20 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           ls -la artifacts/
+
+          # An annotated tag's message becomes the release notes, so what
+          # changed in a release is written once, at the point it's cut,
+          # instead of every release repeating the same blurb. A
+          # lightweight tag has no message, so fall back to that blurb
+          # rather than publishing an empty release body.
+          NOTES="$(git tag -l --format='%(contents)' "$GITHUB_REF_NAME")"
+          if [ -z "${NOTES//[[:space:]]/}" ]; then
+            NOTES="Local-first PDF editor. Downloads: the macOS app (.dmg, Apple Silicon), the Windows installer (.exe), and the Chrome extension (unzip, then chrome://extensions → Developer mode → Load unpacked). Chrome 103+. Documents never leave your machine."
+          fi
+
           gh release create "$GITHUB_REF_NAME" \
             --repo "$GITHUB_REPOSITORY" \
             --title "OpenPdfEdit $GITHUB_REF_NAME" \
-            --notes "Local-first PDF editor. Downloads: the macOS app (.dmg, Apple Silicon), the Windows installer (.exe), and the Chrome extension (unzip, then chrome://extensions → Developer mode → Load unpacked). Chrome 103+. Documents never leave your machine." \
+            --notes "$NOTES" \
             artifacts/* \
           || gh release upload "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --clobber artifacts/*
