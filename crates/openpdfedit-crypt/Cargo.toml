@@ -1,0 +1,18 @@
+[package]
+name = "openpdfedit-crypt"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "PDF Standard Security Handler, AES-256 (V5/R6): password-protect a document."
+
+[dependencies]
+lopdf.workspace = true
+thiserror.workspace = true
+aes = "0.9"
+cbc = "0.2"
+sha2 = "0.10"
+rand = { workspace = true, features = ["sys_rng"] }
+
+[dev-dependencies]
+openpdfedit-engine.workspace = true

@@ -2779,6 +2779,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "openpdfedit-crypt"
+version = "0.1.0"
+dependencies = [
+ "aes",
+ "cbc",
+ "lopdf",
+ "openpdfedit-engine",
+ "rand",
+ "sha2 0.10.9",
+ "thiserror 2.0.19",
+]
+
+[[package]]
 name = "openpdfedit-desktop"
 version = "0.1.0"
 dependencies = [

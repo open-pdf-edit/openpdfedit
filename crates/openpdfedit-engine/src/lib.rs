@@ -481,6 +481,18 @@ pub trait Engine: Send {
     /// path — the entry point a browser extension build needs, since
     /// `wasm32-unknown-unknown` has no filesystem at all.
     fn open_bytes(&self, bytes: Vec<u8>) -> Result<DocHandle, EngineError>;
+    /// Like `open_bytes`, but supplies a password for a document
+    /// protected by the Standard Security Handler.
+    ///
+    /// Separate from `open_bytes` rather than an `Option` parameter on
+    /// it, so every existing call site keeps its meaning and the
+    /// password-carrying path is visible at a glance — this is the one
+    /// place a secret flows into the engine.
+    fn open_bytes_with_password(
+        &self,
+        bytes: Vec<u8>,
+        password: &str,
+    ) -> Result<DocHandle, EngineError>;
     /// Like `save_document`, but returns the saved bytes instead of
     /// writing them to a path — same reason as `open_bytes`.
     fn save_to_bytes(&self, handle: DocHandle) -> Result<Vec<u8>, EngineError>;
@@ -724,6 +736,24 @@ impl Engine for PdfiumEngine {
         let document = self
             .pdfium
             .load_pdf_from_byte_vec(bytes, None)
+            .map_err(|e| EngineError::OpenFailed(e.to_string()))?;
+
+        let handle = self.next_handle.fetch_add(1, Ordering::Relaxed);
+        self.documents
+            .lock()
+            .expect("engine document map lock poisoned")
+            .insert(handle, document);
+        Ok(handle)
+    }
+
+    fn open_bytes_with_password(
+        &self,
+        bytes: Vec<u8>,
+        password: &str,
+    ) -> Result<DocHandle, EngineError> {
+        let document = self
+            .pdfium
+            .load_pdf_from_byte_vec(bytes, Some(password))
             .map_err(|e| EngineError::OpenFailed(e.to_string()))?;
 
         let handle = self.next_handle.fetch_add(1, Ordering::Relaxed);

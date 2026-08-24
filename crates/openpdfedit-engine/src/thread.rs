@@ -89,6 +89,11 @@ enum Request {
         bytes: Vec<u8>,
         reply: mpsc::Sender<Result<DocHandle, EngineError>>,
     },
+    OpenBytesWithPassword {
+        bytes: Vec<u8>,
+        password: String,
+        reply: mpsc::Sender<Result<DocHandle, EngineError>>,
+    },
     SaveToBytes {
         handle: DocHandle,
         reply: mpsc::Sender<Result<Vec<u8>, EngineError>>,
@@ -257,6 +262,20 @@ impl EngineHandle {
         self.request_reply(|reply| Request::OpenBytes { bytes, reply })
     }
 
+    /// See [`Engine::open_bytes_with_password`].
+    pub fn open_bytes_with_password(
+        &self,
+        bytes: Vec<u8>,
+        password: &str,
+    ) -> Result<DocHandle, EngineError> {
+        let password = password.to_string();
+        self.request_reply(|reply| Request::OpenBytesWithPassword {
+            bytes,
+            password,
+            reply,
+        })
+    }
+
     pub fn save_to_bytes(&self, handle: DocHandle) -> Result<Vec<u8>, EngineError> {
         self.request_reply(|reply| Request::SaveToBytes { handle, reply })
     }
@@ -268,6 +287,14 @@ impl EngineHandle {
 /// in-process engine for the wasm/extension build later) can hold a
 /// `&dyn Engine` / `E: Engine` and use either one identically.
 impl Engine for EngineHandle {
+    fn open_bytes_with_password(
+        &self,
+        bytes: Vec<u8>,
+        password: &str,
+    ) -> Result<DocHandle, EngineError> {
+        EngineHandle::open_bytes_with_password(self, bytes, password)
+    }
+
     fn open(&self, path: &Path) -> Result<DocHandle, EngineError> {
         EngineHandle::open(self, path)
     }
@@ -447,6 +474,13 @@ fn run_render_loop(engine: PdfiumEngine, rx: mpsc::Receiver<Request>) {
             }
             Request::OpenBytes { bytes, reply } => {
                 let _ = reply.send(engine.open_bytes(bytes));
+            }
+            Request::OpenBytesWithPassword {
+                bytes,
+                password,
+                reply,
+            } => {
+                let _ = reply.send(engine.open_bytes_with_password(bytes, &password));
             }
             Request::SaveToBytes { handle, reply } => {
                 let _ = reply.send(engine.save_to_bytes(handle));

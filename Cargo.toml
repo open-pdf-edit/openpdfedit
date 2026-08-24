@@ -16,6 +16,7 @@ members = [
     "crates/openpdfedit-textedit",
     "crates/openpdfedit-xfdf",
     "crates/openpdfedit-compare",
+    "crates/openpdfedit-crypt",
     "crates/openpdfedit-batch",
     "crates/openpdfedit-license",
     "crates/openpdfedit-wasm",
@@ -46,6 +47,7 @@ openpdfedit-watermark = { path = "crates/openpdfedit-watermark" }
 openpdfedit-textedit = { path = "crates/openpdfedit-textedit" }
 openpdfedit-xfdf = { path = "crates/openpdfedit-xfdf" }
 openpdfedit-compare = { path = "crates/openpdfedit-compare" }
+openpdfedit-crypt = { path = "crates/openpdfedit-crypt" }
 openpdfedit-batch = { path = "crates/openpdfedit-batch" }
 openpdfedit-license = { path = "crates/openpdfedit-license" }
 
