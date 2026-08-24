@@ -72,6 +72,21 @@ pub enum AnnotationInput {
     Ink {
         strokes: Vec<Vec<[f32; 2]>>,
     },
+    /// A rectangle outline filling the annotation's `rect`.
+    #[serde(rename_all = "camelCase")]
+    Square {
+        /// Border thickness in points; `0` draws a hairline.
+        line_width: f32,
+        /// `[r, g, b]` interior fill, each `0.0..=1.0`. Omitted for
+        /// outline only.
+        fill: Option<[f32; 3]>,
+    },
+    /// An ellipse inscribed in the annotation's `rect`.
+    #[serde(rename_all = "camelCase")]
+    Circle {
+        line_width: f32,
+        fill: Option<[f32; 3]>,
+    },
 }
 
 fn rect_from_flat(r: [f32; 4]) -> Rect {
@@ -102,6 +117,14 @@ fn to_annotation_kind(input: AnnotationInput) -> AnnotationKind {
                 .into_iter()
                 .map(|s| s.into_iter().map(|p| (p[0], p[1])).collect())
                 .collect(),
+        },
+        AnnotationInput::Square { line_width, fill } => AnnotationKind::Square {
+            line_width,
+            fill: fill.map(|[r, g, b]| Color { r, g, b }),
+        },
+        AnnotationInput::Circle { line_width, fill } => AnnotationKind::Circle {
+            line_width,
+            fill: fill.map(|[r, g, b]| Color { r, g, b }),
         },
     }
 }

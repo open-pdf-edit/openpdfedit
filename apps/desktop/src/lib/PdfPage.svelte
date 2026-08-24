@@ -111,6 +111,11 @@
 
   const MOVE_TOOLS: Tool[] = ["moveText", "moveImage"];
 
+  /** Border thickness for a newly drawn shape, in PDF points. Thick
+   * enough to read at a glance without dominating the page; the Rust
+   * side accepts any width, so a properties panel can expose it later. */
+  const SHAPE_LINE_WIDTH = 2;
+
   let containerEl = $state<HTMLDivElement | null>(null);
   let canvasEl = $state<HTMLCanvasElement | null>(null);
   let isNearViewport = $state(false);
@@ -310,7 +315,7 @@
       // meaningless.
       const traveled = Math.hypot(width, height) > 3;
       const hasArea = width > 2 && height > 2;
-      const isAreaTool = activeTool === "redact" || activeTool === "addTextField" || activeTool === "addCheckbox" || activeTool === "signature";
+      const isAreaTool = activeTool === "redact" || activeTool === "addTextField" || activeTool === "addCheckbox" || activeTool === "signature" || activeTool === "rectangle" || activeTool === "ellipse";
       if (isAreaTool ? hasArea : traveled) {
         if (activeTool === "redact") {
           onRedact(pageIndex, rect);
@@ -318,6 +323,18 @@
           onCreateField(pageIndex, rect, activeTool === "addTextField" ? "text" : "checkbox");
         } else if (activeTool === "signature") {
           onPlaceSignature(pageIndex, rect);
+        } else if (activeTool === "rectangle" || activeTool === "ellipse") {
+          // The drag *is* the shape's bounds, so size is set by the
+          // gesture — no separate size control needed.
+          onCreateAnnotation(pageIndex, {
+            rect,
+            color,
+            opacity: 1,
+            annotation: {
+              kind: activeTool === "rectangle" ? "square" : "circle",
+              lineWidth: SHAPE_LINE_WIDTH,
+            },
+          });
         } else {
           const kind = activeTool === "highlight" ? "highlight" : activeTool === "underline" ? "underline" : "strikeOut";
           onCreateAnnotation(pageIndex, {
@@ -427,6 +444,8 @@
         <div
           class="drag-preview"
           class:redact-preview={activeTool === "redact"}
+          class:shape-preview={activeTool === "rectangle" || activeTool === "ellipse"}
+          class:ellipse-preview={activeTool === "ellipse"}
           class:signature-preview={activeTool === "signature"}
           style={dragRectStyle}
         ></div>
@@ -529,6 +548,17 @@
     border-radius: var(--radius-xs);
     white-space: nowrap;
     pointer-events: none;
+  }
+
+  .drag-preview.shape-preview {
+    background: transparent;
+    border: 2px solid color-mix(in oklab, var(--app-pdfedit, #e5484d) 80%, transparent);
+  }
+
+  /* Rounded to a full ellipse so the preview shows the shape being
+     drawn, not the box it's inscribed in. */
+  .drag-preview.ellipse-preview {
+    border-radius: 50%;
   }
 
   .drag-preview.redact-preview {

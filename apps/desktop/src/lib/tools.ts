@@ -6,6 +6,8 @@ export type Tool =
   | "strikeOut"
   | "note"
   | "ink"
+  | "rectangle"
+  | "ellipse"
   | "redact"
   | "editText"
   | "moveText"
@@ -33,6 +35,8 @@ export const TOOLS: ToolDef[] = [
   { id: "strikeOut", label: "Strikeout", icon: "strikethrough" },
   { id: "note", label: "Note", icon: "message-square", startsGroup: true },
   { id: "ink", label: "Draw", icon: "pen-line" },
+  { id: "rectangle", label: "Rectangle", icon: "square" },
+  { id: "ellipse", label: "Ellipse", icon: "circle" },
   { id: "redact", label: "Redact", icon: "square-dashed", startsGroup: true },
   { id: "editText", label: "Edit text", icon: "type", startsGroup: true },
   { id: "moveText", label: "Move text", icon: "move" },

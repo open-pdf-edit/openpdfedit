@@ -121,6 +121,22 @@ pub enum AnnotationKind {
     Ink {
         strokes: Vec<Stroke>,
     },
+    /// A rectangle outline (PDF `/Square`). Drawn as a stroke inset by
+    /// half the line width so the ink stays inside `rect` — a stroke
+    /// centred on the boundary would spill half its width outside the
+    /// annotation's own bounds, which readers clip.
+    Square {
+        /// Border thickness in points.
+        line_width: f32,
+        /// Interior fill, or `None` for outline only.
+        fill: Option<Color>,
+    },
+    /// An ellipse inscribed in `rect` (PDF `/Circle`), drawn from four
+    /// Bézier arcs. Same inset treatment as [`AnnotationKind::Square`].
+    Circle {
+        line_width: f32,
+        fill: Option<Color>,
+    },
 }
 
 pub struct NewAnnotation {
@@ -145,6 +161,8 @@ fn subtype_name(kind: &AnnotationKind) -> &'static str {
         AnnotationKind::StrikeOut { .. } => "StrikeOut",
         AnnotationKind::FreeText { .. } => "FreeText",
         AnnotationKind::Ink { .. } => "Ink",
+        AnnotationKind::Square { .. } => "Square",
+        AnnotationKind::Circle { .. } => "Circle",
     }
 }
 
@@ -354,9 +372,130 @@ fn build_appearance(
             }
             ops.push(Operation::new("S", vec![]));
         }
+        AnnotationKind::Square { line_width, fill } => {
+            let w = shape_line_width(*line_width);
+            let inset = inset_rect(rect, effective_stroke_width(*fill, w).unwrap_or(0.0) / 2.0)?;
+            push_shape_state(&mut ops, color, *fill, w);
+            ops.push(Operation::new(
+                "re",
+                vec![
+                    inset.x0.into(),
+                    inset.y0.into(),
+                    (inset.x1 - inset.x0).into(),
+                    (inset.y1 - inset.y0).into(),
+                ],
+            ));
+            ops.push(shape_paint_op(*fill, w));
+        }
+        AnnotationKind::Circle { line_width, fill } => {
+            let w = shape_line_width(*line_width);
+            let inset = inset_rect(rect, effective_stroke_width(*fill, w).unwrap_or(0.0) / 2.0)?;
+            push_shape_state(&mut ops, color, *fill, w);
+
+            // Four cubic Béziers, the standard circle approximation: a
+            // control point at KAPPA of the half-axis puts the maximum
+            // radial error around 0.02%, which is invisible at any zoom a
+            // reader offers.
+            let (cx, cy) = ((inset.x0 + inset.x1) / 2.0, (inset.y0 + inset.y1) / 2.0);
+            let (rx, ry) = ((inset.x1 - inset.x0) / 2.0, (inset.y1 - inset.y0) / 2.0);
+            let (ox, oy) = (rx * KAPPA, ry * KAPPA);
+            ops.push(Operation::new("m", vec![(cx - rx).into(), cy.into()]));
+            for [c1x, c1y, c2x, c2y, ex, ey] in [
+                [cx - rx, cy + oy, cx - ox, cy + ry, cx, cy + ry],
+                [cx + ox, cy + ry, cx + rx, cy + oy, cx + rx, cy],
+                [cx + rx, cy - oy, cx + ox, cy - ry, cx, cy - ry],
+                [cx - ox, cy - ry, cx - rx, cy - oy, cx - rx, cy],
+            ] {
+                ops.push(Operation::new(
+                    "c",
+                    vec![
+                        c1x.into(),
+                        c1y.into(),
+                        c2x.into(),
+                        c2y.into(),
+                        ex.into(),
+                        ey.into(),
+                    ],
+                ));
+            }
+            ops.push(Operation::new("h", vec![]));
+            ops.push(shape_paint_op(*fill, w));
+        }
     }
 
     Ok((Content { operations: ops }, Vec::new()))
+}
+
+/// Bézier control-point offset for approximating a quarter circle:
+/// `4/3 * (sqrt(2) - 1)`.
+const KAPPA: f32 = 0.552_284_8;
+
+/// Shapes with no border still need a hairline if they have no fill
+/// either, or they'd be invisible; and a negative width is meaningless.
+fn shape_line_width(requested: f32) -> f32 {
+    requested.clamp(0.0, 72.0)
+}
+
+/// Shrinks `rect` by `by` on every side.
+///
+/// A stroke is centred on the path, so half the line width falls outside
+/// it; without this inset a thick border spills past the annotation's own
+/// `/Rect`, which readers clip — the border then looks thinner on the
+/// outside edges than it is.
+fn inset_rect(rect: Rect, by: f32) -> Result<Rect, AnnotError> {
+    let inset = Rect {
+        x0: rect.x0 + by,
+        y0: rect.y0 + by,
+        x1: rect.x1 - by,
+        y1: rect.y1 - by,
+    };
+    if inset.x1 <= inset.x0 || inset.y1 <= inset.y0 {
+        // A border thicker than the box itself has no interior left to
+        // draw; better to say so than to emit an inverted rectangle.
+        return Err(AnnotError::EmptyGeometry);
+    }
+    Ok(inset)
+}
+
+/// A shape with neither fill nor border would paint nothing, so a
+/// zero-width outline-only shape falls back to a hairline rather than
+/// being invisible.
+fn effective_stroke_width(fill: Option<Color>, width: f32) -> Option<f32> {
+    if width > 0.0 {
+        Some(width)
+    } else if fill.is_none() {
+        Some(HAIRLINE_WIDTH)
+    } else {
+        None
+    }
+}
+
+/// Thinnest border that still renders on a normal display.
+const HAIRLINE_WIDTH: f32 = 0.75;
+
+fn push_shape_state(ops: &mut Vec<Operation>, stroke: Color, fill: Option<Color>, width: f32) {
+    if let Some(fill) = fill {
+        ops.push(Operation::new("rg", fill.as_pdf_array()));
+    }
+    // The stroke colour is set whenever the path will actually be
+    // stroked — including the hairline fallback, which otherwise
+    // inherits the default black and silently ignores the chosen colour.
+    if let Some(w) = effective_stroke_width(fill, width) {
+        ops.push(Operation::new("RG", stroke.as_pdf_array()));
+        ops.push(Operation::new("w", vec![line_width(w)]));
+    }
+}
+
+/// Which painting operator closes the path: fill, stroke, or both.
+fn shape_paint_op(fill: Option<Color>, width: f32) -> Operation {
+    match (
+        fill.is_some(),
+        effective_stroke_width(fill, width).is_some(),
+    ) {
+        (true, true) => Operation::new("B", vec![]),
+        (true, false) => Operation::new("f", vec![]),
+        _ => Operation::new("S", vec![]),
+    }
 }
 
 /// Greedy word-wrap by approximate glyph width (Helvetica at roughly

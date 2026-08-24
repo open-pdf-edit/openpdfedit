@@ -192,7 +192,12 @@ export interface FormFieldDto {
 export type AnnotationKindDto =
   | { kind: "highlight" | "underline" | "strikeOut"; quads: [number, number, number, number][] }
   | { kind: "freeText"; text: string; fontSize: number }
-  | { kind: "ink"; strokes: [number, number][][] };
+  | { kind: "ink"; strokes: [number, number][][] }
+  /** A rectangle outline filling the annotation's rect. `fill` omitted
+   * draws an outline only; `lineWidth: 0` draws a hairline. */
+  | { kind: "square"; lineWidth: number; fill?: [number, number, number] }
+  /** An ellipse inscribed in the annotation's rect. */
+  | { kind: "circle"; lineWidth: number; fill?: [number, number, number] };
 
 export type PageMoveDirection = "Up" | "Down";
 
