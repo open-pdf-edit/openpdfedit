@@ -289,6 +289,34 @@ footer{border-top:1px solid var(--white-10);background:var(--color-background-al
   padding-top:18px;padding-bottom:18px;flex-wrap:wrap;
   color:var(--white-40);
 }
+
+/* ---------- Tools directory ---------- */
+.tools-intro{max-width:62ch}
+.tool-groups{display:grid;gap:56px;margin-top:48px}
+.tool-group h3{
+  font-size:13px;font-weight:500;letter-spacing:.08em;text-transform:uppercase;
+  color:var(--accent);margin-bottom:6px;
+}
+.tool-group .group-note{color:var(--white-60);font-size:14px;margin-bottom:20px;max-width:60ch}
+.tool-grid{
+  display:grid;gap:1px;background:var(--white-10);
+  border:1px solid var(--white-10);border-radius:10px;overflow:hidden;
+  grid-template-columns:repeat(auto-fill,minmax(260px,1fr));
+}
+.tool{background:var(--color-background-alt);padding:18px 20px;display:flex;flex-direction:column;gap:5px}
+.tool-name{font-weight:500;font-size:15px;display:flex;align-items:center;gap:8px}
+.tool-desc{color:var(--white-60);font-size:13.5px;line-height:1.5}
+.tool-tag{
+  font-family:var(--font-mono);font-size:10px;letter-spacing:.04em;text-transform:uppercase;
+  color:var(--white-40);border:1px solid var(--white-20);border-radius:99px;padding:1px 7px;
+}
+.tool-tag--note{color:var(--accent);border-color:color-mix(in oklab,var(--accent) 45%,transparent)}
+.count-line{
+  display:flex;flex-wrap:wrap;gap:10px 22px;align-items:baseline;
+  margin-top:28px;color:var(--white-40);font-size:13px;
+}
+.count-line strong{color:var(--white);font-weight:500;font-size:15px}
+@media (max-width:640px){.tool-grid{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
@@ -297,9 +325,9 @@ footer{border-top:1px solid var(--white-10);background:var(--color-background-al
   <div class="wrap nav">
     <a class="wordmark" href="#">OpenPdfEdit<span class="dot">.</span></a>
     <nav class="nav-links">
-      <a href="#features">Features</a>
+      <a href="#tools">Tools</a>
       <a href="#extension">Extension</a>
-      <a href="https://www.openapps.network/">OpenApps</a>
+      <a href="https://github.com/open-pdf-edit/OpenPdfEdit">Source</a>
       <a class="nav-cta" href="#download">Download</a>
     </nav>
   </div>
@@ -312,306 +340,194 @@ footer{border-top:1px solid var(--white-10);background:var(--color-background-al
     <p class="sub">A fast PDF editor with a Rust core, for macOS, Windows, and Chrome. Every page renders and every edit saves on your machine — documents are never uploaded.</p>
     <div class="hero-ctas">
       <a class="btn btn-primary" href="#download">Download for desktop</a>
-      <a class="btn btn-ghost" href="#extension">Get the Chrome extension</a>
+      <a class="btn btn-ghost" href="#tools">See every tool</a>
     </div>
-    <p class="hero-note mono">Free and open source · MIT or Apache-2.0</p>
+  </div>
+</section>
 
-    <div class="hero-shot" aria-hidden="true">
-      <div class="shot-bar"><i></i><i></i><i></i><span class="t mono">contract-draft.pdf — OpenPdfEdit</span></div>
-      <div class="shot-body">
-        <div class="shot-side">
-          <div class="thumb active"></div><div class="thumb"></div><div class="thumb"></div>
+<!-- What it refuses to do -->
+<section id="statement">
+  <div class="wrap">
+    <div class="tool-groups" style="gap:0">
+      <div class="tool-grid">
+        <div class="tool">
+          <span class="tool-name">Nothing is uploaded</span>
+          <span class="tool-desc">There is no HTTP client in the binary. Not disabled, not opt-out — absent. The source is public; check.</span>
         </div>
-        <div class="shot-page">
-          <div class="page-paper">
-            <div class="pl head"></div>
-            <div class="pl w9"></div><div class="pl w7"></div><div class="pl w8"></div>
-            <div class="pl w6 hl"></div>
-            <div class="pl w9"></div><div class="pl w5"></div><div class="pl w8"></div><div class="pl w7"></div>
-            <span class="note-pin">note</span>
+        <div class="tool">
+          <span class="tool-name">No account, ever</span>
+          <span class="tool-desc">Not to install it, not to use it, not to save a file.</span>
+        </div>
+        <div class="tool">
+          <span class="tool-name">No watermarks or page caps</span>
+          <span class="tool-desc">The output is your document. Nothing is stamped on it and nothing is held back.</span>
+        </div>
+        <div class="tool">
+          <span class="tool-name">No AI you didn't ask for</span>
+          <span class="tool-desc">There is none in it at all.</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Tools directory -->
+<section id="tools">
+  <div class="wrap">
+    <h2>Every tool</h2>
+    <p class="tool-desc tools-intro" style="font-size:16px;margin-top:10px">
+      This is the whole list — everything the app can do today, and nothing it can't.
+      Each of these works offline, on the desktop app and (except where noted) in the
+      Chrome extension.
+    </p>
+
+    <div class="tool-groups">
+
+      <div class="tool-group">
+        <h3>Read &amp; navigate</h3>
+        <p class="group-note">Opening a 2,000-page document doesn't render 2,000 pages.</p>
+        <div class="tool-grid">
+          <div class="tool"><span class="tool-name">Open &amp; view</span><span class="tool-desc">Tiled rendering, smooth scrolling, zoom and fit.</span></div>
+          <div class="tool"><span class="tool-name">Find in document</span><span class="tool-desc">Match case, whole word, a result list — and it finds phrases broken across a line wrap.</span></div>
+          <div class="tool"><span class="tool-name">Contents</span><span class="tool-desc">The document's own bookmarks, with the section you're reading highlighted.</span></div>
+          <div class="tool"><span class="tool-name">Page thumbnails</span><span class="tool-desc">Jump around, and reorganise from the same panel.</span></div>
+          <div class="tool"><span class="tool-name">Tabs</span><span class="tool-desc">Several documents open at once.</span></div>
+          <div class="tool"><span class="tool-name">Undo &amp; redo</span><span class="tool-desc">Across every kind of edit, not just markup.</span></div>
+        </div>
+      </div>
+
+      <div class="tool-group">
+        <h3>Annotate &amp; comment</h3>
+        <p class="group-note">Markup snaps to the glyphs you actually selected, not to a hand-drawn box.</p>
+        <div class="tool-grid">
+          <div class="tool"><span class="tool-name">Highlight</span><span class="tool-desc">Over real text selection, across line wraps.</span></div>
+          <div class="tool"><span class="tool-name">Underline</span><span class="tool-desc">Same selection model as highlighting.</span></div>
+          <div class="tool"><span class="tool-name">Strikeout</span><span class="tool-desc">For marking deletions in a draft.</span></div>
+          <div class="tool"><span class="tool-name">Sticky notes</span><span class="tool-desc">Comments anchored to a spot on the page.</span></div>
+          <div class="tool"><span class="tool-name">Freehand drawing</span><span class="tool-desc">Ink, with a smoothed stroke.</span></div>
+          <div class="tool"><span class="tool-name">Rectangle</span><span class="tool-desc">Outline or filled; the drag sets the size.</span></div>
+          <div class="tool"><span class="tool-name">Ellipse</span><span class="tool-desc">Inscribed in the box you drag.</span></div>
+          <div class="tool"><span class="tool-name">Eraser</span><span class="tool-desc">Remove markup you've added.</span></div>
+          <div class="tool"><span class="tool-name">Comments panel</span><span class="tool-desc">Everything marked up, in one list.</span></div>
+          <div class="tool"><span class="tool-name">Export markup</span><span class="tool-desc">XFDF — your comments as a small file, without the document.</span></div>
+          <div class="tool"><span class="tool-name">Import markup</span><span class="tool-desc">Read XFDF from Acrobat, Foxit, Xodo or PDF-XChange.</span></div>
+          <div class="tool"><span class="tool-name">Flatten</span><span class="tool-desc">Bake markup into the page so the recipient can't move or delete it.</span></div>
+        </div>
+      </div>
+
+      <div class="tool-group">
+        <h3>Change what it says</h3>
+        <p class="group-note">Redaction removes the text from the file. It is not a black rectangle you can select underneath.</p>
+        <div class="tool-grid">
+          <div class="tool"><span class="tool-name">Edit text</span><span class="tool-desc">Replace a line in place, with the substituted font called out when one is.</span></div>
+          <div class="tool"><span class="tool-name">Move text</span><span class="tool-desc">Drag a run to a new position.</span></div>
+          <div class="tool"><span class="tool-name">Move images</span><span class="tool-desc">Reposition a placed image.</span></div>
+          <div class="tool"><span class="tool-name">Redact</span><span class="tool-desc">True content removal — the words are gone from the bytes.</span></div>
+        </div>
+      </div>
+
+      <div class="tool-group">
+        <h3>Organise pages</h3>
+        <div class="tool-grid">
+          <div class="tool"><span class="tool-name">Merge</span><span class="tool-desc">Combine several documents into one.</span></div>
+          <div class="tool"><span class="tool-name">Split &amp; extract</span><span class="tool-desc">Pull a page range out into its own file.</span></div>
+          <div class="tool"><span class="tool-name">Reorder</span><span class="tool-desc">Move pages up and down.</span></div>
+          <div class="tool"><span class="tool-name">Rotate</span><span class="tool-desc">Any page, any quarter turn.</span></div>
+          <div class="tool"><span class="tool-name">Delete pages</span><span class="tool-desc">Remove what you don't need.</span></div>
+          <div class="tool"><span class="tool-name">Crop</span><span class="tool-desc">Trim the visible area of a page.</span></div>
+        </div>
+      </div>
+
+      <div class="tool-group">
+        <h3>Forms &amp; signing</h3>
+        <div class="tool-grid">
+          <div class="tool"><span class="tool-name">Fill forms</span><span class="tool-desc">Text fields and checkboxes; radio buttons best-effort.</span></div>
+          <div class="tool"><span class="tool-name">Add a text field</span><span class="tool-desc">Turn a flat document into a fillable one.</span></div>
+          <div class="tool"><span class="tool-name">Add a checkbox</span><span class="tool-desc">Same, for tick boxes.</span></div>
+          <div class="tool"><span class="tool-name">Draw a signature</span><span class="tool-desc">Draw once, reuse it, drag it onto any page.</span></div>
+          <div class="tool">
+            <span class="tool-name">Inspect signatures <span class="tool-tag tool-tag--note">not verified</span></span>
+            <span class="tool-desc">Shows what a digital signature claims. It does not check that it's genuine — and says so, plainly, rather than implying otherwise.</span>
           </div>
         </div>
-        <div class="shot-side right">
-          <div class="comment-card"><b>Comment</b>Clause 4.2 needs review<div class="cl"></div><div class="cl" style="width:70%"></div></div>
-          <div class="comment-card"><b>Highlight</b>Page 1<div class="cl" style="width:55%"></div></div>
+      </div>
+
+      <div class="tool-group">
+        <h3>Protect &amp; finish</h3>
+        <div class="tool-grid">
+          <div class="tool"><span class="tool-name">Password protect</span><span class="tool-desc">AES-256 encryption, with per-recipient permissions.</span></div>
+          <div class="tool"><span class="tool-name">Watermark</span><span class="tool-desc">Tiled text or a logo, any angle, any density.</span></div>
+          <div class="tool"><span class="tool-name">Page numbers</span><span class="tool-desc">Any corner, any font, starting from any number.</span></div>
+          <div class="tool"><span class="tool-name">Bates numbering</span><span class="tool-desc">Zero-padded, prefixed, for discovery sets.</span></div>
+          <div class="tool"><span class="tool-name">Compress</span><span class="tool-desc">Save a smaller copy.</span></div>
         </div>
       </div>
-    </div>
-  </div>
-</section>
 
-<!-- Mono rail -->
-<section class="rail" aria-label="Compatibility">
-  <div class="rail-track" id="railTrack">
-    <span class="capsule">macOS</span>
-    <span class="capsule">Windows</span>
-    <span class="capsule">Chrome 103+</span>
-    <span class="capsule">PDF 1.7</span>
-    <span class="capsule">AcroForm</span>
-    <span class="capsule">Incremental save</span>
-    <span class="capsule">PDFium engine</span>
-    <span class="capsule">Rust core</span>
-    <span class="capsule">WebAssembly</span>
-    <span class="capsule">5 MB extension</span>
-    <span class="capsule">MIT / Apache-2.0</span>
-  </div>
-</section>
-
-<!-- Statement -->
-<section class="statement" id="statement">
-  <div class="wrap">
-    <p id="statementText">Your documents are contracts, records, and signatures. An editor should touch them on your machine and nowhere else — <span class="dim">no upload, no account required, no page limit.</span></p>
-  </div>
-</section>
-
-<!-- Pillars -->
-<section class="pillar" id="features">
-  <div class="wrap">
-    <div class="p-copy">
-      <span class="p-label">tools/annotate</span>
-      <p><b>Mark up any page and keep a record.</b> <span class="cont">Highlight, underline, strikeout, shapes, freehand ink, and text notes — each with a comment thread, each undoable, all saved incrementally so the original bytes stay intact.</span></p>
-      <div class="p-links">
-        <a href="#download">Try it <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg></a>
-      </div>
-    </div>
-    <div class="p-visual">
-      <div class="mini">
-        <div class="mini-row">
-          <span class="chip on">Highlight</span><span class="chip">Underline</span><span class="chip">Ink</span><span class="chip">Note</span>
-        </div>
-        <div class="comment-card"><b>Review thread</b>Three comments on page 2<div class="cl"></div><div class="cl" style="width:80%"></div><div class="cl" style="width:60%"></div></div>
-        <div class="mini-row"><span class="chip">Undo</span><span class="chip">Redo</span><span class="chip on">Saved</span></div>
-      </div>
-    </div>
-  </div>
-</section>
-
-<section class="pillar flip">
-  <div class="wrap">
-    <div class="p-copy">
-      <span class="p-label">tools/forms</span>
-      <p><b>Fill forms without a print-sign-scan loop.</b> <span class="cont">AcroForm text fields, checkboxes, and choices fill in place and persist on save. Need a form that doesn't exist yet? Create the fields too.</span></p>
-      <div class="p-links">
-        <a href="#download">Try it <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg></a>
-      </div>
-    </div>
-    <div class="p-visual">
-      <div class="mini">
-        <div class="field done"><span>Full name</span><span class="val">A. Tan</span></div>
-        <div class="field done"><span>Date</span><span class="val">2026-08-16</span></div>
-        <div class="field"><span>Signature</span><span class="val">…</span></div>
-      </div>
-    </div>
-  </div>
-</section>
-
-<section class="pillar">
-  <div class="wrap">
-    <div class="p-copy">
-      <span class="p-label">tools/pages</span>
-      <p><b>Reshape whole documents in seconds.</b> <span class="cont">Rotate, delete, and reorder pages; extract a range into a new file; merge several PDFs into one — including the copy you're editing right now.</span></p>
-      <div class="p-links">
-        <a href="#download">Try it <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg></a>
-      </div>
-    </div>
-    <div class="p-visual">
-      <div class="pagegrid">
-        <div class="pg">1</div><div class="pg sel">2<span class="rot">↻</span></div><div class="pg">3</div><div class="pg ghost">+</div>
-        <div class="pg">4</div><div class="pg sel">5</div><div class="pg">6</div><div class="pg ghost">+</div>
-      </div>
-    </div>
-  </div>
-</section>
-
-<section class="pillar flip">
-  <div class="wrap">
-    <div class="p-copy">
-      <span class="p-label">tools/trust</span>
-      <p><b>Redact, sign, and prove what changed.</b> <span class="cont">Black out content before sharing, place signatures and see who signed before you, edit text runs and move images, and compare two versions line by line.</span></p>
-      <div class="p-links">
-        <a href="#download">Try it <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg></a>
-      </div>
-    </div>
-    <div class="p-visual">
-      <div class="diff">
-        <div class="dl same"><span class="m"> </span><span class="bar" style="max-width:85%"></span></div>
-        <div class="dl del"><span class="m">−</span><span class="bar" style="max-width:70%"></span></div>
-        <div class="dl add"><span class="m">+</span><span class="bar" style="max-width:75%"></span></div>
-        <div class="dl same"><span class="m"> </span><span class="bar" style="max-width:60%"></span></div>
-        <div class="mini-row" style="margin-top:6px"><span class="chip"><span style="color:var(--accent)">■</span> Redacted</span><span class="chip">Signed ✓</span></div>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- Showcase: two surfaces -->
-<section class="showcase" id="extension">
-  <div class="wrap">
-    <div class="tabs" role="tablist">
-      <button class="tab active" role="tab" aria-selected="true" data-pane="desktop"><span class="dot"></span>Desktop</button>
-      <button class="tab" role="tab" aria-selected="false" data-pane="ext"><span class="dot"></span>Chrome extension</button>
-    </div>
-
-    <div class="pane active" id="pane-desktop">
-      <div>
-        <h3>The full editor, native on your desk</h3>
-        <p>A Tauri app with a dedicated render thread and tile cache — smooth zoom and scroll on large documents. Everything on this page, plus OCR for scanned files.</p>
-        <div class="meta">
-          <span class="capsule">macOS · .dmg</span>
-          <span class="capsule">Windows · installer</span>
-          <span class="capsule">OCR included</span>
-        </div>
-        <div class="btnrow">
-          <a class="btn btn-primary" href="#download">Download for desktop</a>
+      <div class="tool-group">
+        <h3>Read scans &amp; compare drafts</h3>
+        <div class="tool-grid">
+          <div class="tool">
+            <span class="tool-name">OCR <span class="tool-tag">desktop</span></span>
+            <span class="tool-desc">Make a scan searchable. Needs Tesseract installed locally.</span>
+          </div>
+          <div class="tool"><span class="tool-name">Compare documents</span><span class="tool-desc">Text differences and rendered-pixel differences, side by side.</span></div>
         </div>
       </div>
-      <div class="pane-art" aria-hidden="true">
-        <div class="mini">
-          <div class="mini-row"><span class="chip on">Annotate</span><span class="chip">Forms</span><span class="chip">Pages</span><span class="chip">Redact</span></div>
-          <div class="mini-row"><span class="chip">Sign</span><span class="chip">Edit text</span><span class="chip">Compare</span><span class="chip on">OCR</span></div>
-          <div class="field"><span>Render thread</span><span class="val">dedicated</span></div>
-          <div class="field"><span>Tile cache</span><span class="val">LRU</span></div>
-        </div>
-      </div>
+
     </div>
 
-    <div class="pane" id="pane-ext">
-      <div>
-        <h3>The same editor, inside Chrome</h3>
-        <p>The identical interface, compiled to WebAssembly with the PDF engine included — 5 MB installed. It runs entirely inside the browser sandbox: open a file, edit, save back to disk. No server round-trips, ever.</p>
-        <div class="meta">
-          <span class="capsule">Chrome 103+</span>
-          <span class="capsule">5 MB</span>
-          <span class="capsule">WebAssembly</span>
-        </div>
-        <div class="btnrow">
-          <a class="btn btn-primary" href="#download">Get the extension</a>
-        </div>
-      </div>
-      <div class="pane-art" aria-hidden="true">
-        <div class="mini">
-          <div class="field"><span>Processing</span><span class="val">100% local</span></div>
-          <div class="field"><span>Documents uploaded</span><span class="val">0</span></div>
-          <div class="field"><span>Account required</span><span class="val">no</span></div>
-          <div class="field done"><span>Feature parity with desktop</span><span class="val">yes*</span></div>
-          <div class="mini-row"><span class="chip" style="font-size:10px">* OCR stays desktop-only</span></div>
-        </div>
-      </div>
+    <div class="count-line">
+      <span><strong>40+ tools.</strong> No sign-up, no upload, no page limit.</span>
+      <span>Working on: Office conversion, and typing straight into a form field on the page.</span>
     </div>
   </div>
 </section>
 
-<!-- Value triad -->
-<section class="triad">
+<!-- Extension -->
+<section id="extension">
   <div class="wrap">
-    <p><b>Local.</b> <span class="cont">Rendering, editing, and saving all happen on your machine. The only optional network call is signing in to an OpenApps account — and you never have to.</span></p>
-    <p><b>Careful.</b> <span class="cont">Saves are incremental: edits are appended, the original bytes are preserved, and existing digital signatures survive an annotation.</span></p>
-    <p><b>Open.</b> <span class="cont">The whole editor — engine, document model, and interface — is open source under MIT or Apache-2.0. Read it, build it, extend it.</span></p>
-  </div>
-</section>
-
-<!-- Light band: feature grid -->
-<section class="features">
-  <div class="wrap">
-    <h2>Everything it does today</h2>
-    <p class="sub">One editor, two surfaces. Every feature below works on desktop; all but one work in Chrome.</p>
-    <div class="fgrid">
-      <div class="fcard"><b>View</b><span>Open, zoom, and scroll large PDFs with tiled rendering.</span></div>
-      <div class="fcard"><b>Annotate</b><span>Highlight, underline, strikeout, shapes, ink, and text notes.</span></div>
-      <div class="fcard"><b>Comment</b><span>A thread on every annotation, in a side panel.</span></div>
-      <div class="fcard"><b>Undo / redo</b><span>Every edit steps back and forward cleanly.</span></div>
-      <div class="fcard"><b>Fill forms</b><span>AcroForm fields fill in place and persist on save.</span></div>
-      <div class="fcard"><b>Create forms</b><span>Add text fields, checkboxes, and choices to any page.</span></div>
-      <div class="fcard"><b>Organize pages</b><span>Rotate, delete, reorder, and crop pages.</span></div>
-      <div class="fcard"><b>Extract & merge</b><span>Pull ranges into new files; combine PDFs into one.</span></div>
-      <div class="fcard"><b>Redact</b><span>Remove content before a document leaves your hands.</span></div>
-      <div class="fcard"><b>Signatures</b><span>Place your signature; list who signed before you.</span></div>
-      <div class="fcard"><b>Edit content</b><span>Change text runs and move images on the page.</span></div>
-      <div class="fcard"><b>Compare</b><span>Diff two versions of a document, page by page.</span></div>
-      <div class="fcard"><b>Save & save as</b><span>Incremental saves that preserve the original bytes.</span></div>
-      <div class="fcard"><b>OCR<span class="tag" style="margin:0 0 0 auto">desktop only</span></b><span>Recognize text in scanned documents.</span></div>
-      <div class="fcard"><b>Credits</b><span>Optional OpenApps sign-in for future premium features.</span></div>
-      <div class="fcard soon"><b>Firefox</b><span>Not yet — Chrome first, Firefox is on the list.</span></div>
+    <h2>The same editor, in Chrome</h2>
+    <p class="tool-desc tools-intro" style="font-size:16px;margin-top:10px">
+      The extension runs the identical Rust core compiled to WebAssembly — the same
+      rendering, the same editing, the same nothing-leaves-your-machine. Open a PDF from
+      a page or from disk and edit it in the tab.
+    </p>
+    <div class="hero-ctas" style="margin-top:28px">
+      <a class="btn btn-ghost" href="https://github.com/open-pdf-edit/OpenPdfEdit/releases/latest">Download the extension</a>
     </div>
   </div>
 </section>
 
-<!-- CTA -->
-<section class="cta" id="download">
+<!-- Download -->
+<section id="download">
   <div class="wrap">
-    <h2>Your documents never leave<span style="color:var(--accent)">.</span></h2>
-    <p class="sub">Pick a surface. Both are free, open source, and fully local.</p>
-    <div class="hero-ctas">
-      <a class="btn btn-primary" href="https://github.com/openapps/openapps/releases">Download for macOS or Windows</a>
-      <a class="btn btn-ghost" href="https://github.com/openapps/openapps">Get the Chrome extension</a>
+    <h2>Download</h2>
+    <p class="tool-desc tools-intro" style="font-size:16px;margin-top:10px">
+      Free, open source, and the same build for everyone. macOS builds are signed but not
+      notarised, so the first launch needs
+      <span class="mono">Privacy&nbsp;&amp;&nbsp;Security → Open Anyway</span>.
+    </p>
+    <div class="hero-ctas" style="margin-top:28px">
+      <a class="btn btn-primary" href="https://github.com/open-pdf-edit/OpenPdfEdit/releases/latest">All downloads</a>
+      <a class="btn btn-ghost" href="https://github.com/open-pdf-edit/OpenPdfEdit">Read the source</a>
     </div>
-    <p class="hero-note mono">v0.1.2 · builds from source in one command</p>
+    <div class="count-line">
+      <span>macOS (Apple Silicon) · Windows · Chrome extension</span>
+      <span>MIT or Apache-2.0</span>
+    </div>
   </div>
 </section>
 
 <footer>
-  <div class="wrap foot-main">
-    <div class="foot-brand">
-      <span class="wordmark">OpenPdfEdit<span class="dot">.</span></span>
-      <p>A local-first PDF editor from the OpenApps toolkit. One account, one design, every tool.</p>
-    </div>
-    <div class="foot-cols">
-      <div class="fcol"><b>Product</b>
-        <a href="#features">Features</a>
-        <a href="#extension">Chrome extension</a>
-        <a href="#download">Download</a>
-      </div>
-      <div class="fcol"><b>Source</b>
-        <a href="https://github.com/openapps/openapps">Repository</a>
-        <a href="https://github.com/openapps/openapps/releases">Releases</a>
-        <a href="https://github.com/openapps/openapps/issues">Issues</a>
-      </div>
-      <div class="fcol"><b>OpenApps</b>
-        <a href="https://www.openapps.network/">openapps.network</a>
-        <a href="https://accounts.openapps.network/">Account</a>
-      </div>
-    </div>
-  </div>
-  <div class="wrap foot-base mono">
-    <span>OpenPdfEdit v0.1.2 · MIT or Apache-2.0</span>
-    <span>Part of OpenApps</span>
+  <div class="wrap">
+    <span class="mono">OpenPdfEdit — local-first PDF editing.</span>
+    <nav class="nav-links">
+      <a href="#tools">Tools</a>
+      <a href="https://github.com/open-pdf-edit/OpenPdfEdit">GitHub</a>
+      <a href="https://github.com/open-pdf-edit/OpenPdfEdit/releases">Releases</a>
+    </nav>
   </div>
 </footer>
 
-<script>
-// Marquee: duplicate the capsule set once so translateX(-50%) loops seamlessly.
-(function(){
-  var track=document.getElementById('railTrack');
-  track.innerHTML+=track.innerHTML;
-})();
-
-// Statement: wrap words in spans, fade them up 28ms apart when scrolled into view.
-(function(){
-  var el=document.getElementById('statementText');
-  var dim=el.querySelector('.dim');
-  var dimWords=dim?dim.textContent.trim().split(/\s+/):[];
-  var lead=el.childNodes[0].textContent.trim().split(/\s+/);
-  el.innerHTML=lead.map(function(w){return '<span class="w">'+w+'</span>'}).join(' ')
-    +(dimWords.length?' <span class="dim">'+dimWords.map(function(w){return '<span class="w">'+w+'</span>'}).join(' ')+'</span>':'');
-  var words=el.querySelectorAll('.w');
-  words.forEach(function(w,i){w.style.transitionDelay=(i*28)+'ms'});
-  new IntersectionObserver(function(entries,obs){
-    if(entries[0].isIntersecting){
-      document.getElementById('statement').classList.add('lit');
-      obs.disconnect();
-    }
-  },{threshold:0.4}).observe(el);
-})();
-
-// Showcase tabs
-document.querySelectorAll('.tab').forEach(function(tab){
-  tab.addEventListener('click',function(){
-    document.querySelectorAll('.tab').forEach(function(t){t.classList.remove('active');t.setAttribute('aria-selected','false')});
-    document.querySelectorAll('.pane').forEach(function(p){p.classList.remove('active')});
-    tab.classList.add('active');tab.setAttribute('aria-selected','true');
-    document.getElementById('pane-'+tab.dataset.pane).classList.add('active');
-  });
-});
-</script>
 </body>
 </html>

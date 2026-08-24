@@ -14,14 +14,13 @@ python3 -m http.server -d site 8080
 
 ## Before publishing
 
-- **Download links are placeholders.** The two CTA buttons and the footer
-  point at `github.com/openapps/openapps` — replace with the real
-  repository/releases URLs (and the Chrome Web Store listing URL once the
-  extension is published; see `apps/extension/STORE.md`).
-- **The hero and pillar visuals are CSS-drawn mockups**, deliberately
-  abstract so the page ships without screenshots. Swapping in real
-  screenshots later: replace the `.hero-shot` / `.p-visual` contents with
-  an `<img>`; the frames already carry the border/radius/shadow.
-- Facts baked into the copy (keep them true): extension zip ~5 MB,
-  Chrome 103+ minimum, v0.1.0, MIT OR Apache-2.0, OCR desktop-only,
-  no Firefox yet.
+- **Links are live**, pointing at the real repository and its releases.
+  The only thing still missing is the Chrome Web Store listing URL — the
+  extension currently links to the GitHub release (see
+  `apps/extension/STORE.md`).
+- **The tool list is the contract.** Every entry under "Every tool"
+  corresponds to something the app actually does today; the page
+  deliberately claims no more than that. When a feature lands or is
+  removed, update the directory in the same change — a marketing page
+  that overstates the product is worse than one that undersells it, and
+  this one is also the closest thing to a feature list users have.
