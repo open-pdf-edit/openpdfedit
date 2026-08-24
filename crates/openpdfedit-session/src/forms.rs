@@ -188,6 +188,10 @@ pub struct FormFieldDto {
     page_index: u32,
     name: String,
     kind: FormFieldKindDto,
+    /// `[x0, y0, x1, y1]` on the page, in PDF points — lets the viewer
+    /// put an editable box over the field instead of sending the user to
+    /// a side panel to type into a list.
+    rect: [f32; 4],
     value: Option<String>,
     is_checked: Option<bool>,
     is_read_only: bool,
@@ -200,6 +204,7 @@ impl From<FormField> for FormFieldDto {
             page_index: f.page_index,
             name: f.name,
             kind: f.kind.into(),
+            rect: f.rect,
             value: f.value,
             is_checked: f.is_checked,
             is_read_only: f.is_read_only,

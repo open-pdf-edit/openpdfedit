@@ -1,6 +1,10 @@
 <script lang="ts">
-  import PdfPage, { type AnnotationPayload, type SearchMatchOverlay } from "./PdfPage.svelte";
-  import type { SearchHitDto } from "./backend";
+  import PdfPage, {
+    type AnnotationPayload,
+    type PageFormField,
+    type SearchMatchOverlay,
+  } from "./PdfPage.svelte";
+  import type { FormFieldDto, SearchHitDto } from "./backend";
   import type { Tool } from "./tools";
 
   interface PageSize {
@@ -35,6 +39,9 @@
     scrollToPage?: { pageIndex: number; nonce: number } | null;
     /** Fired when the page at the top of the viewport changes. */
     onCurrentPageChange?: (pageIndex: number) => void;
+    /** Every fillable field in the document; grouped per page here. */
+    formFields?: FormFieldDto[];
+    onFillField?: (name: string, value: string) => void;
   }
 
   let {
@@ -54,6 +61,8 @@
     activeHitIndex = -1,
     scrollToPage = null,
     onCurrentPageChange,
+    formFields = [],
+    onFillField,
   }: Props = $props();
 
   // 96 CSS px per inch, 72 PDF points per inch — the standard point-to-CSS-px
@@ -79,6 +88,31 @@
       if (existing) existing.push(overlay);
       else byPage.set(hit.pageIndex, [overlay]);
     });
+    return byPage;
+  });
+
+  // Grouped once, for the same reason search hits are: a per-page scan
+  // of the whole field list on every render is wasted work on a long
+  // form.
+  //
+  // Only text fields get an on-page input. A checkbox needs a control
+  // that toggles rather than a box you type into, and radio groups need
+  // to coordinate across widgets — both are still handled in the panel
+  // rather than half-done here.
+  const fieldsByPage = $derived.by(() => {
+    const byPage = new Map<number, PageFormField[]>();
+    for (const field of formFields) {
+      if (field.kind !== "text") continue;
+      const entry: PageFormField = {
+        name: field.name,
+        value: field.value ?? "",
+        rect: field.rect,
+        readOnly: field.isReadOnly,
+      };
+      const existing = byPage.get(field.pageIndex);
+      if (existing) existing.push(entry);
+      else byPage.set(field.pageIndex, [entry]);
+    }
     return byPage;
   });
 
@@ -172,6 +206,8 @@
       {onPlaceSignature}
       {onMoveObject}
       searchMatches={hitsByPage.get(i) ?? []}
+      formFields={fieldsByPage.get(i) ?? []}
+      {onFillField}
     />
   {/each}
 </div>

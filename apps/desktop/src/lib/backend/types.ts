@@ -196,6 +196,8 @@ export interface FormFieldDto {
   pageIndex: number;
   name: string;
   kind: FormFieldKindDto;
+  /** `[x0, y0, x1, y1]` on the page, in PDF points (origin bottom-left). */
+  rect: [number, number, number, number];
   value: string | null;
   isChecked: boolean | null;
   isReadOnly: boolean;

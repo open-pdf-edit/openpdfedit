@@ -111,6 +111,12 @@ pub struct FormField {
     pub page_index: u32,
     pub name: String,
     pub kind: FormFieldKind,
+    /// The widget's `[x0, y0, x1, y1]` on the page, in PDF page-space
+    /// points (origin bottom-left) — the same convention as annotation
+    /// quads. Present so a viewer can put an editable box exactly over
+    /// the field rather than sending the user off to a side panel to
+    /// type into a list.
+    pub rect: [f32; 4],
     /// For `Text`/`ComboBox`/`ListBox`: the field's current value. For
     /// `Checkbox`/`RadioButton`: this specific widget's own export
     /// value — the string [`PdfiumEngine::fill_form_fields`] expects to
@@ -942,7 +948,21 @@ impl PdfiumEngine {
         for (page_index, page) in document.pages().iter().enumerate() {
             for annotation in page.annotations().iter() {
                 if let Some(field) = annotation.as_form_field() {
-                    fields.push(form_field_to_dto(page_index as u32, field));
+                    // The widget's own bounds, from the annotation that
+                    // carries it — a form field's geometry lives on the
+                    // annotation, not on the field.
+                    let rect = annotation
+                        .bounds()
+                        .map(|b| {
+                            [
+                                b.left().value,
+                                b.bottom().value,
+                                b.right().value,
+                                b.top().value,
+                            ]
+                        })
+                        .unwrap_or([0.0; 4]);
+                    fields.push(form_field_to_dto(page_index as u32, field, rect));
                 }
             }
         }
@@ -1090,7 +1110,7 @@ impl PdfiumEngine {
     }
 }
 
-fn form_field_to_dto(page_index: u32, field: &PdfFormField) -> FormField {
+fn form_field_to_dto(page_index: u32, field: &PdfFormField, rect: [f32; 4]) -> FormField {
     let kind = FormFieldKind::from_pdfium(field.field_type());
     let (value, is_checked) = match field {
         PdfFormField::Text(f) => (f.value(), None),
@@ -1139,6 +1159,7 @@ fn form_field_to_dto(page_index: u32, field: &PdfFormField) -> FormField {
         page_index,
         name: field.name().unwrap_or_default(),
         kind,
+        rect,
         value,
         is_checked,
         is_read_only: field.is_read_only(),

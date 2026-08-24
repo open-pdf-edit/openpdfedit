@@ -72,6 +72,19 @@
      * overlay. Purely presentational — a search never touches the
      * document, so these are not annotations and vanish with the search. */
     searchMatches?: SearchMatchOverlay[];
+    /** Text fields on this page, rendered as real inputs positioned over
+     * the page so they can be filled where they are. */
+    formFields?: PageFormField[];
+    /** Commits a field's new value. */
+    onFillField?: (name: string, value: string) => void;
+  }
+
+  /** One fillable text field, in PDF page-space points. */
+  export interface PageFormField {
+    name: string;
+    value: string;
+    rect: [number, number, number, number];
+    readOnly: boolean;
   }
 
   /** One search hit's geometry, in PDF page-space points. `active` marks
@@ -107,6 +120,8 @@
     onPlaceSignature,
     onMoveObject,
     searchMatches = [],
+    formFields = [],
+    onFillField,
   }: Props = $props();
 
   const MOVE_TOOLS: Tool[] = ["moveText", "moveImage"];
@@ -412,6 +427,42 @@
     <!-- Above the tile, below the interaction layer, and pointer-
          transparent, so a search overlay never intercepts a markup
          gesture aimed at the text underneath it. -->
+    <!-- Real inputs sitting exactly over each field, so a form is
+         filled where it is rather than in a side panel. They're above
+         the tile but rendered before the interaction layer, and only
+         accept pointer events while the select tool is active — a
+         markup gesture must still pass through to the page. -->
+    {#each formFields as field (field.name)}
+      <input
+        class="form-field"
+        class:form-field--interactive={activeTool === "select" && !field.readOnly}
+        value={field.value}
+        readonly={field.readOnly}
+        disabled={busy}
+        tabindex={activeTool === "select" ? 0 : -1}
+        aria-label={field.name}
+        title={field.name}
+        style="left: {field.rect[0] * pxPerPt}px; top: {(heightPt - field.rect[3]) * pxPerPt}px; width: {(field.rect[2] -
+          field.rect[0]) * pxPerPt}px; height: {(field.rect[3] - field.rect[1]) * pxPerPt}px; font-size: {Math.max(
+          9,
+          Math.min(18, (field.rect[3] - field.rect[1]) * pxPerPt * 0.62),
+        )}px;"
+        onchange={(e) => onFillField?.(field.name, e.currentTarget.value)}
+        onkeydown={(e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            e.currentTarget.blur();
+          } else if (e.key === "Escape") {
+            // Put the committed value back and get out of the way.
+            e.currentTarget.value = field.value;
+            e.currentTarget.blur();
+          }
+          // Editing text must not trigger the app's single-key
+          // shortcuts, or typing a value starts changing tools.
+          e.stopPropagation();
+        }}
+      />
+    {/each}
     {#each searchMatches as match, m (m)}
       {#each match.quads as quad, q (q)}
         <div
@@ -492,6 +543,31 @@
     height: 2px;
     background: color-mix(in oklab, var(--red-500) 85%, transparent);
     pointer-events: none;
+  }
+
+  .form-field {
+    position: absolute;
+    margin: 0;
+    padding: 0 3px;
+    border: 1px solid color-mix(in oklab, var(--info-fg, #15b9eb) 55%, transparent);
+    border-radius: 2px;
+    background: color-mix(in oklab, var(--info-fg, #15b9eb) 8%, transparent);
+    color: var(--black, #000);
+    font-family: inherit;
+    line-height: 1;
+    /* Inert unless the select tool is active, so drawing a highlight
+       over a form doesn't get swallowed by its fields. */
+    pointer-events: none;
+  }
+
+  .form-field--interactive {
+    pointer-events: auto;
+  }
+
+  .form-field:focus {
+    outline: 2px solid var(--info-fg, #15b9eb);
+    outline-offset: 0;
+    background: var(--white, #fff);
   }
 
   .search-hit {

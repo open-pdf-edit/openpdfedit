@@ -1152,15 +1152,15 @@
     try {
       doc = await backend.createFormField({ handle: doc.handle, pageIndex, rect, kind, name: name.trim() });
       await Promise.all([refreshAnnotations(), refreshFormFields()]);
-      // The new field is drawn on the page but can only be *filled* from
-      // the Form fields panel, which was previously left closed — so the
-      // field looked broken until you found the panel yourself. Open it
-      // and say so.
-      showForms = true;
       showToast(
-        `Added "${name.trim()}". Type its value in the Form fields panel on the right.`,
+        kind === "text"
+          ? `Added "${name.trim()}". Click it on the page and type.`
+          : `Added "${name.trim()}". Tick it in the Form fields panel.`,
         { title: kind === "text" ? "Text field" : "Checkbox" },
       );
+      // A checkbox still needs the panel — an on-page control for it
+      // would be a toggle, not a text box, and isn't built yet.
+      if (kind === "checkbox") showForms = true;
     } catch (e) {
       error = formatError(e);
     } finally {
@@ -1350,6 +1350,17 @@
       filePath = outputPath;
       return result;
     });
+  }
+
+  /** Commits one field, edited in place on the page. Reuses the same
+   * fill path the panel uses, so there's one way a value reaches the
+   * document rather than two that can diverge. */
+  async function handleFillFieldInline(name: string, value: string) {
+    const current = formFields.find((f) => f.name === name)?.value ?? "";
+    // Blur fires on every field a user tabs through; only a real change
+    // is worth a document mutation and an undo entry.
+    if (value === current) return;
+    await handleFillForm({ [name]: value });
   }
 
   async function handleFillForm(values: Record<string, string>) {
@@ -1996,6 +2007,8 @@
         onCreateField={handleCreateField}
         onPlaceSignature={handlePlaceSignature}
         onMoveObject={handleMoveObject}
+        {formFields}
+        onFillField={handleFillFieldInline}
         {searchHits}
         activeHitIndex={searchActiveIndex}
         {scrollToPage}
