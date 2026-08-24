@@ -57,6 +57,26 @@
     { label: "Black", value: [0, 0, 0] },
   ];
 
+  /** One open document. `doc` and `filePath` below stay the *active*
+   * tab's values so every existing handler keeps working unchanged;
+   * switching tabs swaps them and re-derives the rest.
+   *
+   * Only the cheap view state lives here. Annotations, form fields,
+   * signatures and the outline are re-fetched on switch rather than
+   * cached per tab: they're a handful of fast backend reads, and caching
+   * them would mean invalidating four things on every mutation in every
+   * inactive tab — a much easier thing to get subtly wrong than to
+   * simply ask again. */
+  interface Tab {
+    doc: OpenedDocument;
+    filePath: string;
+    zoom: number;
+    currentPage: number;
+  }
+
+  let tabs = $state<Tab[]>([]);
+  let activeTabIndex = $state(-1);
+
   let filePath = $state<string | null>(null);
   let doc = $state<OpenedDocument | null>(null);
   let error = $state<string | null>(null);
@@ -375,6 +395,85 @@
     });
   });
   let zoom = $state(1);
+
+  // `doc` is reassigned wholesale by every mutating handler (the handle
+  // rotates on each write), and `zoom`/`currentPage` change as the user
+  // works. Mirroring them back into the active tab here means no handler
+  // has to know tabs exist.
+  $effect(() => {
+    const active = tabs[activeTabIndex];
+    if (!active || !doc) return;
+    if (
+      active.doc !== doc ||
+      active.zoom !== zoom ||
+      active.currentPage !== currentPage ||
+      active.filePath !== filePath
+    ) {
+      tabs[activeTabIndex] = {
+        doc,
+        filePath: filePath ?? active.filePath,
+        zoom,
+        currentPage,
+      };
+    }
+  });
+
+  /** Makes `index` the active tab, restoring its view state and
+   * re-deriving everything else. */
+  async function switchToTab(index: number) {
+    if (index < 0 || index >= tabs.length || index === activeTabIndex) return;
+    const target = tabs[index];
+    activeTabIndex = index;
+    doc = target.doc;
+    filePath = target.filePath;
+    zoom = target.zoom;
+    currentPage = target.currentPage;
+    activeTool = "select";
+    closeSearch();
+    await Promise.all([
+      refreshAnnotations(),
+      refreshFormFields(),
+      refreshSignatures(),
+      refreshOutline(),
+    ]);
+  }
+
+  /** Closes one tab, prompting first if it has unsaved edits. */
+  async function closeTab(index: number) {
+    const tab = tabs[index];
+    if (!tab) return;
+    if (tab.doc.is_dirty) {
+      const discard = await showConfirm(
+        `"${tab.filePath.split(/[/\\]/).pop()}" has unsaved changes. Close it anyway?`,
+        { title: "Unsaved changes", confirmLabel: "Discard and close", destructive: true },
+      );
+      if (!discard) return;
+    }
+
+    try {
+      await backend.closeDocument(tab.doc.handle);
+    } catch (e) {
+      // The tab is going away regardless; failing to release the
+      // backend's copy is a logged leak, not a reason to keep a document
+      // the user asked to close.
+      console.error(`closeDocument failed for handle ${tab.doc.handle}:`, e);
+    }
+
+    tabs.splice(index, 1);
+    if (tabs.length === 0) {
+      activeTabIndex = -1;
+      doc = null;
+      filePath = null;
+      outline = [];
+      closeSearch();
+      return;
+    }
+    // Fall back to the neighbour on the left, which is where the eye
+    // already is after a close.
+    const next = Math.min(index, tabs.length - 1);
+    activeTabIndex = -1; // force switchToTab to run even for the same index
+    await switchToTab(next);
+  }
   let activeTool = $state<Tool>("select");
   // Plain (non-reactive) mutable variable, deliberately: it only needs to
   // remember what the *previous* $effect run saw, not to trigger runs of
@@ -520,7 +619,30 @@
   // should go ahead with whatever it was about to do (close the window /
   // replace the open document), `false` if the user backed out.
   async function confirmProceedDespiteUnsavedChanges(action: "close" | "open a different document"): Promise<boolean> {
-    if (!doc?.is_dirty) return true;
+    // Every open tab counts, not just the visible one. Closing the
+    // window with two dirty tabs used to prompt about one of them and
+    // discard the other in silence.
+    const dirty = tabs.filter((tab) => tab.doc.is_dirty);
+    if (dirty.length === 0) return true;
+
+    // More than one, and "Save and continue" can't mean a single save —
+    // say which files are at stake and let the user go back and deal
+    // with them, rather than saving some and losing the rest.
+    if (dirty.length > 1) {
+      const names = dirty.map((tab) => tab.filePath.split(/[/\\]/).pop()).join(", ");
+      return await showConfirm(
+        `${dirty.length} documents have unsaved changes: ${names}.\n\n` +
+          `Close anyway and lose them?`,
+        { title: "Unsaved changes", confirmLabel: "Discard all and close", destructive: true },
+      );
+    }
+
+    // Exactly one dirty document: make sure it's the one on screen
+    // before offering to save it, since `handleSave` acts on the active
+    // tab.
+    const index = tabs.indexOf(dirty[0]);
+    if (index !== activeTabIndex) await switchToTab(index);
+
     const keep = await showConfirm(`You have unsaved changes. Save them before you ${action}?`, {
       title: "Unsaved changes",
       confirmLabel: "Save and continue",
@@ -635,37 +757,44 @@
   async function pickAndOpen() {
     if (mutationBusy) return;
     error = null;
-    if (!(await confirmProceedDespiteUnsavedChanges("open a different document"))) return;
-
+    // No unsaved-changes prompt here any more: opening a document adds a
+    // tab rather than replacing the current one, so nothing is at risk.
     const selected = await backend.pickOpenPath();
     if (!selected) return;
 
-    const previousHandle = doc?.handle ?? null;
-    filePath = selected;
-    zoom = 1;
-    activeTool = "select";
+    await openInNewTab(selected);
+  }
+
+  /** Opens `path` in a new tab and makes it active. Documents already
+   * open are focused rather than opened twice — two tabs over one
+   * backend document would each hold a handle that the other's edits
+   * rotate out from under. */
+  async function openInNewTab(path: string) {
+    const existing = tabs.findIndex((tab) => tab.filePath === path);
+    if (existing !== -1) {
+      await switchToTab(existing);
+      return;
+    }
+
     mutationBusy = true;
     try {
-      doc = await backend.openDocument(selected);
-      // Only reached once the new document has actually opened
-      // successfully — a failed/canceled open must never close the
-      // still-current previous document (see the catch block below,
-      // which never runs this).
-      if (previousHandle !== null && previousHandle !== doc.handle) {
-        try {
-          await backend.closeDocument(previousHandle);
-        } catch (e) {
-          // Best-effort: the new document is already open and usable: a
-          // failure to release the old one's backend-side state is a
-          // (logged) resource leak, not something that should surface as
-          // a user-facing error or undo the successful open.
-          console.error(`closeDocument failed for handle ${previousHandle}:`, e);
-        }
-      }
-      await Promise.all([refreshAnnotations(), refreshFormFields(), refreshSignatures()]);
+      const opened = await backend.openDocument(path);
+      tabs.push({ doc: opened, filePath: path, zoom: 1, currentPage: 0 });
+      activeTabIndex = tabs.length - 1;
+      doc = opened;
+      filePath = path;
+      zoom = 1;
+      currentPage = 0;
+      activeTool = "select";
+      closeSearch();
+      await Promise.all([
+        refreshAnnotations(),
+        refreshFormFields(),
+        refreshSignatures(),
+        refreshOutline(),
+      ]);
     } catch (e) {
       error = formatError(e);
-      doc = null;
     } finally {
       mutationBusy = false;
     }
@@ -1748,6 +1877,31 @@
     </div>
   {/if}
 
+  <!-- Shown from two documents up: with one open, the path bar below
+       already says which file this is, and an always-present tab strip
+       would just be a row of chrome doing nothing. -->
+  {#if tabs.length > 1}
+    <div class="tab-bar" role="tablist">
+      {#each tabs as tab, i (tab.filePath)}
+        <div class="tab" class:tab--active={i === activeTabIndex}>
+          <button
+            class="tab__label"
+            role="tab"
+            aria-selected={i === activeTabIndex}
+            onclick={() => switchToTab(i)}
+            use:tooltip={tab.filePath}
+          >
+            <span class="tab__name">{tab.filePath.split(/[/\\]/).pop()}</span>
+            {#if tab.doc.is_dirty}<span class="tab__dirty" aria-label="Unsaved changes">●</span>{/if}
+          </button>
+          <button class="tab__close" onclick={() => closeTab(i)} aria-label="Close tab">
+            <Icon name="x" size={12} />
+          </button>
+        </div>
+      {/each}
+    </div>
+  {/if}
+
   {#if filePath}
     <div class="path-bar">
       <Icon name="file-pen" size={12} />
@@ -1869,6 +2023,81 @@
 </main>
 
 <style>
+  /* ---- Tabs ---- */
+  .tab-bar {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: stretch;
+    gap: 2px;
+    padding: var(--space-1) var(--space-2) 0;
+    background: var(--surface-card);
+    border-bottom: var(--border-width) solid var(--border-hairline);
+    overflow-x: auto;
+  }
+
+  .tab {
+    display: flex;
+    align-items: center;
+    max-width: 16rem;
+    border: var(--border-width) solid transparent;
+    border-bottom: 0;
+    border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+    background: transparent;
+    transition: var(--transition-control);
+  }
+  .tab:hover {
+    background: var(--surface-hover);
+  }
+  .tab--active {
+    background: var(--bg-page);
+    border-color: var(--border-hairline);
+  }
+
+  .tab__label {
+    display: flex;
+    align-items: center;
+    gap: var(--space-1);
+    min-width: 0;
+    border: 0;
+    background: transparent;
+    padding: 5px var(--space-2);
+    cursor: pointer;
+    font: var(--type-ui);
+    color: var(--text-muted);
+  }
+  .tab--active .tab__label {
+    color: var(--text-strong);
+  }
+
+  .tab__name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .tab__dirty {
+    flex: 0 0 auto;
+    color: var(--warning-fg);
+    font-size: 10px;
+    line-height: 1;
+  }
+
+  .tab__close {
+    display: flex;
+    align-items: center;
+    border: 0;
+    background: transparent;
+    padding: 4px;
+    margin-right: 2px;
+    border-radius: var(--radius-xs);
+    cursor: pointer;
+    color: var(--text-faint);
+  }
+  .tab__close:hover {
+    background: var(--surface-hover);
+    color: var(--text-strong);
+  }
+
   /* ---- Find bar ---- */
   .find-bar {
     flex: 0 0 auto;
