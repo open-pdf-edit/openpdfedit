@@ -131,10 +131,6 @@ jobs:
     needs: [extension, macos-dmg, windows-exe]
     runs-on: ubuntu-latest
     steps:
-      # Needed only to read the tag's annotation for the release notes.
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
       - uses: actions/download-artifact@v4
         with:
           path: artifacts
@@ -146,11 +142,25 @@ jobs:
           ls -la artifacts/
 
           # An annotated tag's message becomes the release notes, so what
-          # changed in a release is written once, at the point it's cut,
-          # instead of every release repeating the same blurb. A
-          # lightweight tag has no message, so fall back to that blurb
-          # rather than publishing an empty release body.
-          NOTES="$(git tag -l --format='%(contents)' "$GITHUB_REF_NAME")"
+          # changed is written once, at the point a release is cut,
+          # instead of every release repeating the same blurb.
+          #
+          # Read through the API rather than from a checkout: v0.1.3
+          # shipped with its commit message as the release body because
+          # actions/checkout materializes the tag as a *lightweight* ref
+          # pointing straight at the commit, so `git tag --format` hands
+          # back the commit's message instead of the annotation — and
+          # being non-empty, it sailed past the fallback below. The API
+          # reports the ref's true object type, so a lightweight tag is
+          # detected rather than silently mistaken for an annotated one.
+          NOTES=""
+          TAG_TYPE="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$GITHUB_REF_NAME" \
+            --jq '.object.type' 2>/dev/null || true)"
+          if [ "$TAG_TYPE" = "tag" ]; then
+            TAG_SHA="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$GITHUB_REF_NAME" \
+              --jq '.object.sha')"
+            NOTES="$(gh api "repos/$GITHUB_REPOSITORY/git/tags/$TAG_SHA" --jq '.message')"
+          fi
           if [ -z "${NOTES//[[:space:]]/}" ]; then
             NOTES="Local-first PDF editor. Downloads: the macOS app (.dmg, Apple Silicon), the Windows installer (.exe), and the Chrome extension (unzip, then chrome://extensions → Developer mode → Load unpacked). Chrome 103+. Documents never leave your machine."
           fi
