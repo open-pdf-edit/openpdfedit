@@ -930,15 +930,46 @@
     return Math.abs(rect[2] - rect[0]) * Math.abs(rect[3] - rect[1]);
   }
 
+  /** A field name that's unique in this document, so the naming prompt
+   * can be answered by just pressing Enter. A form field must have a
+   * name — it's the key its value is stored under — but making someone
+   * invent one before they can draw a box is a poor trade. */
+  function suggestFieldName(kind: "text" | "checkbox"): string {
+    const base = kind === "text" ? "text" : "checkbox";
+    const taken = new Set(formFields.map((f) => f.name));
+    for (let n = 1; ; n++) {
+      const candidate = `${base}_${n}`;
+      if (!taken.has(candidate)) return candidate;
+    }
+  }
+
   async function handleCreateField(pageIndex: number, rect: [number, number, number, number], kind: "text" | "checkbox") {
     if (!doc || mutationBusy) return;
-    const name = await showPrompt(`Name for the new ${kind === "text" ? "text field" : "checkbox"}:`, { title: "Add form field", placeholder: "e.g. full_name", confirmLabel: "Add" });
+    const label = kind === "text" ? "text field" : "checkbox";
+    const name = await showPrompt(`Name for the new ${label}:`, {
+      // Titled after the tool that opened it. It used to say "Add form
+      // field" while the tool said "Add text field", which reads like a
+      // different feature.
+      title: kind === "text" ? "Add text field" : "Add checkbox",
+      defaultValue: suggestFieldName(kind),
+      placeholder: "e.g. full_name",
+      confirmLabel: "Add",
+    });
     if (!name || name.trim().length === 0) return;
     error = null;
     mutationBusy = true;
     try {
       doc = await backend.createFormField({ handle: doc.handle, pageIndex, rect, kind, name: name.trim() });
       await Promise.all([refreshAnnotations(), refreshFormFields()]);
+      // The new field is drawn on the page but can only be *filled* from
+      // the Form fields panel, which was previously left closed — so the
+      // field looked broken until you found the panel yourself. Open it
+      // and say so.
+      showForms = true;
+      showToast(
+        `Added "${name.trim()}". Type its value in the Form fields panel on the right.`,
+        { title: kind === "text" ? "Text field" : "Checkbox" },
+      );
     } catch (e) {
       error = formatError(e);
     } finally {
@@ -1426,6 +1457,15 @@
           aria-label="Toggle comments panel"
         >
           <Icon name="message-square" size={15} />
+        </button>
+        <button
+          class="oa-icon-btn oa-icon-btn--sm"
+          class:oa-icon-btn--selected={showSearch}
+          onclick={() => (showSearch ? closeSearch() : openSearch())}
+          use:tooltip={"Find in document (⌘F)"}
+          aria-label="Find in document"
+        >
+          <Icon name="search" size={15} />
         </button>
         <button
           class="oa-icon-btn oa-icon-btn--sm"

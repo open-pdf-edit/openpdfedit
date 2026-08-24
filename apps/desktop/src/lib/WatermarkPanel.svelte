@@ -29,6 +29,10 @@
   let orientationDeg = $state<0 | 45>(45);
   let opacity = $state(0.4);
   let textScale = $state(1);
+  // Below 1.0 by default: the stock OpenCapture pattern (1.0) was
+  // reported as too dense to read the page underneath. The Rust side
+  // still defaults to 1.0, so existing callers are unaffected.
+  let density = $state(0.6);
   let logoName = $state("");
   let logoBitmap: ImageBitmap | null = $state(null);
   let logoRgbaBase64 = "";
@@ -42,8 +46,11 @@
   // --- the OpenCapture cell math, for the preview only (the applied
   // watermark re-derives the same numbers in Rust, in PDF points) ---
 
+  /** Keep in lockstep with `cell_size` in openpdfedit-watermark — the
+   * preview is only honest if it divides the tile the same way. */
   function cellSize(basisWidth: number): { width: number; height: number } {
-    const width = Math.max(40, Math.round(basisWidth * 0.16));
+    const clamped = Math.min(3, Math.max(0.15, density));
+    const width = Math.max(40, Math.round((basisWidth * 0.16) / clamped));
     const height = Math.max(24, Math.round(width * 0.5));
     return { width, height };
   }
@@ -185,6 +192,7 @@
       orientationDeg,
       opacity,
       textScale,
+      density,
       ...(logoBitmap ? { logoRgbaBase64, logoWidth, logoHeight } : {}),
     });
   }
@@ -249,6 +257,10 @@
           <label class="oa-field">
             <span class="oa-field__label">Text size ×{textScale.toFixed(1)}</span>
             <input type="range" min="0.5" max="2" step="0.1" bind:value={textScale} />
+          </label>
+          <label class="oa-field">
+            <span class="oa-field__label">Density ×{density.toFixed(1)}</span>
+            <input type="range" min="0.15" max="2" step="0.1" bind:value={density} />
           </label>
         </div>
 

@@ -1809,6 +1809,7 @@ mod tests {
                     orientation_deg: 45,
                     opacity: 0.3,
                     text_scale: 1.0,
+                    density: 1.0,
                     logo_rgba_base64: None,
                     logo_width: None,
                     logo_height: None,

@@ -290,6 +290,9 @@ export interface ApplyWatermarkRequest {
   opacity: number;
   /** Multiplier on the automatic font size. */
   textScale: number;
+  /** How many tiles fit across a page relative to the stock pattern:
+   * 1.0 is that pattern, lower is sparser. */
+  density: number;
   logoRgbaBase64?: string;
   logoWidth?: number;
   logoHeight?: number;

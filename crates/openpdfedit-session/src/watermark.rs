@@ -29,6 +29,12 @@ impl From<WatermarkError> for SessionError {
     }
 }
 
+/// Density for payloads written before the field existed — the pattern
+/// every caller got until then.
+fn default_density() -> f32 {
+    1.0
+}
+
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ApplyWatermarkRequest {
@@ -43,6 +49,12 @@ pub struct ApplyWatermarkRequest {
     pub opacity: f32,
     /// Multiplier on the automatic font size.
     pub text_scale: f32,
+    /// How many tiles fit across a page, relative to the original
+    /// pattern: `1.0` is that pattern, lower is sparser. Absent in
+    /// payloads written before this existed, which is why it defaults
+    /// rather than being required.
+    #[serde(default = "default_density")]
+    pub density: f32,
     /// Raw RGBA scanlines (top row first), base64-encoded; all three
     /// logo fields travel together or not at all.
     pub logo_rgba_base64: Option<String>,
@@ -92,6 +104,7 @@ pub fn apply_watermark_impl<E: Engine>(
         orientation_deg: request.orientation_deg,
         opacity: request.opacity,
         text_scale: request.text_scale,
+        density: request.density,
         logo,
         pages: request.pages,
     };
@@ -157,6 +170,7 @@ mod tests {
             orientation_deg: 45,
             opacity: 0.4,
             text_scale: 1.0,
+            density: 1.0,
             logo_rgba_base64: None,
             logo_width: None,
             logo_height: None,
@@ -205,6 +219,7 @@ mod tests {
             orientation_deg: 0,
             opacity: 0.5,
             text_scale: 1.0,
+            density: 1.0,
             logo_rgba_base64: Some("AAAA".into()),
             logo_width: Some(1),
             logo_height: None,

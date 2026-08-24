@@ -95,6 +95,10 @@ pub struct WatermarkOptions {
     pub opacity: f32,
     /// Multiplies the otherwise-automatic font size (see [`cell_font_size`]).
     pub text_scale: f32,
+    /// How many tiles fit across a page, relative to the original
+    /// OpenCapture pattern: `1.0` is that pattern, lower is sparser,
+    /// higher is denser. Clamped to [`MIN_DENSITY`]..=[`MAX_DENSITY`].
+    pub density: f32,
     pub logo: Option<LogoRgba>,
     /// 0-based page indexes; `None` = every page.
     pub pages: Option<Vec<u32>>,
@@ -104,11 +108,23 @@ pub struct WatermarkOptions {
 /// reads consistently across page sizes — the exact constants of the
 /// OpenCapture original (`watermarkCellSize`), with its pixel floors
 /// carried over as point floors.
-pub fn cell_size(page_width: f32) -> (f32, f32) {
-    let width = (page_width * 0.16).max(40.0);
+pub fn cell_size(page_width: f32, density: f32) -> (f32, f32) {
+    // `density` divides the tile, so it reads the way the word does:
+    // higher = more cells per page. 1.0 reproduces the OpenCapture
+    // constants exactly, which is what every caller got before this
+    // parameter existed.
+    let density = density.clamp(MIN_DENSITY, MAX_DENSITY);
+    let width = (page_width * 0.16 / density).max(40.0);
     let height = (width * 0.5).max(24.0);
     (width, height)
 }
+
+/// Bounds on [`WatermarkOptions::density`]. The floor is one cell on a
+/// Letter page (any sparser is a single stamp, which is what the
+/// numbering tool is for); the ceiling is where the cells collide with
+/// the 40pt width floor and stop getting denser anyway.
+pub const MIN_DENSITY: f32 = 0.15;
+pub const MAX_DENSITY: f32 = 3.0;
 
 /// The automatic font size for `text` inside one cell (before
 /// `text_scale`): fits the cell height and shrinks with the text's
@@ -139,7 +155,7 @@ pub struct Band {
 /// Port of `watermarkBands`: which band(s) a location covers. Edge bands
 /// are exactly one cell tall; `TopBottom` is one independent row at each
 /// edge, never allowed to overlap even on an unusually short page.
-pub fn bands(location: WatermarkLocation, page_w: f32, page_h: f32) -> Vec<Band> {
+pub fn bands(location: WatermarkLocation, page_w: f32, page_h: f32, density: f32) -> Vec<Band> {
     if location == WatermarkLocation::Full {
         return vec![Band {
             x: 0.0,
@@ -148,7 +164,7 @@ pub fn bands(location: WatermarkLocation, page_w: f32, page_h: f32) -> Vec<Band>
             height: page_h,
         }];
     }
-    let (_, cell_h) = cell_size(page_w);
+    let (_, cell_h) = cell_size(page_w, density);
     match location {
         WatermarkLocation::Top => vec![Band {
             x: 0.0,
@@ -293,7 +309,7 @@ fn page_watermark_ops(
 ) -> String {
     let page_w = media_box[2] - media_box[0];
     let page_h = media_box[3] - media_box[1];
-    let (cell_w, cell_h) = cell_size(page_w);
+    let (cell_w, cell_h) = cell_size(page_w, opts.density);
     let gap_x = cell_w * 0.5;
     let gap_y = cell_h * 0.5;
     let stride_x = cell_w + gap_x;
@@ -308,7 +324,7 @@ fn page_watermark_ops(
     let mut ops = String::from("q\n");
     ops.push_str(&format!("/{gs_name} gs\n"));
 
-    for band in bands(opts.location, page_w, page_h) {
+    for band in bands(opts.location, page_w, page_h, opts.density) {
         let cols = ((band.width / stride_x).ceil() as i64).max(1);
         let rows = ((band.height / stride_y).ceil() as i64).max(1);
         for row in 0..rows {
@@ -507,34 +523,65 @@ mod tests {
             orientation_deg: 45,
             opacity: 0.5,
             text_scale: 1.0,
+            density: 1.0,
             logo: None,
             pages: None,
         }
     }
 
+    /// Density reads the way the word does — higher packs more cells in
+    /// — and 1.0 has to stay bit-identical to the pattern every caller
+    /// got before the parameter existed.
+    #[test]
+    fn density_scales_the_tile_and_one_is_the_old_behaviour() {
+        let (base_w, base_h) = cell_size(612.0, 1.0);
+        let (sparse_w, sparse_h) = cell_size(612.0, 0.5);
+        let (dense_w, dense_h) = cell_size(612.0, 2.0);
+
+        assert!(
+            sparse_w > base_w && sparse_h > base_h,
+            "lower density = bigger tiles"
+        );
+        assert!(
+            dense_w < base_w && dense_h < base_h,
+            "higher density = smaller tiles"
+        );
+        assert_eq!(sparse_w, base_w * 2.0);
+    }
+
+    #[test]
+    fn density_is_clamped_rather_than_allowed_to_collapse_the_tile() {
+        // A zero or negative density would divide the tile to nothing (or
+        // flip it), so the bounds are enforced in cell_size itself rather
+        // than trusted from the caller.
+        assert_eq!(cell_size(612.0, 0.0), cell_size(612.0, MIN_DENSITY));
+        assert_eq!(cell_size(612.0, -3.0), cell_size(612.0, MIN_DENSITY));
+        assert_eq!(cell_size(612.0, 99.0), cell_size(612.0, MAX_DENSITY));
+    }
+
     #[test]
     fn cell_size_matches_the_opencapture_reference_constants() {
         // 612 pt US-Letter width: 0.16 * 612 = 97.92 wide, half that tall.
-        assert_eq!(cell_size(612.0), (97.92, 48.96));
+        assert_eq!(cell_size(612.0, 1.0), (97.92, 48.96));
         // A tiny page hits the 40/24 floors.
-        assert_eq!(cell_size(100.0), (40.0, 24.0));
+        assert_eq!(cell_size(100.0, 1.0), (40.0, 24.0));
     }
 
     #[test]
     fn bands_cover_the_right_regions() {
-        let full = bands(WatermarkLocation::Full, 612.0, 792.0);
+        let full = bands(WatermarkLocation::Full, 612.0, 792.0, 1.0);
         assert_eq!(full.len(), 1);
         assert_eq!((full[0].width, full[0].height), (612.0, 792.0));
 
-        let (_, cell_h) = cell_size(612.0);
-        let top = bands(WatermarkLocation::Top, 612.0, 792.0);
+        let (_, cell_h) = cell_size(612.0, 1.0);
+        let top = bands(WatermarkLocation::Top, 612.0, 792.0, 1.0);
         assert_eq!(top.len(), 1);
         assert_eq!((top[0].y, top[0].height), (0.0, cell_h));
 
-        let bottom = bands(WatermarkLocation::Bottom, 612.0, 792.0);
+        let bottom = bands(WatermarkLocation::Bottom, 612.0, 792.0, 1.0);
         assert_eq!(bottom[0].y, 792.0 - cell_h);
 
-        let both = bands(WatermarkLocation::TopBottom, 612.0, 792.0);
+        let both = bands(WatermarkLocation::TopBottom, 612.0, 792.0, 1.0);
         assert_eq!(both.len(), 2);
         assert!(
             both[0].y + both[0].height <= both[1].y,
