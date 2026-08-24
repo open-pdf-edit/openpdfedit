@@ -662,8 +662,117 @@ function parseOpenedDocument(json: string): OpenedDocument {
 // wasm module's linear memory regardless of whether anything closed a
 // document first, so there was never a real backstop to preserve — its
 // only actual effect was a bug (see that comment).
+/** Where a document was read from, or is to be written to.
+ *
+ * The File System Access API (`showOpenFilePicker`/`showSaveFilePicker`,
+ * and the `FileSystemFileHandle` they return) is Chromium-only. In the
+ * Chrome extension that was a safe assumption; served as an ordinary web
+ * page it is not — Firefox and Safari have neither, and assuming a
+ * handle exists is the difference between those browsers being able to
+ * open a file and not.
+ *
+ * So a target is one of three things:
+ *
+ * - `handle` — the real thing. Reads *and* writes back to the file the
+ *   user chose, which is what "Save" ought to mean.
+ * - `file` — a `File` from an `<input type="file">`. Readable, but there
+ *   is no way to write back to where it came from; saving such a
+ *   document has to become "download a copy".
+ * - `download` — a write-only sink. There is no save *dialog* without
+ *   the File System Access API, so a chosen destination is really just a
+ *   filename, and the write happens as a browser download.
+ */
+type FileTarget =
+  | { kind: "handle"; handle: FileSystemFileHandle; name: string }
+  | { kind: "file"; file: File; name: string }
+  | { kind: "download"; name: string };
+
+/** Whether this browser can write back to a file the user picked. False
+ * in Firefox and Safari today. */
+export function supportsFileSystemAccess(): boolean {
+  return (
+    typeof window !== "undefined" &&
+    typeof window.showOpenFilePicker === "function" &&
+    typeof window.showSaveFilePicker === "function"
+  );
+}
+
+/** True if saving this document can write back where it came from, as
+ * opposed to producing a download. The UI uses this to say "Save" or
+ * "Download a copy" rather than promising something it can't do. */
+function canWriteBack(target: FileTarget): boolean {
+  return target.kind === "handle";
+}
+
+async function readTarget(target: FileTarget): Promise<Uint8Array> {
+  switch (target.kind) {
+    case "handle":
+      return new Uint8Array(await (await target.handle.getFile()).arrayBuffer());
+    case "file":
+      return new Uint8Array(await target.file.arrayBuffer());
+    case "download":
+      throw new Error(`readTarget: "${target.name}" is a save destination, not a source`);
+  }
+}
+
+async function writeTarget(target: FileTarget, bytes: Uint8Array): Promise<void> {
+  if (target.kind === "handle") {
+    const writable = await target.handle.createWritable();
+    await writable.write(bytes);
+    await writable.close();
+    return;
+  }
+  // No write-back available: hand the bytes to the browser as a
+  // download. `file` lands here too — a document opened through an
+  // <input> can be saved, just not over its original.
+  downloadBytes(target.name, bytes, "application/pdf");
+}
+
+/** Hands the browser a file to save. Revoked on a timer rather than
+ * immediately because the download has to be able to resolve the URL
+ * after the click returns. */
+function downloadBytes(name: string, bytes: Uint8Array, mimeType: string) {
+  const url = URL.createObjectURL(new Blob([bytes], { type: mimeType }));
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = name;
+  anchor.click();
+  setTimeout(() => URL.revokeObjectURL(url), 10_000);
+}
+
+/** Opens a file picker and resolves to the chosen files, or an empty
+ * array if the user cancelled.
+ *
+ * The fallback for browsers without the File System Access API.
+ * Cancellation can't be observed directly — `<input type=file>` fires no
+ * event for it — so this settles on whichever comes first: a `change`
+ * carrying files, or the window regaining focus without any. */
+function pickFilesViaInput(multiple: boolean): Promise<File[]> {
+  return new Promise((resolve) => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = "application/pdf,.pdf";
+    input.multiple = multiple;
+    let settled = false;
+    const finish = (files: File[]) => {
+      if (settled) return;
+      settled = true;
+      window.removeEventListener("focus", onFocus);
+      resolve(files);
+    };
+    const onFocus = () => {
+      setTimeout(() => {
+        if (!input.files?.length) finish([]);
+      }, 500);
+    };
+    input.addEventListener("change", () => finish(Array.from(input.files ?? [])));
+    window.addEventListener("focus", onFocus);
+    input.click();
+  });
+}
+
 interface OpenDocEntry {
-  fileHandle: FileSystemFileHandle;
+  target: FileTarget;
   doc: OpenedDocument;
 }
 const openDocs = new Map<number, OpenDocEntry>();
@@ -721,13 +830,13 @@ function migrateOpenDoc(caller: string, oldHandle: number, freshJson: string): O
 // picks with the same filename outstanding at once) via
 // `uniquePickKey` below — the common case (one pick at a time) needs no
 // suffix at all.
-const pendingOpenPicks = new Map<string, FileSystemFileHandle>();
-const pendingSavePicks = new Map<string, FileSystemFileHandle>();
+const pendingOpenPicks = new Map<string, FileTarget>();
+const pendingSavePicks = new Map<string, FileTarget>();
 
 /** Returns `name` unchanged if it's not already a key in `existing`,
  * otherwise `"name (2)"`, `"name (3)"`, ... — the first suffixed form
  * not already present. */
-function uniquePickKey(name: string, existing: Map<string, FileSystemFileHandle>): string {
+function uniquePickKey(name: string, existing: Map<string, FileTarget>): string {
   if (!existing.has(name)) return name;
   let n = 2;
   while (existing.has(`${name} (${n})`)) {
@@ -775,19 +884,18 @@ function packLengthPrefixedSources(sources: Uint8Array[]): Uint8Array {
  * construction, for every document this backend ever opens from a real
  * picker pick — see `mergeDocuments`/`extractPages`/`saveDocumentAtPath`
  * below for the other three call sites this same fix touches). */
-async function openFromFileHandle(
+async function openFromTarget(
   displayName: string,
-  fileHandle: FileSystemFileHandle,
+  target: FileTarget,
 ): Promise<OpenedDocument> {
   const session = await ensureSession();
-  const file = await fileHandle.getFile();
-  const bytes = new Uint8Array(await file.arrayBuffer());
+  const bytes = await readTarget(target);
   const doc = parseOpenedDocument(session.openDocument(displayName, bytes));
-  openDocs.set(doc.handle, { fileHandle, doc });
+  openDocs.set(doc.handle, { target, doc });
   return doc;
 }
 
-async function writeToFileHandle(handle: number, fileHandle: FileSystemFileHandle): Promise<Uint8Array> {
+async function writeDocumentTo(handle: number, target: FileTarget): Promise<Uint8Array> {
   const session = await ensureSession();
   // workingCopyBytes, not saveToBytes: the working copy is what
   // commit_mutation/undo_impl/redo_impl actually wrote (an incremental,
@@ -797,9 +905,7 @@ async function writeToFileHandle(handle: number, fileHandle: FileSystemFileHandl
   // incremental-save/signature-preservation invariant (see
   // WasmSession::working_copy_bytes's Rust doc for the full rationale).
   const bytes = session.workingCopyBytes(handle);
-  const writable = await fileHandle.createWritable();
-  await writable.write(bytes);
-  await writable.close();
+  await writeTarget(target, bytes);
   return bytes;
 }
 
@@ -859,14 +965,14 @@ export const wasmBackend: Backend = {
    * can't mean anything without a filesystem) fails with a clear error
    * rather than silently doing nothing. */
   async openDocument(path) {
-    const fileHandle = pendingOpenPicks.get(path);
-    if (!fileHandle) {
+    const target = pendingOpenPicks.get(path);
+    if (!target) {
       throw new Error(
         `openDocument: "${path}" is not a pending picked file — the wasm backend has no filesystem, so this must be a key pickOpenPath() returned (see wasm.ts's "Open-document bookkeeping" doc)`,
       );
     }
     pendingOpenPicks.delete(path);
-    return openFromFileHandle(path, fileHandle);
+    return openFromTarget(path, target);
   },
 
   async pickAndOpenDocument() {
@@ -875,10 +981,19 @@ export const wasmBackend: Backend = {
     return wasmBackend.openDocument(path);
   },
 
+  savesByDownloading(handle) {
+    const entry = openDocs.get(handle);
+    return entry ? !canWriteBack(entry.target) : !supportsFileSystemAccess();
+  },
+
   async saveDocument(handle) {
     const entry = openDocs.get(handle);
     if (!entry) throw new Error(`saveDocument: unknown document handle ${handle}`);
-    await writeToFileHandle(handle, entry.fileHandle);
+    // `canWriteBack` is false for a document opened through an <input>:
+    // the bytes go to a download instead of over the original. The UI
+    // labels the action accordingly (see `Backend.savesByDownloading`)
+    // rather than promising a save it can't perform.
+    await writeDocumentTo(handle, entry.target);
     // Mark clean only now that the write above has actually succeeded —
     // see WasmSession::mark_saved's Rust doc for why this ordering is the
     // whole point (a write that throws never reaches this line, so
@@ -896,17 +1011,17 @@ export const wasmBackend: Backend = {
   async saveDocumentAtPath(handle, path) {
     const entry = openDocs.get(handle);
     if (!entry) throw new Error(`saveDocumentAtPath: unknown document handle ${handle}`);
-    const fileHandle = pendingSavePicks.get(path);
-    if (!fileHandle) {
+    const target = pendingSavePicks.get(path);
+    if (!target) {
       throw new Error(
         `saveDocumentAtPath: "${path}" is not a pending picked save target — must be a key pickSavePath() returned`,
       );
     }
     pendingSavePicks.delete(path);
-    await writeToFileHandle(handle, fileHandle);
+    await writeDocumentTo(handle, target);
     // Future saves target the new location, same as the desktop's
     // save_document_as_impl reassigning OpenDoc.original_path.
-    entry.fileHandle = fileHandle;
+    entry.target = target;
     // Same mark-clean-only-after-the-write-succeeds ordering as
     // saveDocument above.
     const session = await ensureSession();
@@ -1153,8 +1268,8 @@ export const wasmBackend: Backend = {
    * the same bytes as a new session document, exactly like
    * `openFromFileHandle` does for a real file pick. */
   async extractPages(request: ExtractPagesRequest) {
-    const fileHandle = pendingSavePicks.get(request.outputPath);
-    if (!fileHandle) {
+    const target = pendingSavePicks.get(request.outputPath);
+    if (!target) {
       throw new Error(
         `extractPages: "${request.outputPath}" is not a pending picked save target — must be a key pickSavePath() returned`,
       );
@@ -1166,9 +1281,7 @@ export const wasmBackend: Backend = {
       JSON.stringify({ handle: request.handle, pageIndices: request.pageIndices }),
     );
 
-    const writable = await fileHandle.createWritable();
-    await writable.write(bytes);
-    await writable.close();
+    await writeTarget(target, bytes);
 
     // request.outputPath, not fileHandle.name, as the display name — same
     // fix-round C1 namespace-unification as openFromFileHandle above:
@@ -1176,7 +1289,7 @@ export const wasmBackend: Backend = {
     // filePath gets set to right after this call resolves
     // (handleExtractSelected's own `filePath = outputPath`).
     const doc = parseOpenedDocument(session.openDocument(request.outputPath, bytes));
-    openDocs.set(doc.handle, { fileHandle, doc });
+    openDocs.set(doc.handle, { target, doc });
     return doc;
   },
 
@@ -1186,8 +1299,8 @@ export const wasmBackend: Backend = {
    * before-size, and the picked save target for the write. Export, not
    * mutation — no handle rotation, `openDocs` untouched. */
   async compressDocument(request: CompressDocumentRequest): Promise<CompressStats> {
-    const fileHandle = pendingSavePicks.get(request.outputPath);
-    if (!fileHandle) {
+    const target = pendingSavePicks.get(request.outputPath);
+    if (!target) {
       throw new Error(
         `compressDocument: "${request.outputPath}" is not a pending picked save target — must be a key pickSavePath() returned`,
       );
@@ -1198,9 +1311,7 @@ export const wasmBackend: Backend = {
     const beforeBytes = session.workingCopyBytes(request.handle).byteLength;
     const bytes = session.saveToBytes(request.handle);
 
-    const writable = await fileHandle.createWritable();
-    await writable.write(bytes);
-    await writable.close();
+    await writeTarget(target, bytes);
 
     return { beforeBytes, afterBytes: bytes.byteLength };
   },
@@ -1365,8 +1476,8 @@ export const wasmBackend: Backend = {
    * — `compareDocuments`'s `pathA` resolution below is written to stay
    * correct under exactly that, see its own doc for how. */
   async mergeDocuments(request: MergeDocumentsRequest) {
-    const fileHandle = pendingSavePicks.get(request.outputPath);
-    if (!fileHandle) {
+    const target = pendingSavePicks.get(request.outputPath);
+    if (!target) {
       throw new Error(
         `mergeDocuments: "${request.outputPath}" is not a pending picked save target — must be a key pickSavePath() returned`,
       );
@@ -1375,15 +1486,14 @@ export const wasmBackend: Backend = {
 
     const sourceBuffers: Uint8Array[] = [];
     for (const sourcePath of request.sourcePaths) {
-      const sourceHandle = pendingOpenPicks.get(sourcePath);
-      if (!sourceHandle) {
+      const sourceTarget = pendingOpenPicks.get(sourcePath);
+      if (!sourceTarget) {
         throw new Error(
           `mergeDocuments: "${sourcePath}" is not a pending picked file — must be a key pickOpenPaths() returned`,
         );
       }
       pendingOpenPicks.delete(sourcePath);
-      const file = await sourceHandle.getFile();
-      sourceBuffers.push(new Uint8Array(await file.arrayBuffer()));
+      sourceBuffers.push(await readTarget(sourceTarget));
     }
 
     const session = await ensureSession();
@@ -1392,9 +1502,7 @@ export const wasmBackend: Backend = {
       packLengthPrefixedSources(sourceBuffers),
     );
 
-    const writable = await fileHandle.createWritable();
-    await writable.write(bytes);
-    await writable.close();
+    await writeTarget(target, bytes);
 
     // request.outputPath, not fileHandle.name, as the display name — same
     // fix-round C1 namespace-unification as openFromFileHandle/extractPages
@@ -1402,7 +1510,7 @@ export const wasmBackend: Backend = {
     // +page.svelte's filePath gets set to right after this call resolves
     // (handleMerge's own `filePath = outputPath`).
     const doc = parseOpenedDocument(session.openDocument(request.outputPath, bytes));
-    openDocs.set(doc.handle, { fileHandle, doc });
+    openDocs.set(doc.handle, { target, doc });
     return doc;
   },
 
@@ -1471,15 +1579,14 @@ export const wasmBackend: Backend = {
     }
     const bytesA = session.workingCopyBytes(matchedHandle);
 
-    const fileHandleB = pendingOpenPicks.get(request.pathB);
-    if (!fileHandleB) {
+    const targetB = pendingOpenPicks.get(request.pathB);
+    if (!targetB) {
       throw new Error(
         `compareDocuments: "${request.pathB}" is not a pending picked file — must be a key pickOpenPath() returned`,
       );
     }
     pendingOpenPicks.delete(request.pathB);
-    const fileB = await fileHandleB.getFile();
-    const bytesB = new Uint8Array(await fileB.arrayBuffer());
+    const bytesB = await readTarget(targetB);
 
     const json = session.compareDocuments(
       bytesA,
@@ -1497,6 +1604,16 @@ export const wasmBackend: Backend = {
 
   async pickOpenPath() {
     let handles: FileSystemFileHandle[];
+    if (!supportsFileSystemAccess()) {
+      // Firefox and Safari: an <input> gives a readable File but no way
+      // back to where it came from, so this document can be saved only
+      // as a download (see `FileTarget`).
+      const [file] = await pickFilesViaInput(false);
+      if (!file) return null;
+      const key = uniquePickKey(file.name, pendingOpenPicks);
+      pendingOpenPicks.set(key, { kind: "file", file, name: file.name });
+      return key;
+    }
     try {
       handles = await window.showOpenFilePicker({ multiple: false, types: PDF_TYPES });
     } catch (e) {
@@ -1506,7 +1623,7 @@ export const wasmBackend: Backend = {
     const fileHandle = handles[0];
     if (!fileHandle) return null;
     const key = uniquePickKey(fileHandle.name, pendingOpenPicks);
-    pendingOpenPicks.set(key, fileHandle);
+    pendingOpenPicks.set(key, { kind: "handle", handle: fileHandle, name: fileHandle.name });
     return key;
   },
 
@@ -1525,6 +1642,13 @@ export const wasmBackend: Backend = {
    * try/catch of their own. */
   async pickOpenPaths() {
     let handles: FileSystemFileHandle[];
+    if (!supportsFileSystemAccess()) {
+      return (await pickFilesViaInput(true)).map((file) => {
+        const key = uniquePickKey(file.name, pendingOpenPicks);
+        pendingOpenPicks.set(key, { kind: "file", file, name: file.name });
+        return key;
+      });
+    }
     try {
       handles = await window.showOpenFilePicker({ multiple: true, types: PDF_TYPES });
     } catch (e) {
@@ -1533,12 +1657,23 @@ export const wasmBackend: Backend = {
     }
     return handles.map((fileHandle) => {
       const key = uniquePickKey(fileHandle.name, pendingOpenPicks);
-      pendingOpenPicks.set(key, fileHandle);
+      pendingOpenPicks.set(key, { kind: "handle", handle: fileHandle, name: fileHandle.name });
       return key;
     });
   },
 
   async pickSavePath(defaultPath) {
+    if (!supportsFileSystemAccess()) {
+      // There is no save *dialog* without the File System Access API, so
+      // a destination is really just a filename and the write becomes a
+      // browser download. Resolving immediately (rather than showing
+      // some substitute prompt) keeps the flow identical for callers;
+      // the browser's own download UI is where the user gets a say.
+      const name = (defaultPath ?? "document.pdf").split(/[/\\]/).pop() || "document.pdf";
+      const key = uniquePickKey(name, pendingSavePicks);
+      pendingSavePicks.set(key, { kind: "download", name });
+      return key;
+    }
     let fileHandle: FileSystemFileHandle;
     try {
       fileHandle = await window.showSaveFilePicker({ suggestedName: defaultPath, types: PDF_TYPES });
@@ -1547,7 +1682,7 @@ export const wasmBackend: Backend = {
       throw e;
     }
     const key = uniquePickKey(fileHandle.name, pendingSavePicks);
-    pendingSavePicks.set(key, fileHandle);
+    pendingSavePicks.set(key, { kind: "handle", handle: fileHandle, name: fileHandle.name });
     return key;
   },
 

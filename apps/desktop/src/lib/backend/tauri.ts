@@ -59,6 +59,11 @@ export const tauriBackend: Backend = {
     return tauriBackend.openDocument(path);
   },
 
+  /** Always false: the desktop writes over the file that was opened. */
+  savesByDownloading() {
+    return false;
+  },
+
   async saveDocument(handle) {
     return invoke<OpenedDocument>("save_document", { handle });
   },

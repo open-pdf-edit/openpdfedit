@@ -1,31 +1,53 @@
-/* Geist + Geist Mono — OpenApps typefaces, vendored from the design system
-   (assets/fonts/*.otf) into static/fonts/ so the desktop app never depends
-   on a network font request. Sans uprights: 100 200 300 400 500 700 (600/800
-   fall back to 700). Mono uprights: 200 300 400 500 800 900. Product UI only
-   ever uses 400/500 of either family — see typography.css. */
+/* Geist + Geist Mono — OpenApps typefaces, vendored from the design
+   system into static/fonts/ so no build ever depends on a network font
+   request.
 
-@font-face{font-family:"Geist";font-style:normal;font-weight:100;font-display:swap;src:url("/fonts/Geist-Thin.otf") format("opentype")}
-@font-face{font-family:"Geist";font-style:italic;font-weight:100;font-display:swap;src:url("/fonts/Geist-ThinItalic.otf") format("opentype")}
-@font-face{font-family:"Geist";font-style:normal;font-weight:200;font-display:swap;src:url("/fonts/Geist-ExtraLight.otf") format("opentype")}
-@font-face{font-family:"Geist";font-style:italic;font-weight:200;font-display:swap;src:url("/fonts/Geist-ExtraLightItalic.otf") format("opentype")}
-@font-face{font-family:"Geist";font-style:normal;font-weight:300;font-display:swap;src:url("/fonts/Geist-Light.otf") format("opentype")}
-@font-face{font-family:"Geist";font-style:italic;font-weight:300;font-display:swap;src:url("/fonts/Geist-LightItalic.otf") format("opentype")}
-@font-face{font-family:"Geist";font-style:normal;font-weight:400;font-display:swap;src:url("/fonts/Geist-Regular.otf") format("opentype")}
-@font-face{font-family:"Geist";font-style:italic;font-weight:400;font-display:swap;src:url("/fonts/Geist-Italic.otf") format("opentype")}
-@font-face{font-family:"Geist";font-style:normal;font-weight:500;font-display:swap;src:url("/fonts/Geist-Medium.otf") format("opentype")}
-@font-face{font-family:"Geist";font-style:italic;font-weight:600;font-display:swap;src:url("/fonts/Geist-SemiBoldItalic.otf") format("opentype")}
-@font-face{font-family:"Geist";font-style:normal;font-weight:700;font-display:swap;src:url("/fonts/Geist-Bold.otf") format("opentype")}
-@font-face{font-family:"Geist";font-style:italic;font-weight:800;font-display:swap;src:url("/fonts/Geist-ExtraBoldItalic.otf") format("opentype")}
+   Only the faces the product actually uses are declared and shipped.
+   This file previously declared all 24 vendored .otf files — every
+   weight from Thin to Black, upright and italic — which came to 3.9 MB
+   against roughly 530 KB of application code. The typography tokens use
+   400 and 500 (see typography.css, and --weight-* in tokens.css); 700 is
+   kept because the tokens define it and 600/800 fall back to it; one
+   italic is used (FormsPanel's empty-state hint). Everything else was
+   downloaded and never drawn.
 
-@font-face{font-family:"Geist Mono";font-style:italic;font-weight:100;font-display:swap;src:url("/fonts/GeistMono-ThinItalic.otf") format("opentype")}
-@font-face{font-family:"Geist Mono";font-style:normal;font-weight:200;font-display:swap;src:url("/fonts/GeistMono-ExtraLight.otf") format("opentype")}
-@font-face{font-family:"Geist Mono";font-style:italic;font-weight:200;font-display:swap;src:url("/fonts/GeistMono-ExtraLightItalic.otf") format("opentype")}
-@font-face{font-family:"Geist Mono";font-style:normal;font-weight:300;font-display:swap;src:url("/fonts/GeistMono-Light.otf") format("opentype")}
-@font-face{font-family:"Geist Mono";font-style:italic;font-weight:300;font-display:swap;src:url("/fonts/GeistMono-LightItalic.otf") format("opentype")}
-@font-face{font-family:"Geist Mono";font-style:normal;font-weight:400;font-display:swap;src:url("/fonts/GeistMono-Regular.otf") format("opentype")}
-@font-face{font-family:"Geist Mono";font-style:italic;font-weight:400;font-display:swap;src:url("/fonts/GeistMono-Italic.otf") format("opentype")}
-@font-face{font-family:"Geist Mono";font-style:normal;font-weight:500;font-display:swap;src:url("/fonts/GeistMono-Medium.otf") format("opentype")}
-@font-face{font-family:"Geist Mono";font-style:italic;font-weight:600;font-display:swap;src:url("/fonts/GeistMono-SemiBoldItalic.otf") format("opentype")}
-@font-face{font-family:"Geist Mono";font-style:normal;font-weight:800;font-display:swap;src:url("/fonts/GeistMono-ExtraBold.otf") format("opentype")}
-@font-face{font-family:"Geist Mono";font-style:normal;font-weight:900;font-display:swap;src:url("/fonts/GeistMono-Black.otf") format("opentype")}
-@font-face{font-family:"Geist Mono";font-style:italic;font-weight:900;font-display:swap;src:url("/fonts/GeistMono-BlackItalic.otf") format("opentype")}
+   WOFF2 rather than OTF: same outlines, Brotli-compressed, ~3x smaller
+   (799 KB -> 269 KB across these five). Supported by every browser this
+   ships in — the Tauri webview, Chrome for the extension, and anything
+   running the web app. */
+
+@font-face {
+  font-family: "Geist";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/fonts/Geist-Regular.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Geist";
+  font-style: italic;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/fonts/Geist-Italic.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Geist";
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("/fonts/Geist-Medium.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Geist";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("/fonts/Geist-Bold.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Geist Mono";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/fonts/GeistMono-Regular.woff2") format("woff2");
+}

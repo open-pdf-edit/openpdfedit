@@ -396,6 +396,13 @@ export interface Backend {
    * on the interface for the wasm backend and any future caller that
    * doesn't need that. */
   pickAndOpenDocument(): Promise<OpenedDocument | null>;
+  /** True when this backend can only save by handing the browser a
+   * download, rather than writing back over the file that was opened.
+   * The desktop always writes back; a browser can only do so where the
+   * File System Access API exists (Chromium today). The UI uses this to
+   * label the action honestly. */
+  savesByDownloading(handle: number): boolean;
+
   saveDocument(handle: number): Promise<OpenedDocument>;
   /** Writes the working copy to an already-chosen `path` — the raw
    * command, no picker. Desktop's own call site uses this directly (via

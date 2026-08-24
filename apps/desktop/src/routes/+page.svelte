@@ -81,6 +81,15 @@
   let doc = $state<OpenedDocument | null>(null);
   let error = $state<string | null>(null);
 
+  /** Whether saving this document produces a download rather than
+   * writing back over the file that was opened. Always false on the
+   * desktop; true in a browser without the File System Access API. The
+   * Save control says which, so it never promises something it can't do.
+   * `doc` is read so this re-evaluates when the active tab changes. */
+  const savesByDownloading = $derived(
+    doc ? backend.savesByDownloading(doc.handle) : false,
+  );
+
   // ---- Protect with a password ----
   let showEncrypt = $state(false);
   let encryptBusy = $state(false);
@@ -1616,8 +1625,12 @@
           class="oa-icon-btn oa-icon-btn--sm"
           onclick={handleSave}
           disabled={!doc.is_dirty || saveBusy || mutationBusy}
-          use:tooltip={doc.is_dirty ? "Save to the original file (⌘S)" : "Saved"}
-          aria-label="Save"
+          use:tooltip={doc.is_dirty
+            ? savesByDownloading
+              ? "Download the edited copy (⌘S) — this browser can't write back over the original"
+              : "Save to the original file (⌘S)"
+            : "Saved"}
+          aria-label={savesByDownloading ? "Download a copy" : "Save"}
         >
           <Icon name="save" size={15} spin={saveBusy} />
         </button>
