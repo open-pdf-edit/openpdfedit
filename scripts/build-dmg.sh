@@ -193,10 +193,16 @@ log "Done"
 echo "  .dmg:  $dest"
 echo "  size:  $(du -h "$dest" | cut -f1)"
 echo
-echo "This build is unsigned (no code-signing/notarization set up yet — see"
-echo "DEPLOYMENT.md). If macOS refuses to open it with a damaged/unverified-"
-echo "developer dialog, run:"
-echo "  xattr -cr \"$dest\""
+echo "This build is ad-hoc signed but not notarized (no Apple Developer"
+echo "credentials configured — see .github/workflows/release.yml for the"
+echo "secrets that switch on Developer ID signing + notarization)."
+echo
+echo "Ad-hoc signing is what keeps macOS from calling a downloaded copy"
+echo "\"damaged\" — that message means a *broken* signature, and an unsealed"
+echo "bundle is exactly that. Without notarization macOS still warns that it"
+echo "cannot check the app for malicious software; open it once via"
+echo "System Settings -> Privacy & Security -> Open Anyway, or run:"
+echo "  xattr -dr com.apple.quarantine \"$dest\""
 
 if [ "$CLEAN_AFTER" = "1" ]; then
   log "Cleaning up (--clean)"

@@ -25,6 +25,25 @@ the macOS app (`.dmg`, Apple Silicon), the Windows installer
 They're built by [`.github/workflows/release.yml`](.github/workflows/release.yml)
 on every `v*` tag.
 
+### Opening the macOS app the first time
+
+The `.dmg` is signed, but not *notarized* — notarization needs a paid
+Apple Developer account. So the first launch shows **"Apple could not
+verify OpenPdfEdit is free of malware."** To get past it once:
+
+**System Settings → Privacy & Security →** scroll to the message about
+OpenPdfEdit **→ Open Anyway.** Or, from a terminal:
+
+```sh
+xattr -dr com.apple.quarantine /Applications/OpenPdfEdit.app
+```
+
+If you instead see **"OpenPdfEdit is damaged and can't be opened"**, you
+have v0.1.2 or earlier. That build shipped with a broken signature — the
+app bundle was never sealed — and macOS reports a broken signature as
+"damaged". The command above clears it, and releases after v0.1.2 are
+fixed properly.
+
 ## Test the Chrome extension (fastest path)
 
 A ready-to-load build is committed at

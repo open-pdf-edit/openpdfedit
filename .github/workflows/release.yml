@@ -68,7 +68,30 @@ jobs:
         run: npm ci
       - name: Build the .dmg
         working-directory: apps/desktop
-        run: npm run tauri build -- --bundles dmg
+        env:
+          # Set these repository secrets to ship a Developer ID-signed,
+          # notarized build. With none of them set, the bundle falls back
+          # to the ad-hoc identity in tauri.macos.conf.json, which is
+          # what stops macOS calling the download "damaged" — see that
+          # file and the README's macOS note.
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          # Drop any Apple variable that arrived empty. GitHub
+          # materializes an absent secret as an empty string, and Tauri
+          # treats "present but empty" as "configured" — which turns a
+          # missing credential into a *failed* notarization rather than a
+          # skipped one, breaking the release for anyone who hasn't set
+          # them up.
+          for var in APPLE_CERTIFICATE APPLE_CERTIFICATE_PASSWORD \
+                     APPLE_SIGNING_IDENTITY APPLE_ID APPLE_PASSWORD APPLE_TEAM_ID; do
+            [ -n "${!var}" ] || unset "$var"
+          done
+          npm run tauri build -- --bundles dmg
       - uses: actions/upload-artifact@v4
         with:
           name: macos-dmg
