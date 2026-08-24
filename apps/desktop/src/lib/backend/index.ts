@@ -21,6 +21,8 @@ export type {
   CreateFormFieldRequest,
   DeleteAnnotationRequest,
   EditTextRunRequest,
+  EncryptChoices,
+  EncryptStats,
   ExportXfdfResult,
   ExtractPagesRequest,
   ImportXfdfResult,

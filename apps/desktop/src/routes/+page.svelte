@@ -24,7 +24,8 @@
   import AccountPanel from "$lib/AccountPanel.svelte";
   import WatermarkPanel from "$lib/WatermarkPanel.svelte";
   import NumberingPanel from "$lib/NumberingPanel.svelte";
-  import type { NumberPagesChoices, WatermarkChoices } from "$lib/backend/types";
+  import EncryptPanel from "$lib/EncryptPanel.svelte";
+  import type { EncryptChoices, NumberPagesChoices, WatermarkChoices } from "$lib/backend/types";
   import { showAlert, showConfirm, showPrompt } from "$lib/dialog.svelte";
   import ToastHost from "$lib/ToastHost.svelte";
   import { showToast } from "$lib/toast.svelte";
@@ -59,6 +60,31 @@
   let filePath = $state<string | null>(null);
   let doc = $state<OpenedDocument | null>(null);
   let error = $state<string | null>(null);
+
+  // ---- Protect with a password ----
+  let showEncrypt = $state(false);
+  let encryptBusy = $state(false);
+
+  async function handleEncrypt(choices: EncryptChoices) {
+    if (!doc) return;
+    error = null;
+    encryptBusy = true;
+    try {
+      // Export, not mutation: the open document is untouched, so there's
+      // no handle to swap and nothing to refresh.
+      const result = await backend.encryptDocument(doc.handle, choices);
+      if (!result) return;
+      showEncrypt = false;
+      showToast(
+        "Saved a password-protected copy. The document you're editing is unchanged.",
+        { title: "Protected" },
+      );
+    } catch (e) {
+      error = formatError(e);
+    } finally {
+      encryptBusy = false;
+    }
+  }
 
   // ---- Page numbers / Bates ----
   let showNumbering = $state(false);
@@ -1507,6 +1533,15 @@
         </button>
         <button
           class="oa-icon-btn oa-icon-btn--sm"
+          class:oa-icon-btn--selected={showEncrypt}
+          onclick={() => (showEncrypt = !showEncrypt)}
+          use:tooltip={"Save a password-protected copy"}
+          aria-label="Protect with a password"
+        >
+          <Icon name="key" size={15} />
+        </button>
+        <button
+          class="oa-icon-btn oa-icon-btn--sm"
           class:oa-icon-btn--selected={showNumbering}
           onclick={() => (showNumbering = !showNumbering)}
           use:tooltip={"Add page numbers or Bates numbering"}
@@ -1600,6 +1635,12 @@
   </header>
 
   <AccountPanel open={showAccount} onClose={() => (showAccount = false)} />
+  <EncryptPanel
+    open={showEncrypt}
+    busy={encryptBusy}
+    onApply={handleEncrypt}
+    onClose={() => (showEncrypt = false)}
+  />
   <NumberingPanel
     open={showNumbering}
     busy={mutationBusy}

@@ -72,6 +72,22 @@ export interface NumberPagesChoices {
   pages: number[] | null;
 }
 
+/** Everything the encryption dialog decides. */
+export interface EncryptChoices {
+  /** What a reader is prompted for. Required. */
+  userPassword: string;
+  /** Full-permission password; empty reuses `userPassword`. */
+  ownerPassword: string;
+  allowPrint: boolean;
+  allowModify: boolean;
+  allowCopy: boolean;
+  allowAnnotate: boolean;
+}
+
+export interface EncryptStats {
+  bytes: number;
+}
+
 export interface FlattenDocumentRequest {
   handle: number;
   annotations: boolean;
@@ -447,6 +463,11 @@ export interface Backend {
   /** Bakes markup (and optionally filled form values) into the page.
    * Mutating — rotates the handle, and is undoable. */
   flattenDocument(request: FlattenDocumentRequest): Promise<FlattenResultDto>;
+
+  /** Writes a password-protected copy, picking a destination the way
+   * this backend does. Resolves to `null` if the user cancelled.
+   * Export — the open document is untouched. */
+  encryptDocument(handle: number, choices: EncryptChoices): Promise<EncryptStats | null>;
 
   /** Stamps page numbers or Bates numbering into a margin of each page.
    * Mutating — rotates the handle, and is undoable. */

@@ -8,6 +8,7 @@ description = "Engine-generic document session core: open-documents map, undo/re
 
 [dependencies]
 openpdfedit-engine.workspace = true
+openpdfedit-crypt.workspace = true
 openpdfedit-doc.workspace = true
 openpdfedit-flatten.workspace = true
 openpdfedit-numbering.workspace = true

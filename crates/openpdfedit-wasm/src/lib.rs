@@ -247,6 +247,7 @@ use openpdfedit_session::annotations::{
     TextSelectionQuadsRequest,
 };
 use openpdfedit_session::compare::compare_bytes;
+use openpdfedit_session::encrypt::{encrypt_document_bytes, EncryptChoices};
 use openpdfedit_session::flatten::{flatten_document_impl, FlattenDocumentRequest};
 use openpdfedit_session::forms::{
     create_form_field_impl, fill_form_fields_impl, list_form_fields_impl, CreateFormFieldRequest,
@@ -1114,6 +1115,21 @@ impl WasmSession {
         )
         .map_err(to_js_err)?;
         serde_json::to_string(&info).map_err(to_js_err)
+    }
+
+    /// The encrypted bytes for this document's working copy, for the
+    /// extension to hand to a download. Export, not mutation: the open
+    /// document is untouched and no handle rotates — see
+    /// `openpdfedit_session::encrypt`'s module doc for why encrypting in
+    /// place would be the wrong shape.
+    #[wasm_bindgen(js_name = encryptDocumentBytes)]
+    pub fn encrypt_document_bytes_js(
+        &self,
+        handle: u32,
+        choices_json: &str,
+    ) -> Result<Vec<u8>, JsValue> {
+        let choices: EncryptChoices = serde_json::from_str(choices_json).map_err(to_js_err)?;
+        encrypt_document_bytes(&self.state, handle as DocHandle, &choices).map_err(to_js_err)
     }
 
     /// Permanently removes the content (text and images, not just a black

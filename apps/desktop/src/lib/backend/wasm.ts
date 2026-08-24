@@ -47,6 +47,7 @@ import type {
   ApplyWatermarkRequest,
   CompressDocumentRequest,
   CompressStats,
+  EncryptStats,
   ExportXfdfResult,
   FlattenResultDto,
   ImportXfdfResult,
@@ -364,6 +365,9 @@ interface WasmSessionHandle {
   /** Mutating/rotates. `requestJson` is a `FlattenDocumentRequest`;
    * returns a `FlattenResultDto` JSON string. */
   flattenDocument(requestJson: string): string;
+  /** Export — returns the encrypted bytes for the extension to download.
+   * `choicesJson` is an `EncryptChoices`. */
+  encryptDocumentBytes(handle: number, choicesJson: string): Uint8Array;
   /** Mutating/rotates. `requestJson` is a `NumberPagesRequest`. */
   numberPages(requestJson: string): string;
   /** Read-only. Returns an `ExportXfdfDto` JSON string carrying the XML
@@ -1239,6 +1243,19 @@ export const wasmBackend: Backend = {
     const session = await ensureSession();
     const json = session.flattenDocument(JSON.stringify(request));
     return JSON.parse(json) as FlattenResultDto;
+  },
+
+  async encryptDocument(handle, choices) {
+    const session = await ensureSession();
+    const bytes = session.encryptDocumentBytes(handle, JSON.stringify(choices));
+    // No filesystem here, so "save a copy" means hand it to a download.
+    const url = URL.createObjectURL(new Blob([bytes], { type: "application/pdf" }));
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = "protected.pdf";
+    anchor.click();
+    setTimeout(() => URL.revokeObjectURL(url), 10_000);
+    return { bytes: bytes.byteLength };
   },
 
   async numberPages(handle, choices) {

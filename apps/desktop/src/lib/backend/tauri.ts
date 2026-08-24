@@ -32,6 +32,7 @@ import type {
   ApplyWatermarkRequest,
   CompressDocumentRequest,
   CompressStats,
+  EncryptStats,
   ExportXfdfResult,
   FlattenResultDto,
   ImportXfdfResult,
@@ -184,6 +185,14 @@ export const tauriBackend: Backend = {
 
   async flattenDocument(request) {
     return invoke<FlattenResultDto>("flatten_document_cmd", { request });
+  },
+
+  async encryptDocument(handle, choices) {
+    const outputPath = await tauriBackend.pickSavePath();
+    if (!outputPath) return null;
+    return invoke<EncryptStats>("encrypt_document_cmd", {
+      request: { handle, outputPath, ...choices },
+    });
   },
 
   async numberPages(handle, choices) {
