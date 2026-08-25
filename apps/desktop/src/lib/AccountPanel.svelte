@@ -122,8 +122,17 @@
       // re-render; the `storage` listener in the effect above is the
       // backstop if it never arrives (a popup blocker, or someone
       // finishing sign-in in a tab they opened themselves).
-      const popup = window.open("/login", "openpdfedit-signin", "width=420,height=680");
-      if (!popup) {
+      // A tab, not a sized popup. Passing width/height makes a popup
+      // window, and wallet and Nostr extensions do not work reliably in
+      // one: their own approval window takes focus, and the provider
+      // treats a request from a backgrounded popup as abandoned —
+      // reported by the user as OKX and Nostr both refusing to sign on
+      // this page while both worked on the server's own /signin, which
+      // OpenCapture opens as a tab (`ext.tabs.create`). Google was
+      // unaffected either way, because a full-page OAuth redirect never
+      // involves an extension.
+      const signinTab = window.open("/login", "openpdfedit-signin");
+      if (!signinTab) {
         showToast("Allow pop-ups for this site to sign in.", { tone: "warning", title: "Pop-up blocked" });
       }
       return;
