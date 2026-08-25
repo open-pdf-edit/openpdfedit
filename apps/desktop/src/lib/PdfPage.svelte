@@ -241,15 +241,32 @@
     return [Math.min(a.x, b.x), Math.min(a.y, b.y), Math.max(a.x, b.x), Math.max(a.y, b.y)];
   }
 
-  async function onPointerDown(e: PointerEvent) {
-    e.currentTarget && (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-    const [x, y] = cssToPdfPoint(e.clientX, e.clientY);
+  /** Tools that act where you press, with no gesture of their own. They
+   * are the ones a finger has to be treated differently for: see
+   * `pendingTap`. */
+  const TAP_TOOLS: Tool[] = ["select", "erase", "note", "editText"];
 
-    if (activeTool === "select" || activeTool === "erase") {
+  /** How far a finger may travel and still count as a tap rather than a
+   * scroll, in CSS pixels. Roughly the wobble of a deliberate tap on a
+   * phone; a scroll clears it within the first few pixels. */
+  const TAP_SLOP_PX = 10;
+
+  /** A finger resting on the page under a tap tool, not yet resolved.
+   *
+   * With a mouse, press *is* the click. With a finger it is ambiguous:
+   * the same gesture starts every scroll of the document. Acting on
+   * pointerdown would mean flicking through a document with the eraser
+   * selected deletes whatever the flick started on. So a touch is held
+   * until release and only counts if it stayed put — and the layer lets
+   * the browser scroll in the meantime, rather than swallowing the
+   * gesture with `touch-action: none`. */
+  let pendingTap: { x: number; y: number; clientX: number; clientY: number } | null = null;
+
+  async function tapAt(x: number, y: number) {
+    if (activeTool === "select" || activeTool === "erase" || activeTool === "editText") {
       // Click-to-select-and-delete an existing annotation — no drag
-      // gesture of its own, same click-based shape as editText/moveImage
-      // below, just resolved against annotations instead of text
-      // runs/image placements (see +page.svelte's handleToolClick).
+      // gesture of its own, just resolved against annotations instead of
+      // text runs/image placements (see +page.svelte's handleToolClick).
       onToolClick(pageIndex, x, y);
       return;
     }
@@ -265,16 +282,28 @@
           annotation: { kind: "freeText", text: text.trim(), fontSize: 12 },
         });
       }
+    }
+  }
+
+  async function onPointerDown(e: PointerEvent) {
+    const [x, y] = cssToPdfPoint(e.clientX, e.clientY);
+
+    if (TAP_TOOLS.includes(activeTool)) {
+      if (e.pointerType === "touch") {
+        // Deliberately no pointer capture: capturing here would take the
+        // gesture away from the scroller, which is the thing the finger
+        // is most likely to have meant.
+        pendingTap = { x, y, clientX: e.clientX, clientY: e.clientY };
+        return;
+      }
+      await tapAt(x, y);
       return;
     }
+
+    e.currentTarget && (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
 
     if (activeTool === "ink") {
       inkStroke = [[x, y]];
-      return;
-    }
-
-    if (activeTool === "editText") {
-      onToolClick(pageIndex, x, y);
       return;
     }
 
@@ -310,7 +339,20 @@
     }
   }
 
-  function onPointerUp() {
+  function onPointerCancel() {
+    // The browser took the gesture — it was a scroll, not a tap.
+    pendingTap = null;
+  }
+
+  function onPointerUp(e: PointerEvent) {
+    const tap = pendingTap;
+    if (tap) {
+      pendingTap = null;
+      const travelled = Math.hypot(e.clientX - tap.clientX, e.clientY - tap.clientY);
+      if (travelled <= TAP_SLOP_PX) void tapAt(tap.x, tap.y);
+      return;
+    }
+
     if (activeTool === "ink" && inkStroke.length > 1) {
       const xs = inkStroke.map((p) => p[0]);
       const ys = inkStroke.map((p) => p[1]);
@@ -511,10 +553,12 @@
     <div
       class="interaction-layer"
       class:active={activeTool !== "select"}
+      class:interaction-layer--tap={TAP_TOOLS.includes(activeTool)}
       class:busy
       onpointerdown={onPointerDown}
       onpointermove={onPointerMove}
       onpointerup={onPointerUp}
+      onpointercancel={onPointerCancel}
       role="presentation"
     ></div>
     {#if moveIndicator}
@@ -625,7 +669,16 @@
   .interaction-layer {
     position: absolute;
     inset: 0;
+    /* Drag tools own the gesture: a highlight drawn across a line must
+       not scroll the document out from under itself. */
     touch-action: none;
+  }
+
+  /* Tap tools do not, so the page can be scrolled and pinched with a
+     finger anywhere on it — which is most of the page. `onPointerUp`
+     decides after the fact whether what happened was a tap. */
+  .interaction-layer--tap {
+    touch-action: auto;
   }
 
   .interaction-layer.active {
