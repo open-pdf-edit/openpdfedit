@@ -1488,8 +1488,14 @@ export const wasmBackend: Backend = {
 
   async flattenDocument(request) {
     const session = await ensureSession();
-    const json = session.flattenDocument(JSON.stringify(request));
-    return JSON.parse(json) as FlattenResultDto;
+    // Same rotation as numberPages, wrapped in a result object: the
+    // document is one field of it, so the migration has to reach inside
+    // rather than take the whole payload.
+    const result = JSON.parse(session.flattenDocument(JSON.stringify(request))) as FlattenResultDto;
+    return {
+      ...result,
+      document: migrateOpenDoc("flattenDocument", request.handle, JSON.stringify(result.document)),
+    };
   },
 
   async encryptDocument(handle, choices) {
@@ -1507,8 +1513,16 @@ export const wasmBackend: Backend = {
 
   async numberPages(handle, choices) {
     const session = await ensureSession();
-    const json = session.numberPages(JSON.stringify({ handle, ...choices }));
-    return JSON.parse(json) as OpenedDocument;
+    // Through migrateOpenDoc, like every other mutation: numbering goes
+    // via commit_mutation, which reopens the document under a fresh
+    // handle. Parsing the DTO and returning it left `openDocs` keyed by
+    // the old one, so the next call — an undo, most obviously — arrived
+    // with the new handle and was told the document did not exist.
+    return migrateOpenDoc(
+      "numberPages",
+      handle,
+      session.numberPages(JSON.stringify({ handle, ...choices })),
+    );
   },
 
   // No filesystem here, so "export" means hand the browser a download
