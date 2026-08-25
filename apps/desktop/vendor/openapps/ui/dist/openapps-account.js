@@ -247,13 +247,6 @@ let OpenAppsAccount = class OpenAppsAccount extends OpenAppsElement {
           <div class="right">
             <div class="balance">${this.me.balance.toLocaleString()}</div>
             <div class="muted small">credits</div>
-            <button
-              class="signout"
-              ?disabled=${this.busy}
-              @click=${this.signOut}
-            >
-              Sign out
-            </button>
           </div>
         </div>
 
@@ -306,6 +299,10 @@ let OpenAppsAccount = class OpenAppsAccount extends OpenAppsElement {
         ${this.notice ? html `<p class="notice">${this.notice}</p>` : nothing}
         ${this.error ? html `<p class="error" role="alert">${this.error}</p>` : nothing}
       </div>
+
+      <button class="signout" ?disabled=${this.busy} @click=${this.signOut}>
+        Sign out
+      </button>
     `;
     }
     renderMergePrompt(pending) {
@@ -330,7 +327,6 @@ let OpenAppsAccount = class OpenAppsAccount extends OpenAppsElement {
           </button>
         </div>
         ${this.error ? html `<p class="error" role="alert">${this.error}</p>` : nothing}
-      </div>
     `;
     }
     static { this.styles = [
@@ -352,18 +348,21 @@ let OpenAppsAccount = class OpenAppsAccount extends OpenAppsElement {
       }
       .right {
         text-align: right;
-        display: flex;
-        flex-direction: column;
-        align-items: flex-end;
-        gap: 6px;
       }
-      /* Quiet by default. Signing out is not the thing anyone came to this
-         panel to do, and a button styled to invite the click would be
-         reaching for the one action here that throws work away. */
+      /* Below the card, full width, quiet — the same shape and place
+         OpenCapture arrived at independently when it had to build this
+         itself. Bottom is where a finished-with action belongs: nobody
+         opens an account panel in order to sign out, and putting it
+         beside the balance makes the one control that throws a session
+         away the easiest one to reach by accident. */
       .signout {
-        font-size: 0.8125rem;
-        padding: 3px 10px;
-        border-radius: 999px;
+        display: block;
+        width: 100%;
+        margin-top: 16px;
+        font: inherit;
+        font-size: 0.875rem;
+        padding: 9px 12px;
+        border-radius: var(--radius-md, 8px);
         border: 1px solid var(--border-hairline, var(--fb-hairline));
         background: transparent;
         color: var(--text-muted, var(--fb-muted));
