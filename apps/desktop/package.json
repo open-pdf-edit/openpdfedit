@@ -1,6 +1,6 @@
 {
   "name": "openpdfedit-desktop",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "OpenPdfEdit desktop app front-end (Svelte 5 + Tauri 2)",
   "type": "module",
   "scripts": {
