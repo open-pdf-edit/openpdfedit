@@ -71,6 +71,27 @@ for f in openpdfedit_wasm.js openpdfedit_wasm_bg.wasm; do
   cp "$WASM_GEN_DIR/$f" "$DIST_DIR/wasm-gen/$f"
 done
 
+# OCR's engine and trained data, served from this origin rather than the
+# CDN tesseract.js would otherwise reach for. See
+# scripts/fetch-tesseract-assets.sh for why that default is wrong here.
+# Deliberately *not* in the service worker's precache list: ~3 MB gzipped
+# that only someone who OCRs a scan ever needs. The fetch handler caches
+# them on first use, so OCR works offline from the second time on.
+log "Copying the OCR engine and language data"
+bash "$WORKSPACE_DIR/scripts/fetch-tesseract-assets.sh"
+OCR_DIR="$DIST_DIR/ocr"
+TESS_CORE="$DESKTOP_DIR/node_modules/tesseract.js-core"
+TESS_JS="$DESKTOP_DIR/node_modules/tesseract.js/dist"
+mkdir -p "$OCR_DIR"
+for f in tesseract-core-simd-lstm.wasm.js tesseract-core-simd-lstm.wasm \
+         tesseract-core-lstm.wasm.js tesseract-core-lstm.wasm; do
+  [ -f "$TESS_CORE/$f" ] || { echo "build.sh: missing $TESS_CORE/$f — run npm install in apps/desktop" >&2; exit 1; }
+  cp "$TESS_CORE/$f" "$OCR_DIR/$f"
+done
+[ -f "$TESS_JS/worker.min.js" ] || { echo "build.sh: missing $TESS_JS/worker.min.js" >&2; exit 1; }
+cp "$TESS_JS/worker.min.js" "$OCR_DIR/worker.min.js"
+cp "$WORKSPACE_DIR/.vendor/tesseract/eng.traineddata" "$OCR_DIR/eng.traineddata"
+
 # A service worker, so the app keeps working with no network at all —
 # which is the whole claim, and only demonstrable if it's true offline.
 log "Adding the offline service worker"

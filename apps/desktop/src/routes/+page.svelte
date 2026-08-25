@@ -1878,17 +1878,17 @@
         >
           <Icon name="layers" size={15} spin={flattenBusy} />
         </button>
-        {#if backendKind !== "wasm"}
-          <button
-            class="oa-icon-btn oa-icon-btn--sm"
-            onclick={handleOcrDocument}
-            disabled={ocrBusy}
-            use:tooltip={"Make a scanned document searchable (requires tesseract installed locally)"}
-            aria-label="OCR document"
-          >
-            <Icon name="scan-text" size={15} spin={ocrBusy} />
-          </button>
-        {/if}
+        <button
+          class="oa-icon-btn oa-icon-btn--sm"
+          onclick={handleOcrDocument}
+          disabled={ocrBusy}
+          use:tooltip={backendKind === "wasm"
+            ? "Make a scanned document searchable — the first run downloads the recogniser (about 3 MB), then works offline"
+            : "Make a scanned document searchable (requires tesseract installed locally)"}
+          aria-label="OCR document"
+        >
+          <Icon name="scan-text" size={15} spin={ocrBusy} />
+        </button>
         <button
           class="oa-icon-btn oa-icon-btn--sm"
           onclick={handleCompareDocument}

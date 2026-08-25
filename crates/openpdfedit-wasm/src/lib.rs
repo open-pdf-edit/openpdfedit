@@ -588,6 +588,34 @@ impl WasmSession {
     /// working copy of a protected document is stored *decrypted* — see
     /// `openpdfedit_session::working_copy_bytes`, which is what puts the
     /// protection back before these bytes reach a file.
+    /// Writes an invisible text layer from words recognised in the
+    /// browser, making a scan searchable.
+    ///
+    /// Recognition happens in JavaScript (tesseract.js in a worker),
+    /// because shelling out to the tesseract binary — what the desktop
+    /// does — has no equivalent here. Everything after recognition is
+    /// the same code the desktop runs: the words land in
+    /// `openpdfedit_ocr::add_text_layer` either way, so a page OCR'd in
+    /// the browser and the same page OCR'd on the desktop differ only by
+    /// what the two recognisers read, never by how the layer is written.
+    ///
+    /// `request_json` is an `AddOcrTextLayerRequest`: every page at once,
+    /// so the whole document's OCR is a single undo step.
+    #[wasm_bindgen(js_name = addOcrTextLayer)]
+    pub fn add_ocr_text_layer(&self, request_json: &str) -> Result<String, JsValue> {
+        let request: openpdfedit_session::ocr::AddOcrTextLayerRequest =
+            serde_json::from_str(request_json).map_err(to_js_err)?;
+        let info = openpdfedit_session::ocr::add_ocr_text_layer_impl(
+            &self.state.engine,
+            &self.state.docs,
+            &self.state.history,
+            &*self.state.store,
+            request,
+        )
+        .map_err(to_js_err)?;
+        serde_json::to_string(&info).map_err(to_js_err)
+    }
+
     #[wasm_bindgen(js_name = workingCopyBytes)]
     pub fn working_copy_bytes(&self, handle: u32) -> Result<js_sys::Uint8Array, JsValue> {
         let bytes = openpdfedit_session::working_copy_bytes(&self.state, handle as DocHandle)

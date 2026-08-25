@@ -12,6 +12,8 @@ openpdfedit-crypt.workspace = true
 openpdfedit-doc.workspace = true
 openpdfedit-flatten.workspace = true
 openpdfedit-numbering.workspace = true
+# The portable half only — recognition is cfg'd out of wasm32 there.
+openpdfedit-ocr.workspace = true
 openpdfedit-xfdf.workspace = true
 openpdfedit-annot.workspace = true
 # `forms::normalize_button_states_in_bytes` re-parses a just-saved PDF via

@@ -244,6 +244,7 @@ pub mod encrypt;
 pub mod flatten;
 pub mod forms;
 pub mod numbering;
+pub mod ocr;
 pub mod outline;
 pub mod pages;
 pub mod redact;

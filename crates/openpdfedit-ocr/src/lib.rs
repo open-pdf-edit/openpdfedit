@@ -51,6 +51,7 @@
 //! A word containing non-ASCII characters is skipped, not mis-encoded —
 //! full Unicode support needs the CMap infrastructure and is future work.
 
+#[cfg(not(target_arch = "wasm32"))]
 use std::process::Command;
 
 use lopdf::content::{Content, Operation};
@@ -97,6 +98,13 @@ pub struct OcrWord {
     pub confidence: f32,
 }
 
+// Everything from here to `add_text_layer` shells out to the tesseract
+// binary, which wasm32 has no way to do. Gated rather than removed: the
+// browser build reaches the same PDF-writing code below by handing in
+// words its own recogniser produced (tesseract.js), so the two paths
+// differ only in where the words come from.
+#[cfg(not(target_arch = "wasm32"))]
+#[cfg(not(target_arch = "wasm32"))]
 /// Runs `tesseract` over a rendered page tile (`width`×`height`,
 /// row-major RGBA8 — exactly what `EngineHandle::render_page` returns)
 /// and returns every recognized word with its pixel-space bounding box.
@@ -137,6 +145,7 @@ pub fn recognize_words(
     result
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 /// Where to look for a `tesseract` binary, in order, when the process's
 /// own `PATH` doesn't have one.
 ///
@@ -160,10 +169,12 @@ const TESSERACT_FALLBACK_PATHS: &[&str] = &[
     r"C:\Program Files\Tesseract-OCR\tesseract.exe",
 ];
 
+#[cfg(not(target_arch = "wasm32"))]
 /// The environment variable that overrides binary discovery entirely,
 /// for an install in a location this crate doesn't know about.
 const TESSERACT_PATH_ENV: &str = "OPENPDFEDIT_TESSERACT";
 
+#[cfg(not(target_arch = "wasm32"))]
 /// Resolves the `tesseract` executable to invoke: an explicit override
 /// first, then whatever `PATH` provides, then the well-known install
 /// prefixes above. Returns `None` when no candidate can be executed.
@@ -191,6 +202,7 @@ pub fn tesseract_path() -> Option<std::path::PathBuf> {
         .find(|candidate| candidate.exists() && runs(candidate))
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 /// What to tell the user when no `tesseract` can be found. Actionable by
 /// design: the previous message ("not installed or not on PATH: No such
 /// file or directory (os error 2)") was accurate and useless — it named
@@ -207,6 +219,7 @@ fn missing_tesseract_message() -> String {
     )
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 fn run_tesseract(image_path: &std::path::Path, lang: &str) -> Result<Vec<OcrWord>, OcrError> {
     let program =
         tesseract_path().ok_or_else(|| OcrError::TesseractNotFound(missing_tesseract_message()))?;
@@ -381,6 +394,7 @@ pub fn add_text_layer(
     Ok(ascii_words.len())
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 /// OCRs one page: renders it via `engine` at `dpi`, recognizes words, and
 /// appends the invisible text layer to `doc`. Does not save — the caller
 /// decides when, via [`Document::save_incremental`], same as every other
@@ -418,6 +432,7 @@ pub fn ocr_page(
     )
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 /// OCRs every page of `doc`, in order. Returns the total word count added
 /// across all pages. A single page's failure (e.g. a transient tesseract
 /// error) aborts the whole call rather than silently skipping that page —
