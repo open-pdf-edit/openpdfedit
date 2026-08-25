@@ -60,17 +60,38 @@ export declare function waitForNostrProvider(timeoutMs?: number): Promise<Nip07P
 export declare function nostrProviderNames(): string[];
 /** What a wallet calls itself, for an error a user can act on. */
 export declare function ethereumProviderName(provider: Eip1193Provider | null): string;
+/** One wallet the user could choose. */
+export interface EthereumWallet {
+    /** What the wallet calls itself — shown to the user. */
+    name: string;
+    provider: Eip1193Provider;
+}
 /**
  * Every injected provider this page can see, deduplicated.
  *
- * Exists so a caller can tell "one wallet, connect it" from "several, the
- * user has to say which" — the case a single `window.ethereum` cannot
- * represent at all.
+ * Legacy globals only. `discoverEthereumWallets` is the one to use: this
+ * is its fallback for wallets that predate EIP-6963.
  */
-export declare function ethereumProviders(): {
-    name: string;
-    provider: Eip1193Provider;
-}[];
+export declare function ethereumProviders(): EthereumWallet[];
+/**
+ * Ask every wallet in the browser to announce itself (EIP-6963).
+ *
+ * This is the fix for the whole class of problem `window.ethereum`
+ * creates. That global holds exactly one provider, so two installed
+ * wallets fight over it and the winner is whichever injected last — a
+ * user with MetaMask and OKX who wants OKX gets prompted by MetaMask,
+ * dismisses it, and is told the connection was rejected. EIP-6963 exists
+ * precisely because a single global cannot express "the user has more
+ * than one wallet and gets to say which".
+ *
+ * Announcements are synchronous — a wallet's listener responds during the
+ * dispatch below — but the spec allows a later announcement, so this
+ * yields once before answering rather than reading the array immediately.
+ *
+ * Falls back to the legacy globals when nothing announces, so wallets
+ * that predate the standard still work.
+ */
+export declare function discoverEthereumWallets(): Promise<EthereumWallet[]>;
 export declare function hasEthereum(): boolean;
 export declare function hasNostr(): boolean;
 /**
@@ -100,14 +121,14 @@ export declare function availableNamespaces(): Namespace[];
  */
 export declare function signNostrWithSecretKey(templateJson: string, nsec: string): Promise<Proof>;
 /** Prompt for account access and return the first address. */
-export declare function connectEthereum(): Promise<string>;
+export declare function connectEthereum(chosen?: Eip1193Provider): Promise<string>;
 /**
  * Sign the SIWE message with EIP-191 `personal_sign`.
  *
  * Parameter order is [message, address] — the reverse of `eth_sign`, and a
  * classic source of "invalid signature" bugs.
  */
-export declare function signSiwe(message: string, address: string): Promise<Proof>;
+export declare function signSiwe(message: string, address: string, chosen?: Eip1193Provider): Promise<Proof>;
 /**
  * Fill in and sign the server's NIP-98 event template.
  *
