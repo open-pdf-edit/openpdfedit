@@ -108,15 +108,34 @@ pub struct WatermarkOptions {
 /// reads consistently across page sizes — the exact constants of the
 /// OpenCapture original (`watermarkCellSize`), with its pixel floors
 /// carried over as point floors.
-pub fn cell_size(page_width: f32, density: f32) -> (f32, f32) {
-    // `density` divides the tile, so it reads the way the word does:
-    // higher = more cells per page. 1.0 reproduces the OpenCapture
-    // constants exactly, which is what every caller got before this
-    // parameter existed.
-    let density = density.clamp(MIN_DENSITY, MAX_DENSITY);
-    let width = (page_width * 0.16 / density).max(40.0);
+pub fn cell_size(page_width: f32) -> (f32, f32) {
+    // Density is deliberately *not* a factor here. It used to divide
+    // this, which made a lower density draw a bigger mark fewer times —
+    // and since the font size is fitted to the cell (see
+    // [`cell_font_size`]), turning the dial down grew the lettering
+    // instead of spreading it out. That is not what the word means, and
+    // not what anyone reaching for it wants: density is how many marks
+    // land on a page, not how large each one is. It now only affects the
+    // gap between cells — see [`cell_gap`].
+    let width = (page_width * 0.16).max(40.0);
     let height = (width * 0.5).max(24.0);
     (width, height)
+}
+
+/// The space left between one cell and the next.
+///
+/// This is where `density` lives now. At `1.0` the gap is half a cell in
+/// each direction, which is exactly what the tiling did before density
+/// was separated from size — so a watermark applied at the default is
+/// unchanged, down to the operator stream.
+///
+/// Lower density widens the gap without touching the mark; higher
+/// narrows it. The divisor keeps the gap positive at every allowed
+/// density, so cells never overlap however far the dial is pushed —
+/// at [`MAX_DENSITY`] they still sit about a sixth of a cell apart.
+pub fn cell_gap(cell_w: f32, cell_h: f32, density: f32) -> (f32, f32) {
+    let density = density.clamp(MIN_DENSITY, MAX_DENSITY);
+    (cell_w * 0.5 / density, cell_h * 0.5 / density)
 }
 
 /// Bounds on [`WatermarkOptions::density`]. The floor is one cell on a
@@ -164,7 +183,10 @@ pub fn bands(location: WatermarkLocation, page_w: f32, page_h: f32, density: f32
             height: page_h,
         }];
     }
-    let (_, cell_h) = cell_size(page_w, density);
+    // An edge band is one cell tall — the mark's own height, which no
+    // longer moves with density.
+    let _ = density;
+    let (_, cell_h) = cell_size(page_w);
     match location {
         WatermarkLocation::Top => vec![Band {
             x: 0.0,
@@ -309,9 +331,8 @@ fn page_watermark_ops(
 ) -> String {
     let page_w = media_box[2] - media_box[0];
     let page_h = media_box[3] - media_box[1];
-    let (cell_w, cell_h) = cell_size(page_w, opts.density);
-    let gap_x = cell_w * 0.5;
-    let gap_y = cell_h * 0.5;
+    let (cell_w, cell_h) = cell_size(page_w);
+    let (gap_x, gap_y) = cell_gap(cell_w, cell_h, opts.density);
     let stride_x = cell_w + gap_x;
     let stride_y = cell_h + gap_y;
 
@@ -533,20 +554,46 @@ mod tests {
     /// — and 1.0 has to stay bit-identical to the pattern every caller
     /// got before the parameter existed.
     #[test]
-    fn density_scales_the_tile_and_one_is_the_old_behaviour() {
-        let (base_w, base_h) = cell_size(612.0, 1.0);
-        let (sparse_w, sparse_h) = cell_size(612.0, 0.5);
-        let (dense_w, dense_h) = cell_size(612.0, 2.0);
+    fn density_spaces_the_marks_out_without_resizing_them() {
+        // Reported: turning density down made the watermark bigger and
+        // fewer, when what it should do is leave the mark alone and put
+        // more space between copies. It used to divide the cell, and the
+        // font size is fitted to the cell, so the lettering grew with it.
+        let (base_w, base_h) = cell_size(612.0);
+        let (sparse_gx, sparse_gy) = cell_gap(base_w, base_h, 0.5);
+        let (gx, gy) = cell_gap(base_w, base_h, 1.0);
+        let (dense_gx, dense_gy) = cell_gap(base_w, base_h, 2.0);
 
         assert!(
-            sparse_w > base_w && sparse_h > base_h,
-            "lower density = bigger tiles"
+            sparse_gx > gx && sparse_gy > gy,
+            "lower density = more space between marks"
         );
         assert!(
-            dense_w < base_w && dense_h < base_h,
-            "higher density = smaller tiles"
+            dense_gx < gx && dense_gy < gy,
+            "higher density = less space between marks"
         );
-        assert_eq!(sparse_w, base_w * 2.0);
+        // Twice as sparse means twice the gap, not twice the mark.
+        assert_eq!(sparse_gx, gx * 2.0);
+    }
+
+    /// Whatever the density, the mark itself is the same size — which is
+    /// the whole point of the change, and the thing a caller would most
+    /// easily undo by reintroducing density into `cell_size`.
+    #[test]
+    fn the_mark_is_the_same_size_at_every_density() {
+        let base = cell_size(612.0);
+        for density in [MIN_DENSITY, 0.5, 1.0, 2.0, MAX_DENSITY] {
+            assert_eq!(cell_size(612.0), base, "density {density} changed the cell");
+        }
+    }
+
+    /// Cells must not overlap however far the dial is pushed: the gap
+    /// stays positive at the densest allowed setting.
+    #[test]
+    fn marks_never_collide_even_at_maximum_density() {
+        let (w, h) = cell_size(612.0);
+        let (gx, gy) = cell_gap(w, h, MAX_DENSITY);
+        assert!(gx > 0.0 && gy > 0.0, "cells would overlap at max density");
     }
 
     #[test]
@@ -554,17 +601,18 @@ mod tests {
         // A zero or negative density would divide the tile to nothing (or
         // flip it), so the bounds are enforced in cell_size itself rather
         // than trusted from the caller.
-        assert_eq!(cell_size(612.0, 0.0), cell_size(612.0, MIN_DENSITY));
-        assert_eq!(cell_size(612.0, -3.0), cell_size(612.0, MIN_DENSITY));
-        assert_eq!(cell_size(612.0, 99.0), cell_size(612.0, MAX_DENSITY));
+        let (w, h) = cell_size(612.0);
+        assert_eq!(cell_gap(w, h, 0.0), cell_gap(w, h, MIN_DENSITY));
+        assert_eq!(cell_gap(w, h, -3.0), cell_gap(w, h, MIN_DENSITY));
+        assert_eq!(cell_gap(w, h, 99.0), cell_gap(w, h, MAX_DENSITY));
     }
 
     #[test]
     fn cell_size_matches_the_opencapture_reference_constants() {
         // 612 pt US-Letter width: 0.16 * 612 = 97.92 wide, half that tall.
-        assert_eq!(cell_size(612.0, 1.0), (97.92, 48.96));
+        assert_eq!(cell_size(612.0), (97.92, 48.96));
         // A tiny page hits the 40/24 floors.
-        assert_eq!(cell_size(100.0, 1.0), (40.0, 24.0));
+        assert_eq!(cell_size(100.0), (40.0, 24.0));
     }
 
     #[test]
@@ -573,7 +621,7 @@ mod tests {
         assert_eq!(full.len(), 1);
         assert_eq!((full[0].width, full[0].height), (612.0, 792.0));
 
-        let (_, cell_h) = cell_size(612.0, 1.0);
+        let (_, cell_h) = cell_size(612.0);
         let top = bands(WatermarkLocation::Top, 612.0, 792.0, 1.0);
         assert_eq!(top.len(), 1);
         assert_eq!((top[0].y, top[0].height), (0.0, cell_h));
@@ -726,5 +774,61 @@ mod tests {
         let doc2 = Document::from_bytes(&saved).unwrap();
         let content = String::from_utf8_lossy(&doc2.page_content_bytes(0).unwrap()).to_string();
         assert!(content.contains("/OPEWmLogo Do"), "got: {content}");
+    }
+}
+
+#[cfg(test)]
+mod density_behaviour {
+    use super::*;
+
+    /// The user-visible promise, measured on a real page rather than
+    /// inferred from the helpers: turning density down must leave the
+    /// lettering the same size and simply put fewer copies on the page.
+    ///
+    /// Counting `Tj` operators is what makes this a test of the output
+    /// rather than of the arithmetic — the previous behaviour would fail
+    /// it on the font size while passing every unit assertion about
+    /// cells and gaps.
+    #[test]
+    fn lower_density_means_fewer_marks_at_the_same_size() {
+        let media_box = [0.0, 0.0, 612.0, 792.0];
+        let render = |density: f32| {
+            let opts = WatermarkOptions {
+                text: "CONFIDENTIAL".to_string(),
+                location: WatermarkLocation::Full,
+                orientation_deg: 0,
+                opacity: 0.4,
+                text_scale: 1.0,
+                density,
+                logo: None,
+                pages: None,
+            };
+            page_watermark_ops(media_box, &opts, "GS0", Some("F0"), None)
+        };
+
+        let sparse = render(0.5);
+        let dense = render(2.0);
+
+        let marks = |ops: &str| ops.matches("Tj").count();
+        assert!(
+            marks(&sparse) < marks(&dense),
+            "lower density should put fewer marks on the page, got {} vs {}",
+            marks(&sparse),
+            marks(&dense),
+        );
+
+        // Same font size at both densities. `Tf` carries it, and it is
+        // fitted to the cell — which is exactly what used to move.
+        let font_op = |ops: &str| {
+            ops.lines()
+                .find(|l| l.contains(" Tf"))
+                .map(str::to_string)
+                .expect("a text watermark must set a font size")
+        };
+        assert_eq!(
+            font_op(&sparse),
+            font_op(&dense),
+            "density changed the lettering size; it must only change the spacing",
+        );
     }
 }

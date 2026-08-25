@@ -843,3 +843,4 @@ test("the Supporter gate: OCR is gated too, and one unlock covers both", async (
 
   await page.close();
 });
+
