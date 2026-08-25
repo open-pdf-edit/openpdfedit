@@ -1749,8 +1749,9 @@ export const wasmBackend: Backend = {
   async ocrDocument(request) {
     const { recognisePage } = await import("./ocr-browser");
     const session = await ensureSession();
-    const entry = openDocs.get(request.handle);
-    if (!entry) throw new Error(`ocrDocument: unknown document handle ${request.handle}`);
+    if (!openDocs.has(request.handle)) {
+      throw new Error(`ocrDocument: unknown document handle ${request.handle}`);
+    }
 
     const sizes = JSON.parse(session.pageSizes(request.handle)) as {
       width: number;
@@ -1777,11 +1778,18 @@ export const wasmBackend: Backend = {
       }
     }
 
-    const doc = parseOpenedDocument(
+    // Through migrateOpenDoc like every other mutating method, because
+    // committing rotates the handle: `addOcrTextLayer` goes through
+    // `commit_mutation`, which reopens the document and hands back a
+    // fresh handle. Updating `entry.doc` without re-keying `openDocs`
+    // left the map under the *old* handle, so the next call — a second
+    // OCR, a save, anything — arrived with the new one and was told the
+    // document did not exist ("unknown document handle 5").
+    return migrateOpenDoc(
+      "ocrDocument",
+      request.handle,
       session.addOcrTextLayer(JSON.stringify({ handle: request.handle, pages })),
     );
-    entry.doc = { ...doc, file_path: entry.doc.file_path };
-    return entry.doc;
   },
 
   // --- file-picker primitives (real — open/save-as depend on these) ---

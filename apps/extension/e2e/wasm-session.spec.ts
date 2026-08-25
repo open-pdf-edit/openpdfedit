@@ -359,3 +359,80 @@ test("WasmSession, driven in-page, round-trips open/fill/mutate/undo/save agains
 
   await page.close();
 });
+
+/**
+ * Two OCR passes in a row.
+ *
+ * Committing a text layer rotates the document handle — `commit_mutation`
+ * reopens and hands back a fresh one. The backend keeps its own map of
+ * open documents keyed by handle, so a mutating call that updates the
+ * document but not the key leaves the map under the old handle: the next
+ * call arrives with the new one and is told the document does not exist.
+ * Reported as "ocrDocument: unknown document handle 5", after OCR had
+ * already succeeded once.
+ *
+ * Driven against `WasmSession` directly rather than through the UI so it
+ * needs no recogniser: what rotates the handle is the commit, not the
+ * reading, and a stub word exercises the same path in a fraction of the
+ * time.
+ */
+test("addOcrTextLayer rotates the handle, and the new one is usable", async ({
+  context,
+  extensionId,
+}) => {
+  const page = await context.newPage();
+  await page.goto(`chrome-extension://${extensionId}/index.html`);
+
+  const result = await page.evaluate(async (textBase64) => {
+    await new Promise<void>((resolve, reject) => {
+      const script = document.createElement("script");
+      script.src = "/pdfium.js";
+      script.onload = () => resolve();
+      script.onerror = () => reject(new Error("failed to load /pdfium.js"));
+      document.head.appendChild(script);
+    });
+    const win = window as unknown as { PDFiumModule?: () => Promise<unknown> };
+    const pdfiumModule = await win.PDFiumModule!();
+    const mod = (await import(/* @vite-ignore */ "/wasm-gen/openpdfedit_wasm.js")) as {
+      default: () => Promise<unknown>;
+      initialize_pdfium_render: (a: unknown, b: unknown, c: boolean) => boolean;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      WasmSession: new () => any;
+    };
+    const rustModule = await mod.default();
+    mod.initialize_pdfium_render(pdfiumModule, rustModule, false);
+    const session = new mod.WasmSession();
+
+    const bytes = Uint8Array.from(atob(textBase64), (c) => c.charCodeAt(0));
+    const opened = JSON.parse(session.openDocument("scan.pdf", bytes));
+
+    const layer = (handle: number) =>
+      JSON.parse(
+        session.addOcrTextLayer(
+          JSON.stringify({
+            handle,
+            pages: [
+              {
+                page_index: 0,
+                page_width_pt: 612,
+                page_height_pt: 792,
+                image_width_px: 1275,
+                image_height_px: 1650,
+                words: [
+                  { text: "SCANNED", left: 150, top: 200, width: 400, height: 50, confidence: 90 },
+                ],
+              },
+            ],
+          }),
+        ),
+      );
+
+    const first = layer(opened.handle);
+    // The handle the second pass must use is the one the first returned.
+    const second = layer(first.handle);
+    return { opened: opened.handle, first: first.handle, second: second.handle };
+  }, TEXT_PDF_BASE64);
+
+  expect(result.first).not.toBe(result.opened);
+  expect(result.second).not.toBe(result.first);
+});
