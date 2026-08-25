@@ -180,3 +180,98 @@ test("a finger dragged under a tap tool scrolls instead of acting", async ({ bro
 
   await ctx.close();
 });
+
+/**
+ * Pinching changes the app's zoom, not the browser's.
+ *
+ * A browser pinch scales the visual viewport: the page gets bigger by
+ * being a 100% bitmap enlarged, so it blurs, and the toolbar is enlarged
+ * with it. Zooming the app instead re-renders the page at the new size.
+ */
+test("pinching zooms the document, sharply", async ({ browser }) => {
+  const ctx = await browser.newContext({ ...devices["iPhone 13"] });
+  const page = await ctx.newPage();
+  await openDocument(page);
+
+  // Reserved, or the browser takes the gesture and none of this runs.
+  const reserved = await page.evaluate(
+    () => getComputedStyle(document.querySelector(".scroll-container")!).touchAction,
+  );
+  expect(reserved, "the browser must not keep pinch for itself").toBe("pan-y");
+
+  const zoomLabel = page.locator(".zoom-level");
+  const before = await zoomLabel.innerText();
+  const canvasBefore = (await page.locator("canvas").first().boundingBox())!.width;
+
+  const container = page.locator(".scroll-container");
+  const box = (await container.boundingBox())!;
+  const cx = Math.round(box.x + box.width / 2);
+  const cy = Math.round(box.y + box.height / 2);
+
+  const finger = (type: string, id: number, x: number, y: number) =>
+    container.dispatchEvent(type, {
+      pointerId: id,
+      pointerType: "touch",
+      isPrimary: id === 1,
+      bubbles: true,
+      clientX: x,
+      clientY: y,
+    });
+
+  // Two fingers 40px apart, spread to 160px: four times the zoom, less
+  // whatever the clamp allows.
+  await finger("pointerdown", 1, cx - 20, cy);
+  await finger("pointerdown", 2, cx + 20, cy);
+  await finger("pointermove", 1, cx - 80, cy);
+  await finger("pointermove", 2, cx + 80, cy);
+  await finger("pointerup", 1, cx - 80, cy);
+  await finger("pointerup", 2, cx + 80, cy);
+
+  await expect(zoomLabel).not.toHaveText(before);
+  const after = Number.parseInt(await zoomLabel.innerText(), 10);
+  expect(after, "spreading must zoom in").toBeGreaterThan(Number.parseInt(before, 10));
+
+  // The rendered page really is bigger — not a scaled-up bitmap, which
+  // would leave the canvas' own width alone.
+  await expect
+    .poll(async () => (await page.locator("canvas").first().boundingBox())!.width)
+    .toBeGreaterThan(canvasBefore * 1.5);
+
+  await ctx.close();
+});
+
+test("a pinch abandons whatever the first finger had started", async ({ browser }) => {
+  const ctx = await browser.newContext({ ...devices["iPhone 13"] });
+  const page = await ctx.newPage();
+  await openDocument(page);
+
+  // Highlight keeps the gesture, so one finger down on a page begins
+  // drawing a rectangle. A second finger means the first was the start
+  // of a zoom, and the half-drawn highlight must not survive it.
+  await page.getByRole("button", { name: "Highlight", exact: true }).click();
+
+  const layer = page.locator(".interaction-layer").first();
+  const lbox = (await layer.boundingBox())!;
+  const x = Math.round(lbox.x + lbox.width / 2);
+  const y = Math.round(lbox.y + lbox.height / 2);
+
+  const at = (target: typeof layer, type: string, id: number, px: number, py: number) =>
+    target.dispatchEvent(type, {
+      pointerId: id,
+      pointerType: "touch",
+      isPrimary: id === 1,
+      bubbles: true,
+      clientX: px,
+      clientY: py,
+    });
+
+  await at(layer, "pointerdown", 1, x, y);
+  await at(layer, "pointermove", 1, x + 60, y + 10);
+  await expect(page.locator(".drag-preview"), "a drag should be under way").toHaveCount(1);
+
+  const container = page.locator(".scroll-container");
+  await at(container, "pointerdown", 2, x - 60, y);
+  await expect(page.locator(".drag-preview"), "the pinch must take the gesture").toHaveCount(0);
+
+  await ctx.close();
+});

@@ -2224,6 +2224,7 @@
         onCreateField={handleCreateField}
         onPlaceSignature={handlePlaceSignature}
         onMoveObject={handleMoveObject}
+        onZoom={(next) => (zoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, next)))}
         {formFields}
         onFillField={handleFillFieldInline}
         {focusField}

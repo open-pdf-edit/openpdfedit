@@ -82,6 +82,12 @@
      * what makes re-focusing the same field work: a bare name wouldn't
      * change, so the effect wouldn't re-run. */
     focusField?: { name: string; nonce: number } | null;
+    /** Bumped by the viewer when a gesture that started here has been
+     * taken over by something bigger — a second finger arriving to
+     * pinch. Whatever was being drawn is abandoned: the finger that
+     * began it is now half of a zoom, and committing a highlight
+     * because someone zoomed in on a word would be its own bug. */
+    gestureCancel?: number;
   }
 
   /** One fillable text field, in PDF page-space points. */
@@ -128,6 +134,7 @@
     formFields = [],
     onFillField,
     focusField = null,
+    gestureCancel = 0,
   }: Props = $props();
 
   /** The rendered inputs, keyed by field name, so a just-drawn field can
@@ -342,7 +349,23 @@
   function onPointerCancel() {
     // The browser took the gesture — it was a scroll, not a tap.
     pendingTap = null;
+    abandonGesture();
   }
+
+  /** Forget whatever was in progress, without committing it. */
+  function abandonGesture() {
+    dragStart = null;
+    dragCurrent = null;
+    inkStroke = [];
+  }
+
+  $effect(() => {
+    // Read it so the effect subscribes; the value itself means nothing
+    // beyond "it changed". Also runs once on mount, when there is
+    // nothing in progress to abandon.
+    void gestureCancel;
+    abandonGesture();
+  });
 
   function onPointerUp(e: PointerEvent) {
     const tap = pendingTap;
