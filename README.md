@@ -27,9 +27,12 @@ on every `v*` tag.
 
 ### Opening the macOS app the first time
 
-The `.dmg` is signed, but not *notarized* — notarization needs a paid
-Apple Developer account. So the first launch shows **"Apple could not
-verify OpenPdfEdit is free of malware."** To get past it once:
+The `.dmg` carries an *ad-hoc* signature — a real signature, but not one
+tied to an Apple Developer ID, and not notarized. Both of those need a
+paid Apple Developer account. The ad-hoc signature is what stops macOS
+calling the download **"damaged"**; what it can't stop is the weaker
+warning, **"Apple could not verify OpenPdfEdit is free of malware."** To
+get past that once:
 
 **System Settings → Privacy & Security →** scroll to the message about
 OpenPdfEdit **→ Open Anyway.** Or, from a terminal:
@@ -37,6 +40,12 @@ OpenPdfEdit **→ Open Anyway.** Or, from a terminal:
 ```sh
 xattr -dr com.apple.quarantine /Applications/OpenPdfEdit.app
 ```
+
+To remove the warning entirely, set `APPLE_CERTIFICATE`,
+`APPLE_CERTIFICATE_PASSWORD`, `APPLE_SIGNING_IDENTITY`, `APPLE_ID`,
+`APPLE_PASSWORD` and `APPLE_TEAM_ID` as repository secrets — the release
+workflow already picks them up and notarizes when they're all present,
+and falls back to ad-hoc signing when they aren't.
 
 If you instead see **"OpenPdfEdit is damaged and can't be opened"**, you
 have v0.1.2 or earlier. That build shipped with a broken signature — the
