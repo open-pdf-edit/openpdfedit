@@ -275,3 +275,72 @@ test("a pinch abandons whatever the first finger had started", async ({ browser 
 
   await ctx.close();
 });
+
+/**
+ * Opening and saving on a phone.
+ *
+ * The File System Access API — `showOpenFilePicker`, and the writable
+ * handle that lets Save write back over the original — is desktop
+ * Chromium only. Neither iOS Safari nor Android Chrome has it, so a
+ * phone always takes the fallback path: an `<input type="file">` to get
+ * bytes in, and a download to get them out. That path exists for the
+ * extension; this is the phone using it, and the check that the Save
+ * control admits which of the two it is doing rather than promising a
+ * write it cannot perform.
+ */
+test("a phone without the file system API can still open and save", async ({ browser }) => {
+  const ctx = await browser.newContext({ ...devices["Pixel 5"], acceptDownloads: true });
+  const page = await ctx.newPage();
+
+  await page.addInitScript(() => {
+    delete (window as unknown as Record<string, unknown>).showOpenFilePicker;
+    delete (window as unknown as Record<string, unknown>).showSaveFilePicker;
+  });
+  await page.goto(ORIGIN);
+
+  const chooserPromise = page.waitForEvent("filechooser");
+  await page.locator("header.topbar").getByRole("button", { name: "Open PDF…" }).click();
+  const chooser = await chooserPromise;
+  await chooser.setFiles({
+    name: "doc.pdf",
+    mimeType: "application/pdf",
+    buffer: Buffer.from(TEXT_PDF_BASE64, "base64"),
+  });
+
+  await expect(page.locator(".path-bar__text")).toHaveText("doc.pdf", { timeout: 30_000 });
+  await expect(page.locator("canvas")).toBeVisible({ timeout: 30_000 });
+
+  // Saying "Save" here would promise writing back over a file this
+  // browser cannot reopen for writing.
+  const save = page.getByRole("button", { name: "Download a copy" });
+  await expect(save).toBeVisible();
+
+  // Nothing to save until something has been changed. A rectangle, not
+  // a highlight: a highlight needs words under it, and where they are
+  // depends on the fixture.
+  await page.getByRole("button", { name: "Rectangle", exact: true }).click();
+  const layer = page.locator(".interaction-layer").first();
+  const box = (await layer.boundingBox())!;
+  for (const [type, dx, dy] of [
+    ["pointerdown", 40, 40],
+    ["pointermove", 160, 120],
+    ["pointerup", 160, 120],
+  ] as const) {
+    await layer.dispatchEvent(type, {
+      pointerId: 1,
+      pointerType: "touch",
+      isPrimary: true,
+      bubbles: true,
+      clientX: Math.round(box.x + dx),
+      clientY: Math.round(box.y + dy),
+    });
+  }
+  await expect(save).toBeEnabled({ timeout: 30_000 });
+
+  const downloadPromise = page.waitForEvent("download");
+  await save.click();
+  const download = await downloadPromise;
+  expect(download.suggestedFilename()).toContain(".pdf");
+
+  await ctx.close();
+});
