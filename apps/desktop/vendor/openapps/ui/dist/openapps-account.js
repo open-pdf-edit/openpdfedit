@@ -81,6 +81,27 @@ let OpenAppsAccount = class OpenAppsAccount extends OpenAppsElement {
     get canConnectGoogle() {
         return (this.enabled?.google ?? false) && !this.linked("google");
     }
+    /**
+     * Sign out.
+     *
+     * This lives here, and not only on `<openapps-login>`, because signing
+     * out is a property of *having* an account rather than of getting one.
+     * A host that cannot mount the login element — anything whose window
+     * holds unsaved work, since that element's Google button navigates the
+     * whole page away — could otherwise show a signed-in account with no
+     * way to leave it. That is exactly what happened: one app had a sign-out
+     * and another didn't, decided by which elements each happened to mount.
+     *
+     * The event and the notify() are what let the rest of a page react —
+     * a balance elsewhere, a host's own header — without any of them
+     * knowing about each other.
+     */
+    async signOut() {
+        await this.run(() => this.sdk.auth.logout());
+        this.me = null;
+        this.emit("openapps-logout", null);
+        notify();
+    }
     async connectGoogle(merge = false) {
         await this.run(async () => {
             // Come back to this page, minus any fragment — the server puts the
@@ -226,6 +247,13 @@ let OpenAppsAccount = class OpenAppsAccount extends OpenAppsElement {
           <div class="right">
             <div class="balance">${this.me.balance.toLocaleString()}</div>
             <div class="muted small">credits</div>
+            <button
+              class="signout"
+              ?disabled=${this.busy}
+              @click=${this.signOut}
+            >
+              Sign out
+            </button>
           </div>
         </div>
 
@@ -324,6 +352,30 @@ let OpenAppsAccount = class OpenAppsAccount extends OpenAppsElement {
       }
       .right {
         text-align: right;
+        display: flex;
+        flex-direction: column;
+        align-items: flex-end;
+        gap: 6px;
+      }
+      /* Quiet by default. Signing out is not the thing anyone came to this
+         panel to do, and a button styled to invite the click would be
+         reaching for the one action here that throws work away. */
+      .signout {
+        font-size: 0.8125rem;
+        padding: 3px 10px;
+        border-radius: 999px;
+        border: 1px solid var(--border-hairline, var(--fb-hairline));
+        background: transparent;
+        color: var(--text-muted, var(--fb-muted));
+        cursor: pointer;
+      }
+      .signout:hover:not(:disabled) {
+        color: var(--text-strong, var(--fb-strong));
+        border-color: var(--text-muted, var(--fb-muted));
+      }
+      .signout:disabled {
+        opacity: 0.5;
+        cursor: default;
       }
       .balance {
         font-size: 1.5rem;
