@@ -58,6 +58,19 @@ export declare function findNostrProvider(): Nip07Provider | null;
 export declare function waitForNostrProvider(timeoutMs?: number): Promise<Nip07Provider | null>;
 /** Every place checked, for a diagnostic the user can act on. */
 export declare function nostrProviderNames(): string[];
+/** What a wallet calls itself, for an error a user can act on. */
+export declare function ethereumProviderName(provider: Eip1193Provider | null): string;
+/**
+ * Every injected provider this page can see, deduplicated.
+ *
+ * Exists so a caller can tell "one wallet, connect it" from "several, the
+ * user has to say which" — the case a single `window.ethereum` cannot
+ * represent at all.
+ */
+export declare function ethereumProviders(): {
+    name: string;
+    provider: Eip1193Provider;
+}[];
 export declare function hasEthereum(): boolean;
 export declare function hasNostr(): boolean;
 /**

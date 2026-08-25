@@ -58,7 +58,37 @@ export async function waitForNostrProvider(timeoutMs = 2000) {
 export function nostrProviderNames() {
     return nostrProviders().map((p) => p.where);
 }
-/** EIP-1193 providers, same story: OKX also answers on its own object. */
+/** What a wallet calls itself, for an error a user can act on. */
+export function ethereumProviderName(provider) {
+    if (!provider)
+        return "wallet";
+    const flags = provider;
+    // EIP-6963 gives a real name; the flags are what wallets set on the
+    // injected object and are the only identification available without it.
+    if (typeof flags.__name === "string")
+        return flags.__name;
+    if (flags.isOkxWallet || flags.isOKExWallet)
+        return "OKX Wallet";
+    if (flags.isRabby)
+        return "Rabby";
+    if (flags.isBraveWallet)
+        return "Brave Wallet";
+    if (flags.isCoinbaseWallet)
+        return "Coinbase Wallet";
+    if (flags.isMetaMask)
+        return "MetaMask";
+    return "wallet";
+}
+/**
+ * EIP-1193 providers, same story: OKX also answers on its own object.
+ *
+ * The order matters more than it looks. `window.ethereum` is a single
+ * global that every wallet extension writes to, so with two installed the
+ * winner is whichever injected last — not whichever the user meant. OKX
+ * is the common case here because it always mirrors itself onto
+ * `window.okxwallet`, so it stays reachable even when it lost that race;
+ * the reverse is not true of most others.
+ */
 function findEthereumProvider() {
     if (typeof window === "undefined")
         return null;
@@ -67,6 +97,28 @@ function findEthereumProvider() {
             return candidate;
     }
     return null;
+}
+/**
+ * Every injected provider this page can see, deduplicated.
+ *
+ * Exists so a caller can tell "one wallet, connect it" from "several, the
+ * user has to say which" — the case a single `window.ethereum` cannot
+ * represent at all.
+ */
+export function ethereumProviders() {
+    if (typeof window === "undefined")
+        return [];
+    const seen = new Set();
+    const out = [];
+    for (const candidate of [window.ethereum, window.okxwallet]) {
+        if (!candidate || typeof candidate.request !== "function")
+            continue;
+        if (seen.has(candidate))
+            continue;
+        seen.add(candidate);
+        out.push({ name: ethereumProviderName(candidate), provider: candidate });
+    }
+    return out;
 }
 export function hasEthereum() {
     return findEthereumProvider() !== null;
@@ -149,12 +201,19 @@ export async function connectEthereum() {
     const provider = findEthereumProvider();
     if (!provider)
         throw new WalletError("no Ethereum wallet found in this browser");
+    const name = ethereumProviderName(provider);
     let accounts;
     try {
         accounts = await provider.request({ method: "eth_requestAccounts" });
     }
     catch (cause) {
-        throw new WalletError(rejectionMessage(cause, "wallet connection was rejected"));
+        // Named, because "wallet connection was rejected" is unactionable when
+        // more than one wallet is installed: `window.ethereum` is a single
+        // global and the wallet that answers is whichever injected last, so
+        // the prompt a user dismissed may well have been from a wallet they
+        // were not trying to use. Saying which one turns "it didn't work"
+        // into something they can see is wrong.
+        throw new WalletError(rejectionMessage(cause, `${name} rejected the connection`));
     }
     const address = Array.isArray(accounts) ? accounts[0] : undefined;
     if (typeof address !== "string" || !address) {
