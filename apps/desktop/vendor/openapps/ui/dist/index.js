@@ -41,6 +41,7 @@
  * stuck in light.
  */
 export { configure, getClient, onChange, notify } from "./context.js";
+export { captureReferral, clearReferral, referralInUrl, storedReferral, } from "./referral-code.js";
 export { OpenAppsElement } from "./base.js";
 export { OpenAppsLogin } from "./openapps-login.js";
 export { OpenAppsAccount } from "./openapps-account.js";

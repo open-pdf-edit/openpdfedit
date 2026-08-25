@@ -180,7 +180,7 @@
                attribute only has to be right until then. -->
           <openapps-referral
             app-id="openpdfedit"
-            invite-url="https://openpdfedit.com/"
+            invite-url="https://app.openpdfedit.com/"
           ></openapps-referral>
         {:else}
           <p class="message">Sign in to see your credits and buy more.</p>
