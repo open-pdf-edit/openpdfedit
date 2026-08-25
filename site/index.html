@@ -6,12 +6,18 @@
 <title>OpenPdfEdit — Edit PDFs. Keep them yours.</title>
 <meta name="description" content="A fast, local PDF editor for macOS, Windows, and Chrome. Annotate, fill forms, organize pages, redact, and compare — your documents never leave your machine.">
 <meta name="theme-color" content="#111111">
+<link rel="canonical" href="https://openpdfedit.com/">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://openpdfedit.com/">
+<meta property="og:title" content="OpenPdfEdit — Edit PDFs. Keep them yours.">
+<meta property="og:description" content="A fast, local PDF editor for the browser, macOS, Windows, and Chrome. Annotate, fill forms, organize pages, redact, and compare — your documents never leave your machine.">
+<meta name="twitter:card" content="summary_large_image">
 <style>
 /* ---------- Fonts ---------- */
-@font-face{font-family:"Geist";src:url("fonts/Geist-Light.otf") format("opentype");font-weight:300;font-display:swap}
-@font-face{font-family:"Geist";src:url("fonts/Geist-Regular.otf") format("opentype");font-weight:400;font-display:swap}
-@font-face{font-family:"Geist";src:url("fonts/Geist-Medium.otf") format("opentype");font-weight:500;font-display:swap}
-@font-face{font-family:"Geist Mono";src:url("fonts/GeistMono-Regular.otf") format("opentype");font-weight:400;font-display:swap}
+@font-face{font-family:"Geist";src:url("fonts/Geist-Light.woff2") format("woff2");font-weight:300;font-display:swap}
+@font-face{font-family:"Geist";src:url("fonts/Geist-Regular.woff2") format("woff2");font-weight:400;font-display:swap}
+@font-face{font-family:"Geist";src:url("fonts/Geist-Medium.woff2") format("woff2");font-weight:500;font-display:swap}
+@font-face{font-family:"Geist Mono";src:url("fonts/GeistMono-Regular.woff2") format("woff2");font-weight:400;font-display:swap}
 
 /* ---------- Tokens (OpenApps design system, OpenPdfEdit accent slot) ---------- */
 :root{
@@ -35,6 +41,13 @@
 }
 
 *{margin:0;padding:0;box-sizing:border-box}
+.hero-note{margin-top:14px;font-size:14px;color:var(--white-60)}
+.tool-tag{
+  display:inline-block;margin-left:6px;padding:1px 6px;border-radius:999px;
+  border:1px solid var(--white-20);background:var(--white-04);
+  font-family:var(--font-mono);font-size:10px;letter-spacing:.04em;
+  text-transform:uppercase;color:var(--white-60);vertical-align:1px;
+}
 html{scroll-behavior:smooth}
 body{
   font-family:var(--font-sans);
@@ -326,6 +339,7 @@ footer{border-top:1px solid var(--white-10);background:var(--color-background-al
     <a class="wordmark" href="#">OpenPdfEdit<span class="dot">.</span></a>
     <nav class="nav-links">
       <a href="#tools">Tools</a>
+      <a href="#webapp">Web app</a>
       <a href="#extension">Extension</a>
       <a href="https://github.com/open-pdf-edit/OpenPdfEdit">Source</a>
       <a class="nav-cta" href="#download">Download</a>
@@ -339,9 +353,10 @@ footer{border-top:1px solid var(--white-10);background:var(--color-background-al
     <h1>Edit PDFs<span class="accent">.</span><br>Keep them yours<span class="accent">.</span></h1>
     <p class="sub">A fast PDF editor with a Rust core, for macOS, Windows, and Chrome. Every page renders and every edit saves on your machine — documents are never uploaded.</p>
     <div class="hero-ctas">
-      <a class="btn btn-primary" href="#download">Download for desktop</a>
-      <a class="btn btn-ghost" href="#tools">See every tool</a>
+      <a class="btn btn-primary" href="https://app.openpdfedit.com">Open it in your browser</a>
+      <a class="btn btn-ghost" href="#download">Download for desktop</a>
     </div>
+    <p class="hero-note">No account, no upload, no install — it runs in the tab.</p>
   </div>
 </section>
 
@@ -360,7 +375,7 @@ footer{border-top:1px solid var(--white-10);background:var(--color-background-al
         </div>
         <div class="tool">
           <span class="tool-name">No watermarks or page caps</span>
-          <span class="tool-desc">The output is your document. Nothing is stamped on it and nothing is held back.</span>
+          <span class="tool-desc">The output is your document. Nothing of ours is stamped on it, no page limit, no export cap — a free file is a finished file.</span>
         </div>
         <div class="tool">
           <span class="tool-name">No AI you didn't ask for</span>
@@ -456,7 +471,7 @@ footer{border-top:1px solid var(--white-10);background:var(--color-background-al
         <h3>Protect &amp; finish</h3>
         <div class="tool-grid">
           <div class="tool"><span class="tool-name">Password protect</span><span class="tool-desc">AES-256 encryption, with per-recipient permissions.</span></div>
-          <div class="tool"><span class="tool-name">Watermark</span><span class="tool-desc">Tiled text or a logo, any angle, any density.</span></div>
+          <div class="tool"><span class="tool-name">Watermark <span class="tool-tag">Supporter</span></span><span class="tool-desc">Tiled text or a logo, any angle, any density. The one paid tool — 1,000 credits, once, unlocked for good.</span></div>
           <div class="tool"><span class="tool-name">Page numbers</span><span class="tool-desc">Any corner, any font, starting from any number.</span></div>
           <div class="tool"><span class="tool-name">Bates numbering</span><span class="tool-desc">Zero-padded, prefixed, for discovery sets.</span></div>
           <div class="tool"><span class="tool-name">Compress</span><span class="tool-desc">Save a smaller copy.</span></div>
@@ -479,6 +494,26 @@ footer{border-top:1px solid var(--white-10);background:var(--color-background-al
     <div class="count-line">
       <span><strong>40+ tools.</strong> No sign-up, no upload, no page limit.</span>
       <span>Working on: Office conversion, and typing straight into a form field on the page.</span>
+    </div>
+  </div>
+</section>
+
+<!-- Web app -->
+<section id="webapp">
+  <div class="wrap">
+    <h2>No install at all</h2>
+    <p class="tool-desc tools-intro" style="font-size:16px;margin-top:10px">
+      The same editor as a web page: the identical Rust core compiled to WebAssembly, running
+      entirely in your browser. Your documents are never uploaded, because there is nowhere to
+      upload them to — the page does the work, not a server. Load it once and it keeps working
+      with no network at all.
+    </p>
+    <div class="hero-ctas" style="margin-top:28px">
+      <a class="btn btn-primary" href="https://app.openpdfedit.com">Open the web app</a>
+    </div>
+    <div class="count-line">
+      <span>Chrome, Edge, Firefox, Safari</span>
+      <span>Saving over the original needs Chrome or Edge</span>
     </div>
   </div>
 </section>
@@ -509,7 +544,7 @@ footer{border-top:1px solid var(--white-10);background:var(--color-background-al
     </p>
     <div class="hero-ctas" style="margin-top:28px">
       <a class="btn btn-primary" href="https://github.com/open-pdf-edit/OpenPdfEdit/releases/latest">All downloads</a>
-      <a class="btn btn-ghost" href="https://github.com/open-pdf-edit/OpenPdfEdit">Read the source</a>
+      <a class="btn btn-ghost" href="https://app.openpdfedit.com">Or skip it — use the web app</a>
     </div>
     <div class="count-line">
       <span>macOS (Apple Silicon) · Windows · Chrome extension</span>
