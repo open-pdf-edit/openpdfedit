@@ -482,7 +482,25 @@ export class OpenApps {
     };
     // ---------- referral ----------
     referral = {
-        code: (signal) => this.#request("/v1/referral/code", { auth: "bearer", signal }),
+        /**
+         * Your referral code, and — when `appId` names an app the operator has
+         * registered a domain for — a ready-to-share link on that app's own
+         * domain.
+         *
+         * Pass the app id whenever you know it. A referral link has to carry the
+         * *product's* domain: an invite to OpenCapture that lands on the accounts
+         * server is an invite to nothing the recipient recognises, and one built
+         * from `location` inside a browser extension points at a
+         * `chrome-extension://` URL that resolves on nobody else's machine.
+         *
+         * Without an id, or for an app with no registered URL, `invite_url` comes
+         * back `null` and building the link is the caller's problem.
+         */
+        code: (appId, signal) => this.#request("/v1/referral/code", {
+            auth: "bearer",
+            query: { app: appId },
+            signal,
+        }),
         apply: (code, signal) => this.#request("/v1/referral/apply", {
             method: "POST",
             auth: "bearer",
