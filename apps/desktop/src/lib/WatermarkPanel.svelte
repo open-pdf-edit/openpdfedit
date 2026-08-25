@@ -48,9 +48,13 @@
 
   /** Keep in lockstep with `cell_size` in openpdfedit-watermark — the
    * preview is only honest if it divides the tile the same way. */
+  // Density is deliberately not a factor here — it only widens the gap
+  // between cells (see `cellGap`). It used to divide this, which made
+  // turning the dial down grow the lettering instead of spreading it
+  // out, since the font size is fitted to the cell. Keep in lockstep
+  // with `openpdfedit-watermark`'s `cell_size`.
   function cellSize(basisWidth: number): { width: number; height: number } {
-    const clamped = Math.min(3, Math.max(0.15, density));
-    const width = Math.max(40, Math.round((basisWidth * 0.16) / clamped));
+    const width = Math.max(40, Math.round(basisWidth * 0.16));
     const height = Math.max(24, Math.round(width * 0.5));
     return { width, height };
   }
@@ -117,8 +121,12 @@
                 { x: 0, y: H - Math.min(cell.height, Math.floor(H / 2)), width: W, height: Math.min(cell.height, Math.floor(H / 2)) },
               ];
 
-    const gapX = cell.width * 0.5;
-    const gapY = cell.height * 0.5;
+    // Mirrors `cell_gap`: half a cell at density 1 (unchanged from
+    // before density and size were separated), wider as density falls,
+    // and always positive so cells never overlap.
+    const clamped = Math.min(3, Math.max(0.15, density));
+    const gapX = (cell.width * 0.5) / clamped;
+    const gapY = (cell.height * 0.5) / clamped;
     const strideX = cell.width + gapX;
     const strideY = cell.height + gapY;
     const angle = (-orientationDeg * Math.PI) / 180;
