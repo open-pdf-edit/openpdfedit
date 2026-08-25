@@ -82,8 +82,17 @@ cp "$WEBAPP_DIR/manifest.webmanifest" "$DIST_DIR/manifest.webmanifest"
 # number from serving the first build's index.html and wasm forever —
 # and equally, keeps a rebuild that changed nothing from pointlessly
 # evicting a returning visitor's 9 MB of cached binaries.
+# Hashed from *inside* dist/, so the names that reach the digest are
+# relative. `xargs shasum` prints "<hash>  <path>", so hashing its output
+# with absolute paths made the build id depend on where the repository
+# happens to sit on disk: moving the checkout produced a brand-new id for
+# a byte-identical build, which tells every returning visitor's service
+# worker to evict and re-download ~9 MB of WebAssembly for nothing.
+# Relative paths keep what should matter — a renamed file is a different
+# build — and drop what shouldn't.
 BUILD_ID=$(
-  find "$DIST_DIR" -type f -print0 |
+  cd "$DIST_DIR" &&
+  find . -type f -print0 |
     LC_ALL=C sort -z |
     xargs -0 shasum -a 256 |
     shasum -a 256 |
