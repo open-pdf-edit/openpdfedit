@@ -276,31 +276,44 @@ which is the worst possible time to find out.
 From a checkout of this repository, on your machine:
 
 ```sh
-# the web app — a real build, not a copy of the source
-npm --prefix apps/webapp run build
-
-# ship both
-rsync -av --delete site/              root@104.36.65.54:/var/www/openpdfedit/
-rsync -av --delete apps/webapp/dist/  root@104.36.65.54:/var/www/openpdfedit-app/
+./scripts/deploy-webapp.sh           # the web app
+./scripts/deploy-webapp.sh --site    # the web app and the marketing site
+./scripts/deploy-webapp.sh --dry-run # what would change, changing nothing
 ```
 
-Same `/var/www/<name>` layout as `/var/www/opencapture`. `--delete`
-matters on the app: its JavaScript filenames are content hashes, so
-without it every deploy leaves the previous build's chunks behind
-forever.
+It builds first and stops if the build fails. That is the whole reason
+it exists: the two steps used to be two commands on two lines, and a
+shell runs the second whether or not the first succeeded — so a failed
+build published the *previous* build, and the deploy looked entirely
+normal. It also refuses to ship a tree missing any of the files the app
+cannot start without, and finishes by fetching
+`/service-worker.js` from the live site to confirm the build id there
+matches the one it just made. rsync exiting zero only means the files
+moved; that check is what says the site is serving them.
 
-If nginx runs as `www-data` and rsync lands files as root, fix the
-ownership once after the first deploy:
+`HOST=user@example.com ./scripts/deploy-webapp.sh` if the server moves.
+
+**Expect a password prompt per rsync.** If that gets tiresome,
+`ssh-copy-id root@104.36.65.54` once removes it.
+
+**The first run moves about 47 MB** — most of it the OCR engine and
+language data, which the app fetches only when someone actually OCRs
+something. Every run after that moves almost nothing: those files never
+change and rsync only sends what differs.
+
+Same `/var/www/<name>` layout as `/var/www/opencapture`. If nginx runs
+as `www-data` and rsync lands files as root, fix the ownership once
+after the first deploy:
 
 ```sh
 chown -R www-data:www-data /var/www/openpdfedit /var/www/openpdfedit-app
 ```
 
-**Redeploying the app later:** the service worker's cache name is a
-digest of the build, so a rebuild that changed something gets a new name
-and every returning visitor picks it up on their next load. A rebuild
-that changed nothing keeps the old name and costs them nothing. There is
-no version number to remember to bump.
+**Redeploying later:** the service worker's cache name is a digest of
+the build, so a rebuild that changed something gets a new name and every
+returning visitor picks it up on their next load. A rebuild that changed
+nothing keeps the old name and costs them nothing. There is no version
+number to remember to bump.
 
 ---
 
