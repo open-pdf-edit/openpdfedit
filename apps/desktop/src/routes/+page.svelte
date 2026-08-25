@@ -36,6 +36,7 @@
   import { untrack } from "svelte";
   import type { AnnotationPayload } from "$lib/PdfPage.svelte";
   import BrandMark from "$lib/BrandMark.svelte";
+  import InstallPrompt from "$lib/InstallPrompt.svelte";
   import Icon from "$lib/Icon.svelte";
   import { tooltip } from "$lib/tooltip";
 
@@ -2283,6 +2284,10 @@
           <Icon name="folder-open" size={15} />
           Open PDF…
         </button>
+        <!-- Here rather than in the topbar: this is the one moment
+             someone is deciding whether to keep the thing, and it is
+             gone the instant a document is open. -->
+        <InstallPrompt />
       </div>
     {/if}
   </div>
