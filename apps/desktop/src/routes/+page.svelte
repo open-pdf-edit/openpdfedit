@@ -505,6 +505,9 @@
     await switchToTab(next);
   }
   let activeTool = $state<Tool>("select");
+  /** Set when a text field has just been drawn, so the page can put the
+   * cursor in it once it renders. */
+  let focusField = $state<{ name: string; nonce: number } | null>(null);
   // Plain (non-reactive) mutable variable, deliberately: it only needs to
   // remember what the *previous* $effect run saw, not to trigger runs of
   // its own. Seeded to activeTool's own initial value below.
@@ -1166,31 +1169,32 @@
 
   async function handleCreateField(pageIndex: number, rect: [number, number, number, number], kind: "text" | "checkbox") {
     if (!doc || mutationBusy) return;
-    const label = kind === "text" ? "text field" : "checkbox";
-    const name = await showPrompt(`Name for the new ${label}:`, {
-      // Titled after the tool that opened it. It used to say "Add form
-      // field" while the tool said "Add text field", which reads like a
-      // different feature.
-      title: kind === "text" ? "Add text field" : "Add checkbox",
-      defaultValue: suggestFieldName(kind),
-      placeholder: "e.g. full_name",
-      confirmLabel: "Add",
-    });
-    if (!name || name.trim().length === 0) return;
+    // No naming prompt. A field's name is the key its value is stored
+    // under — it matters when a form's data gets exported, and not at
+    // all to someone adding a box to type in — so it's generated here
+    // and the dialog that used to ask for it is gone. Drawing a box and
+    // then being interrogated about it is the wrong order: the drawing
+    // *was* the instruction.
+    const name = suggestFieldName(kind);
     error = null;
     mutationBusy = true;
     try {
-      doc = await backend.createFormField({ handle: doc.handle, pageIndex, rect, kind, name: name.trim() });
+      doc = await backend.createFormField({ handle: doc.handle, pageIndex, rect, kind, name });
       await Promise.all([refreshAnnotations(), refreshFormFields()]);
-      showToast(
-        kind === "text"
-          ? `Added "${name.trim()}". Click it on the page and type.`
-          : `Added "${name.trim()}". Tick it in the Form fields panel.`,
-        { title: kind === "text" ? "Text field" : "Checkbox" },
-      );
-      // A checkbox still needs the panel — an on-page control for it
-      // would be a toggle, not a text box, and isn't built yet.
-      if (kind === "checkbox") showForms = true;
+      if (kind === "text") {
+        // The field is only clickable under the select tool (a markup
+        // gesture has to pass through fields, or drawing over a form
+        // would be swallowed by them). Staying on "Add text field" is
+        // what made a just-drawn box look inert, so switch, then put the
+        // cursor in it: draw, type, done.
+        activeTool = "select";
+        focusField = { name, nonce: focusField ? focusField.nonce + 1 : 1 };
+      } else {
+        // A checkbox still needs the panel — an on-page control for it
+        // would be a toggle, not a text box, and isn't built yet.
+        showForms = true;
+        showToast(`Added "${name}". Tick it in the Form fields panel.`, { title: "Checkbox" });
+      }
     } catch (e) {
       error = formatError(e);
     } finally {
@@ -2056,6 +2060,7 @@
         onMoveObject={handleMoveObject}
         {formFields}
         onFillField={handleFillFieldInline}
+        {focusField}
         {searchHits}
         activeHitIndex={searchActiveIndex}
         {scrollToPage}

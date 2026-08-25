@@ -491,3 +491,71 @@ test("the real UI: open, paint, highlight, save, delete/undo/redo, merge (incl. 
 
   await page.close();
 });
+
+
+/** Drawing a text field, in its own page rather than appended to the
+ * marathon above: this needs a document with nothing else going on, and
+ * the assertions are about one interaction rather than a sequence. */
+test("the real UI: drawing a text field leaves it focused and typeable, with no dialog", async ({
+  context,
+  extensionId,
+}) => {
+  test.setTimeout(60_000);
+
+  const page = await context.newPage();
+  await installFilePickerStubs(page);
+  await page.setViewportSize({ width: 1200, height: 1400 });
+  await page.goto(`chrome-extension://${extensionId}/index.html`);
+  await seedFile(page, "a.pdf", TEXT_PDF_BASE64);
+
+  await queueOpenPick(page, ["a.pdf"]);
+  await page.locator("header.topbar").getByRole("button", { name: "Open PDF…" }).click();
+  await expect(page.locator(".path-bar__text")).toHaveText("a.pdf");
+  await expect(page.locator("canvas")).toBeVisible();
+
+  // Drawing the box used to open a naming dialog, and the field it
+  // produced was inert until the tool was switched back to Select by
+  // hand — so the only way to put text in it was the Form fields panel.
+  // Both halves are asserted, because both were needed before "draw a
+  // box, then type in it" was true.
+  await page.getByRole("button", { name: "Add text field", exact: true }).click();
+  const layer = page.locator(".interaction-layer").first();
+  const box = await layer.boundingBox();
+  if (!box) throw new Error("interaction-layer has no bounding box — page didn't render?");
+  const from = pdfPointToLocalCssPx(100, 400);
+  const to = pdfPointToLocalCssPx(300, 360);
+  await page.mouse.move(box.x + from.x, box.y + from.y);
+  await page.mouse.down();
+  await page.mouse.move(box.x + to.x, box.y + to.y, { steps: 5 });
+  await page.mouse.up();
+
+  const field = page.locator("input.form-field").first();
+  await expect(field).toBeVisible({ timeout: 15_000 });
+  // Nothing interrupted the drawing.
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  // The tool switched itself, so the field is live rather than inert...
+  await expect(page.getByRole("button", { name: "Select", exact: true })).toHaveClass(
+    /oa-rail-btn--selected/,
+  );
+  await expect(field).toHaveClass(/form-field--interactive/);
+  // ...and the cursor is already in it, so typing needs no click first.
+  await expect(field).toBeFocused();
+
+  await page.keyboard.type("typed on the page");
+  await field.blur();
+
+  // Committed through the real backend rather than left sitting in the
+  // DOM: the value survives a re-read of the field list.
+  await expect
+    .poll(
+      async () =>
+        page.evaluate(() =>
+          (document.querySelector("input.form-field") as HTMLInputElement | null)?.value,
+        ),
+      { timeout: 10_000 },
+    )
+    .toBe("typed on the page");
+  await expect(page.locator(".banner")).toHaveCount(0);
+
+  await page.close();
+});

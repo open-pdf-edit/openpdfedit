@@ -77,6 +77,11 @@
     formFields?: PageFormField[];
     /** Commits a field's new value. */
     onFillField?: (name: string, value: string) => void;
+    /** A field to put the cursor in — set when one has just been drawn,
+     * so it can be typed into without a second click. The `nonce` is
+     * what makes re-focusing the same field work: a bare name wouldn't
+     * change, so the effect wouldn't re-run. */
+    focusField?: { name: string; nonce: number } | null;
   }
 
   /** One fillable text field, in PDF page-space points. */
@@ -122,7 +127,27 @@
     searchMatches = [],
     formFields = [],
     onFillField,
+    focusField = null,
   }: Props = $props();
+
+  /** The rendered inputs, keyed by field name, so a just-drawn field can
+   * be focused without reaching into the DOM by selector. */
+  const fieldInputs = new Map<string, HTMLInputElement>();
+
+  // Focusing has to wait for the input to exist: the field is drawn, the
+  // document reloads, and only then does this page render an input for
+  // it. `focusField` changing is that signal — by the time the prop
+  // arrives with a name this page owns, the `{#each}` above has already
+  // run for the refreshed field list.
+  $effect(() => {
+    const request = focusField;
+    if (!request) return;
+    void request.nonce;
+    const input = fieldInputs.get(request.name);
+    if (!input) return;
+    input.focus();
+    input.select();
+  });
 
   const MOVE_TOOLS: Tool[] = ["moveText", "moveImage"];
 
@@ -434,6 +459,13 @@
          markup gesture must still pass through to the page. -->
     {#each formFields as field (field.name)}
       <input
+        bind:this={
+          () => fieldInputs.get(field.name) ?? null,
+          (el) => {
+            if (el) fieldInputs.set(field.name, el);
+            else fieldInputs.delete(field.name);
+          }
+        }
         class="form-field"
         class:form-field--interactive={activeTool === "select" && !field.readOnly}
         value={field.value}

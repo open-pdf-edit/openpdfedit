@@ -42,6 +42,10 @@
     /** Every fillable field in the document; grouped per page here. */
     formFields?: FormFieldDto[];
     onFillField?: (name: string, value: string) => void;
+    /** A field to put the cursor in, once it exists — see
+     * `PdfPage`'s own prop. Passed to every page; only the one that
+     * renders a field by that name acts on it. */
+    focusField?: { name: string; nonce: number } | null;
   }
 
   let {
@@ -63,6 +67,7 @@
     onCurrentPageChange,
     formFields = [],
     onFillField,
+    focusField = null,
   }: Props = $props();
 
   // 96 CSS px per inch, 72 PDF points per inch — the standard point-to-CSS-px
@@ -208,6 +213,7 @@
       searchMatches={hitsByPage.get(i) ?? []}
       formFields={fieldsByPage.get(i) ?? []}
       {onFillField}
+      {focusField}
     />
   {/each}
 </div>
