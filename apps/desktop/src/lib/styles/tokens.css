@@ -173,6 +173,11 @@
   --control-h-md: 34px;
   --control-h-lg: 42px;
   --rail-w: 56px;
+  /* The tool bar's height on a phone, where the rail lies along the
+     bottom instead of down the side. 52px keeps a 44px target with room
+     to breathe, and matches the topbar so the page is centred between
+     two equal bands. */
+  --mobile-toolbar-h: 52px;
   --topbar-h: 52px;
 
   /* ---- Radius ---- */

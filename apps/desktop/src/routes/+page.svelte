@@ -429,6 +429,48 @@
   });
   let zoom = $state(1);
 
+  /* Below this the layout switches to the phone arrangement — the same
+   * number as the media query at the bottom of this file. Kept in both
+   * places rather than plumbed through, because CSS cannot read a
+   * constant and a wrong guess here only mis-sizes the first render. */
+  const PHONE_MAX_PX = 720;
+
+  /** The zoom that makes a page fill the width available to it.
+   *
+   * A Letter page at 100% is 816 CSS px — twice a phone's width, so a
+   * document opened at zoom 1 shows its left half and nothing suggests
+   * the rest is there. Desktop keeps 100%, where a page fits and a
+   * predictable scale is worth more than filling the window. */
+  function fitWidthZoom(pageWidthPt: number): number {
+    const available = window.innerWidth - 16; // the viewer's own padding
+    const atFullSize = pageWidthPt * (96 / 72);
+    return Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, available / atFullSize));
+  }
+
+  /** Which document the fitted zoom was last applied for, so it happens
+   * once per document rather than on every render. */
+  let fittedFor: OpenedDocument | null = null;
+
+  /* Fit a newly opened document to a phone's width.
+   *
+   * An effect rather than a call at the open site, because two earlier
+   * attempts there were both wrong about *when* they ran — one measured
+   * the document being replaced, the other was undone by the tab's own
+   * stored zoom. Reacting to `doc` cannot be early or late by
+   * construction.
+   *
+   * Only for a document not yet fitted, so someone who zooms keeps their
+   * zoom, and only on a phone: on a desktop a page fits at 100% and a
+   * predictable scale is worth more than filling the window. */
+  $effect(() => {
+    const current = doc;
+    if (!current || current === fittedFor) return;
+    fittedFor = current;
+    if (typeof window === "undefined" || window.innerWidth > PHONE_MAX_PX) return;
+    const first = current.page_sizes?.[0];
+    if (first) zoom = fitWidthZoom(first.width);
+  });
+
   // `doc` is reassigned wholesale by every mutating handler (the handle
   // rotates on each write), and `zoom`/`currentPage` change as the user
   // works. Mirroring them back into the active tab here means no handler
@@ -551,6 +593,10 @@
   let showSignaturePad = $state(false);
   let showAccount = $state(false);
   let showWatermark = $state(false);
+  /** Phone only: whether the document-tools sheet is open. On a desktop
+   * those tools sit in the topbar and this is never read — see the
+   * `.topbar__group--overflow` rules. */
+  let moreOpen = $state(false);
   // ---- The Supporter gate ----
   //
   // Two tools are paid: the watermark and OCR. One unlock covers both —
@@ -1763,14 +1809,6 @@
         >
           <Icon name="save" size={15} spin={saveBusy} />
         </button>
-        <button class="oa-icon-btn oa-icon-btn--sm" onclick={handleSaveAs} disabled={saveBusy || mutationBusy} use:tooltip={"Save a copy (⌘⇧S)"} aria-label="Save as">
-          <Icon name="copy" size={15} />
-        </button>
-        {#if canPrint}
-          <button class="oa-icon-btn oa-icon-btn--sm" onclick={handlePrint} disabled={printBusy || mutationBusy} use:tooltip={"Print (⌘P)"} aria-label="Print">
-            <Icon name="printer" size={15} spin={printBusy} />
-          </button>
-        {/if}
         <button class="oa-icon-btn oa-icon-btn--sm" onclick={handleUndo} disabled={!doc.can_undo || undoRedoBusy || mutationBusy} use:tooltip={"Undo (⌘Z)"} aria-label="Undo">
           <Icon name="undo-2" size={15} />
         </button>
@@ -1779,7 +1817,7 @@
         </button>
       </div>
 
-      <div class="topbar__group">
+      <div class="topbar__group topbar__group--zoom">
         <button class="oa-icon-btn oa-icon-btn--sm" onclick={zoomOut} disabled={zoom <= MIN_ZOOM} aria-label="Zoom out">
           <Icon name="zoom-out" size={15} />
         </button>
@@ -1794,10 +1832,33 @@
       </span>
     {/if}
 
+    {#if doc}
+      <!-- Phone only (see the media query): the document tools do not fit a
+           390px topbar, so they move to a sheet. The buttons themselves are
+           not duplicated — the same groups are repositioned by CSS, which is
+           what keeps one set of handlers and one set of disabled states. -->
+      <button
+        class="topbar__more oa-icon-btn oa-icon-btn--sm"
+        class:oa-icon-btn--selected={moreOpen}
+        onclick={() => (moreOpen = !moreOpen)}
+        aria-label="More tools"
+        aria-expanded={moreOpen}
+      >
+        <Icon name="layout-panel-left" size={15} />
+      </button>
+    {/if}
     <div class="topbar__spacer"></div>
 
     {#if doc}
-      <div class="topbar__group">
+      <div class="topbar__group topbar__group--overflow" class:is-open={moreOpen}>
+        <button class="oa-icon-btn oa-icon-btn--sm" onclick={handleSaveAs} disabled={saveBusy || mutationBusy} use:tooltip={"Save a copy (⌘⇧S)"} aria-label="Save as">
+          <Icon name="copy" size={15} />
+        </button>
+        {#if canPrint}
+          <button class="oa-icon-btn oa-icon-btn--sm" onclick={handlePrint} disabled={printBusy || mutationBusy} use:tooltip={"Print (⌘P)"} aria-label="Print">
+            <Icon name="printer" size={15} spin={printBusy} />
+          </button>
+        {/if}
         <button
           class="oa-icon-btn oa-icon-btn--sm"
           class:oa-icon-btn--selected={showComments}
@@ -2391,6 +2452,13 @@
     gap: 2px;
   }
 
+  /* Phone only — the media query at the end of this file turns it on.
+     Hidden here rather than only shown there, or a desktop gets a button
+     that toggles a sheet it never renders. */
+  .topbar__more {
+    display: none;
+  }
+
   .topbar__spacer {
     flex: 1;
   }
@@ -2530,5 +2598,148 @@
   .empty-state p {
     font: var(--type-body);
     color: var(--text-muted);
+  }
+
+  /* ---------------------------------------------------------------- *
+   * Phones.
+   *
+   * The desktop layout puts 24 buttons in the topbar and a permanent
+   * 56px rail down the left. On a 390px screen that wrapped over the
+   * path bar, ran a second row off the right edge, and left a sliver
+   * for the page — the thing anyone actually came to look at.
+   *
+   * Nothing is duplicated to fix it. The same buttons, handlers and
+   * disabled states are simply drawn somewhere else: the document tools
+   * become a sheet, the tool rail becomes a thumb-reachable bar along
+   * the bottom, and side panels become full-screen. One set of markup,
+   * two arrangements.
+   * ---------------------------------------------------------------- */
+  @media (max-width: 720px) {
+    /* The page gets the room. Everything below is in service of that. */
+    .topbar {
+      gap: 2px;
+      padding: 0 var(--space-2);
+    }
+
+    .topbar__more {
+      display: inline-flex;
+    }
+
+    /* The document tools, and zoom, as a sheet above the tool bar rather
+       than a row that cannot fit. `position: fixed` rather than a
+       separate component: the buttons keep their identity, so a disabled
+       Save is still disabled here. */
+    .topbar__group--overflow {
+      position: fixed;
+      left: 0;
+      right: 0;
+      bottom: var(--mobile-toolbar-h);
+      z-index: 60;
+      display: none;
+      flex-wrap: wrap;
+      justify-content: flex-start;
+      gap: var(--space-2);
+      padding: var(--space-4);
+      background: var(--surface-card);
+      border-top: var(--border-width) solid var(--border-hairline);
+      box-shadow: var(--shadow-xl);
+      max-height: 55dvh;
+      overflow-y: auto;
+    }
+
+    .topbar__group--overflow.is-open {
+      display: flex;
+    }
+
+    /* Bigger targets in the sheet: these are fingers, not a cursor, and
+       44px is the smallest thing Apple and Google both consider tappable. */
+    .topbar__group--overflow :global(.oa-icon-btn) {
+      width: 44px;
+      height: 44px;
+    }
+
+    /* Tools along the bottom, where a thumb reaches. Horizontal because
+       there are seventeen of them and a phone has width to scroll, not
+       height to spare. */
+    .body {
+      flex-direction: column-reverse;
+    }
+
+    .rail {
+      width: 100%;
+      height: var(--mobile-toolbar-h);
+      flex-direction: row;
+      align-items: center;
+      gap: 2px;
+      padding: 0 var(--space-2);
+      overflow-x: auto;
+      overflow-y: hidden;
+      border-right: none;
+      border-top: var(--border-width) solid var(--border-hairline);
+      /* Momentum scrolling, and no scrollbar eating a phone's height. */
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: none;
+    }
+
+    .rail::-webkit-scrollbar {
+      display: none;
+    }
+
+    .rail :global(.oa-rail-btn) {
+      flex: 0 0 auto;
+      width: 44px;
+      height: 44px;
+    }
+
+    .rail__spacer {
+      display: none;
+    }
+
+    .rail__colors {
+      flex-direction: row;
+      gap: 6px;
+      padding-left: var(--space-2);
+      border-top: none;
+      border-left: var(--border-width) solid var(--border-hairline);
+    }
+
+    .rail__gap {
+      margin-top: 0;
+      margin-left: var(--space-2);
+    }
+
+    /* A side panel beside a 390px page is not a panel, it is a column an
+       inch wide. Full screen, above the sheet. */
+    .body :global(aside:not(.rail)),
+    .body :global(.panel) {
+      position: fixed;
+      inset: var(--topbar-h) 0 var(--mobile-toolbar-h) 0;
+      width: auto;
+      max-width: none;
+      z-index: 55;
+      border-left: none;
+      overflow-y: auto;
+    }
+
+    .path-bar {
+      padding: 4px var(--space-3);
+    }
+
+    /* Zoom buttons go, rather than joining the sheet. A phone already
+       fits the page to its width when a document opens, and pinch is the
+       gesture people reach for — two more buttons would be a worse
+       answer than the one the platform already has. They were briefly in
+       the sheet, where they sat underneath the document tools at the
+       same fixed position and could not be tapped at all. */
+    .topbar__group--zoom {
+      display: none;
+    }
+
+    /* "Page 1 of 12" is the first thing to go when the topbar is full:
+       the path bar already names the document, and the page a reader is
+       on is obvious from the page. */
+    .topbar__meta {
+      display: none;
+    }
   }
 </style>
