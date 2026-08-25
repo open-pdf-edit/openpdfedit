@@ -14,12 +14,22 @@ const ORIGIN = "http://localhost:8099";
  * product promises cannot happen.
  */
 test("every OCR asset is served from our own origin", async ({ request }) => {
+  // Every variant tesseract.js may ask for, not the ones this machine
+  // happens to pick. It chooses at runtime from what the browser
+  // supports — plain, SIMD or relaxed SIMD, each with an LSTM-only twin
+  // — so a subset passes wherever it was tested and fails elsewhere with
+  // "failed to load". That is not hypothetical: the first version of
+  // this shipped four of them and current Chrome asked for a fifth.
+  const cores = ["", "-simd", "-relaxedsimd"].flatMap((simd) =>
+    ["", "-lstm"].map((lstm) => `tesseract-core${simd}${lstm}`),
+  );
   for (const [path, minBytes] of [
     ["/ocr/worker.min.js", 10_000],
-    ["/ocr/tesseract-core-simd-lstm.wasm", 1_000_000],
-    ["/ocr/tesseract-core-simd-lstm.wasm.js", 1_000_000],
-    ["/ocr/tesseract-core-lstm.wasm", 1_000_000],
     ["/ocr/eng.traineddata", 3_000_000],
+    ...cores.flatMap((core) => [
+      [`/ocr/${core}.wasm`, 1_000_000] as const,
+      [`/ocr/${core}.wasm.js`, 1_000_000] as const,
+    ]),
   ] as const) {
     const response = await request.get(`${ORIGIN}${path}`);
     expect(response.status(), `${path} must be served`).toBe(200);

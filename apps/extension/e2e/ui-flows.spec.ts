@@ -807,3 +807,39 @@ test("the account panel: a tall dialog stays inside a short window and scrolls",
 
   await page.close();
 });
+
+test("the Supporter gate: OCR is gated too, and one unlock covers both", async ({
+  context,
+  extensionId,
+}) => {
+  const page = await context.newPage();
+  await installAccountStubs(page, { signedIn: true, unlocked: false, unlock: "ok" });
+  await installFilePickerStubs(page);
+  await page.setViewportSize({ width: 1200, height: 1400 });
+  await page.goto(`chrome-extension://${extensionId}/index.html`);
+  await seedFile(page, "a.pdf", TEXT_PDF_BASE64);
+  await queueOpenPick(page, ["a.pdf"]);
+  await page.locator("header.topbar").getByRole("button", { name: "Open PDF…" }).click();
+  await expect(page.locator(".path-bar__text")).toHaveText("a.pdf");
+
+  // Reaching for OCR must raise the gate, not run it.
+  await page.getByRole("button", { name: "OCR document" }).click();
+  const gate = page.getByRole("dialog", { name: "Supporter feature" });
+  await expect(gate).toBeVisible({ timeout: 15_000 });
+  // Titled for the tool that was clicked, so it does not look like the
+  // wrong panel opened...
+  await expect(gate.getByRole("heading", { name: "OCR" })).toBeVisible();
+  // ...while saying plainly that the purchase is not per tool.
+  await expect(gate).toContainText("both Supporter tools");
+
+  await page.getByRole("button", { name: "Not now" }).click();
+
+  // And the watermark shares the entitlement rather than having its own.
+  await page.getByRole("button", { name: "Watermark document" }).click();
+  await expect(gate).toBeVisible({ timeout: 15_000 });
+  await expect(gate.getByRole("heading", { name: "Watermark" })).toBeVisible();
+  await gate.getByRole("button", { name: /Unlock for/ }).click();
+  await expect(page.getByRole("dialog", { name: "Watermark" })).toBeVisible({ timeout: 15_000 });
+
+  await page.close();
+});

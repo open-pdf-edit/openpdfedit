@@ -83,11 +83,19 @@ OCR_DIR="$DIST_DIR/ocr"
 TESS_CORE="$DESKTOP_DIR/node_modules/tesseract.js-core"
 TESS_JS="$DESKTOP_DIR/node_modules/tesseract.js/dist"
 mkdir -p "$OCR_DIR"
-for f in tesseract-core-simd-lstm.wasm.js tesseract-core-simd-lstm.wasm \
-         tesseract-core-lstm.wasm.js tesseract-core-lstm.wasm; do
-  [ -f "$TESS_CORE/$f" ] || { echo "build.sh: missing $TESS_CORE/$f — run npm install in apps/desktop" >&2; exit 1; }
-  cp "$TESS_CORE/$f" "$OCR_DIR/$f"
-done
+# Every core variant, not a chosen few. tesseract.js picks one at
+# runtime from what the browser supports — plain, SIMD, or relaxed SIMD,
+# each with an LSTM-only twin — and asks for it by name. Shipping a
+# subset works on whatever machine the build was tested on and fails on
+# someone else's with "failed to load", which is exactly what happened:
+# the guess omitted relaxedsimd, which is what current Chrome asks for.
+# They are ~2.7 MB each but only one is ever fetched, so the cost is disk
+# on the server, not bandwidth for the user.
+cp "$TESS_CORE"/tesseract-core*.wasm "$TESS_CORE"/tesseract-core*.wasm.js "$OCR_DIR/"
+[ -f "$OCR_DIR/tesseract-core-relaxedsimd-lstm.wasm.js" ] || {
+  echo "build.sh: no tesseract core variants found in $TESS_CORE — run npm install in apps/desktop" >&2
+  exit 1
+}
 [ -f "$TESS_JS/worker.min.js" ] || { echo "build.sh: missing $TESS_JS/worker.min.js" >&2; exit 1; }
 cp "$TESS_JS/worker.min.js" "$OCR_DIR/worker.min.js"
 cp "$WORKSPACE_DIR/.vendor/tesseract/eng.traineddata" "$OCR_DIR/eng.traineddata"

@@ -85,27 +85,6 @@ let OpenAppsAccount = class OpenAppsAccount extends OpenAppsElement {
     get canConnectGoogle() {
         return (this.enabled?.google ?? false) && !this.linked("google");
     }
-    /**
-     * Sign out.
-     *
-     * This lives here, and not only on `<openapps-login>`, because signing
-     * out is a property of *having* an account rather than of getting one.
-     * A host that cannot mount the login element — anything whose window
-     * holds unsaved work, since that element's Google button navigates the
-     * whole page away — could otherwise show a signed-in account with no
-     * way to leave it. That is exactly what happened: one app had a sign-out
-     * and another didn't, decided by which elements each happened to mount.
-     *
-     * The event and the notify() are what let the rest of a page react —
-     * a balance elsewhere, a host's own header — without any of them
-     * knowing about each other.
-     */
-    async signOut() {
-        await this.run(() => this.sdk.auth.logout());
-        this.me = null;
-        this.emit("openapps-logout", null);
-        notify();
-    }
     async connectGoogle(merge = false) {
         await this.run(async () => {
             // Come back to this page, minus any fragment — the server puts the
@@ -337,9 +316,6 @@ let OpenAppsAccount = class OpenAppsAccount extends OpenAppsElement {
         ${this.error ? html `<p class="error" role="alert">${this.error}</p>` : nothing}
       </div>
 
-      <button class="signout" ?disabled=${this.busy} @click=${this.signOut}>
-        Sign out
-      </button>
     `;
     }
     renderMergePrompt(pending) {
@@ -385,33 +361,6 @@ let OpenAppsAccount = class OpenAppsAccount extends OpenAppsElement {
       }
       .right {
         text-align: right;
-      }
-      /* Below the card, full width, quiet — the same shape and place
-         OpenCapture arrived at independently when it had to build this
-         itself. Bottom is where a finished-with action belongs: nobody
-         opens an account panel in order to sign out, and putting it
-         beside the balance makes the one control that throws a session
-         away the easiest one to reach by accident. */
-      .signout {
-        display: block;
-        width: 100%;
-        margin-top: 16px;
-        font: inherit;
-        font-size: 0.875rem;
-        padding: 9px 12px;
-        border-radius: var(--radius-md, 8px);
-        border: 1px solid var(--border-hairline, var(--fb-hairline));
-        background: transparent;
-        color: var(--text-muted, var(--fb-muted));
-        cursor: pointer;
-      }
-      .signout:hover:not(:disabled) {
-        color: var(--text-strong, var(--fb-strong));
-        border-color: var(--text-muted, var(--fb-muted));
-      }
-      .signout:disabled {
-        opacity: 0.5;
-        cursor: default;
       }
       .balance {
         font-size: 1.5rem;

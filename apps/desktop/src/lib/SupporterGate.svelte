@@ -26,6 +26,10 @@
 
   interface Props {
     state: GateState;
+    /** Which tool the user just reached for. One unlock covers both, so
+     * this only changes what the panel is *about* — never what is
+     * bought. */
+    tool?: "watermark" | "ocr";
     /** Open the account panel — sign in, or top up. */
     onAccount: () => void;
     /** Spend the credits. */
@@ -35,7 +39,9 @@
     onClose: () => void;
   }
 
-  let { state, onAccount, onUnlock, onRetry, onClose }: Props = $props();
+  let { state, tool = "watermark", onAccount, onUnlock, onRetry, onClose }: Props = $props();
+
+  const title = $derived(tool === "ocr" ? "OCR" : "Watermark");
 
   const price = SUPPORTER_COST.toLocaleString();
 
@@ -61,8 +67,8 @@
     <div class="oa-dialog gate-dialog">
       <div class="oa-dialog__header">
         <div class="oa-dialog__header-text">
-          <h2 class="oa-dialog__title">Watermark</h2>
-          <p class="oa-dialog__subtitle">A Supporter feature — {price} credits, once, yours for good.</p>
+          <h2 class="oa-dialog__title">{title}</h2>
+          <p class="oa-dialog__subtitle">A Supporter feature — {price} credits, once, for both Supporter tools.</p>
         </div>
         <button class="oa-icon-btn oa-icon-btn--sm" onclick={onClose} aria-label="Close">
           <Icon name="x" size={15} />
@@ -74,12 +80,15 @@
           <p class="gate-message">Checking your account…</p>
         {:else if state.kind === "signed-out"}
           <p class="gate-message">
-            Sign in to unlock the watermark tool. It costs {price} credits once, and stays unlocked on
-            every device you sign in on.
+            Sign in to unlock {title}. One {price}-credit purchase covers the watermark
+            <em>and</em> OCR, on every device you sign in on.
           </p>
         {:else if state.kind === "locked"}
           <p class="gate-message">
-            Tile text or a logo across every page. {price} credits, charged once — not a subscription,
+            {tool === "ocr"
+              ? "Make a scan searchable — select, search and copy its text."
+              : "Tile text or a logo across every page."}
+            {price} credits, charged once, and it unlocks both Supporter tools — not a subscription,
             and not per document.
           </p>
         {:else if state.kind === "unlocking"}
