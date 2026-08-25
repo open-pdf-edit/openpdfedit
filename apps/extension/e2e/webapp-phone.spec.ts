@@ -109,3 +109,74 @@ test("a desktop window is untouched by any of it", async ({ browser }) => {
 
   await ctx.close();
 });
+
+/**
+ * Touch on the page itself.
+ *
+ * The annotation layer covers every page edge to edge and used to carry
+ * `touch-action: none` unconditionally, so on a phone a finger dragged
+ * anywhere over a page scrolled nothing and pinching zoomed nothing —
+ * the document was reachable only through the scrollbar it does not
+ * have. The tools that need the gesture still take it; the ones that
+ * only need a point no longer do.
+ */
+test("a finger can scroll the document", async ({ browser }) => {
+  const ctx = await browser.newContext({ ...devices["iPhone 13"] });
+  const page = await ctx.newPage();
+  await openDocument(page);
+
+  const touchAction = await page.evaluate(
+    () => getComputedStyle(document.querySelector(".interaction-layer")!).touchAction,
+  );
+  expect(touchAction, "the select tool must not swallow scrolling").not.toBe("none");
+
+  // A drawing tool is the other half: it has to keep the gesture, or a
+  // highlight drawn across a line scrolls the line away mid-stroke.
+  await page.getByRole("button", { name: "Highlight", exact: true }).click();
+  const drawing = await page.evaluate(
+    () => getComputedStyle(document.querySelector(".interaction-layer")!).touchAction,
+  );
+  expect(drawing, "a drawing tool must own the gesture").toBe("none");
+
+  await ctx.close();
+});
+
+test("a finger dragged under a tap tool scrolls instead of acting", async ({ browser }) => {
+  const ctx = await browser.newContext({ ...devices["iPhone 13"] });
+  const page = await ctx.newPage();
+  await openDocument(page);
+
+  // Note is the visible one of the tap tools: it opens a dialog, so both
+  // outcomes can be seen. Erase behaves identically and is the one that
+  // would hurt — flicking through a document would delete whatever the
+  // flick happened to start on.
+  await page.getByRole("button", { name: "Note", exact: true }).click();
+
+  const layer = page.locator(".interaction-layer");
+  const box = (await layer.boundingBox())!;
+  const x = Math.round(box.x + box.width / 2);
+  const y = Math.round(box.y + box.height / 2);
+
+  const touch = (type: string, cx: number, cy: number) =>
+    layer.dispatchEvent(type, {
+      pointerId: 1,
+      pointerType: "touch",
+      isPrimary: true,
+      bubbles: true,
+      clientX: cx,
+      clientY: cy,
+    });
+
+  // A scroll: down, well away, up.
+  await touch("pointerdown", x, y);
+  await touch("pointermove", x, y - 120);
+  await touch("pointerup", x, y - 120);
+  await expect(page.getByRole("dialog"), "a scroll must not add a note").toHaveCount(0);
+
+  // A tap: down and up in the same place.
+  await touch("pointerdown", x, y);
+  await touch("pointerup", x + 2, y + 1);
+  await expect(page.getByRole("dialog")).toBeVisible();
+
+  await ctx.close();
+});
