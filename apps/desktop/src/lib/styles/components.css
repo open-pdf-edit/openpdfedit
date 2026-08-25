@@ -332,6 +332,17 @@
   border-radius: var(--radius-xl);
   box-shadow: var(--shadow-xl);
   overflow: hidden;
+  /* A dialog used to grow to whatever its content needed, with no way to
+     scroll it: the scrim centres it, so a tall one ran off the top and
+     bottom of the window at once, taking its title and its buttons with
+     it. The account panel reached that first — it stacks three elements
+     whose height depends on how many credit packages are for sale — but
+     nothing stopped any other dialog doing the same on a short window.
+     The scrim's own padding is --space-6 top and bottom, so this is the
+     tallest a dialog can be while still sitting inside it. */
+  max-height: calc(100dvh - var(--space-6) * 2);
+  display: flex;
+  flex-direction: column;
 }
 .oa-dialog__header {
   display: flex;
@@ -349,6 +360,13 @@
   font: var(--type-body);
   color: var(--text-muted);
   white-space: pre-wrap;
+  /* The body is what scrolls, so the header stays put and the footer's
+     buttons stay reachable. `min-height: 0` is what actually allows it:
+     a flex item's default `min-height: auto` refuses to shrink below its
+     content, which would push the whole dialog past its max-height again
+     and undo the rule above. */
+  overflow-y: auto;
+  min-height: 0;
 }
 .oa-dialog__footer {
   display: flex;

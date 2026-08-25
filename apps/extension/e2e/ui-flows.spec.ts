@@ -708,3 +708,83 @@ test("the Supporter gate: too few credits says how many, and doesn't open the to
 
   await page.close();
 });
+
+/** A dialog must not grow past the window.
+ *
+ * The account panel is the one that reaches this first — it stacks three
+ * elements whose combined height depends on how many credit packages are
+ * for sale, none of which this app controls — but the rule being tested
+ * belongs to the shared dialog, not to that panel. On a short window an
+ * uncapped dialog is centred by the scrim and so runs off the top *and*
+ * bottom at once, taking its own title and buttons with it, with nothing
+ * to scroll.
+ *
+ * Stubbed rather than signed in: the height under test is a function of
+ * the account endpoints' responses, and a real account would make this
+ * pass or fail depending on how many packages happened to be on sale
+ * that day.
+ */
+test("the account panel: a tall dialog stays inside a short window and scrolls", async ({
+  context,
+  extensionId,
+}) => {
+  const page = await context.newPage();
+  // Deliberately short — a laptop with the browser chrome taking its cut.
+  const viewport = { width: 1280, height: 560 };
+  await page.setViewportSize(viewport);
+
+  await page.addInitScript(() => {
+    localStorage.setItem(
+      "openapps.session",
+      JSON.stringify({ accessToken: "test-access", refreshToken: "test-refresh" }),
+    );
+    const realFetch = window.fetch.bind(window);
+    const json = (body: unknown) =>
+      new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } });
+    window.fetch = ((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+      if (url.includes("/v1/me")) return Promise.resolve(json({ id: "01USER", balance: 4200, accounts: [] }));
+      if (url.includes("/v1/credits/balance")) return Promise.resolve(json({ balance: 4200 }));
+      if (url.includes("/v1/payments/packages")) {
+        return Promise.resolve(
+          json({
+            packages: [
+              { id: "p1", credits: 1000, price_cents: 500, currency: "usd" },
+              { id: "p2", credits: 5000, price_cents: 2000, currency: "usd" },
+              { id: "p3", credits: 20000, price_cents: 7000, currency: "usd" },
+            ],
+          }),
+        );
+      }
+      if (url.includes("/v1/payments/topups")) return Promise.resolve(json({ topups: [] }));
+      if (url.includes("/v1/auth/methods")) return Promise.resolve(json({ methods: { google: true } }));
+      return realFetch(input as RequestInfo, init);
+    }) as typeof window.fetch;
+  });
+
+  await page.goto(`chrome-extension://${extensionId}/index.html`);
+  await page.getByRole("button", { name: "Account" }).click();
+
+  const dialog = page.getByRole("dialog", { name: "Account" });
+  await expect(dialog).toBeVisible();
+  const card = dialog.locator(".oa-dialog");
+  // Wait for the packages to land, since they are what makes it tall.
+  await expect
+    .poll(async () => (await card.boundingBox())?.height ?? 0, { timeout: 10_000 })
+    .toBeGreaterThan(300);
+
+  const box = await card.boundingBox();
+  expect(box).not.toBeNull();
+  // Both edges, not just the bottom: the scrim centres the dialog, so an
+  // uncapped one overflows upward first and hides its own close button.
+  expect(box!.y).toBeGreaterThanOrEqual(0);
+  expect(box!.y + box!.height).toBeLessThanOrEqual(viewport.height);
+
+  // And the content is still reachable rather than merely clipped —
+  // `overflow: hidden` alone would satisfy the bounds above while losing
+  // everything past the fold.
+  const body = dialog.locator(".oa-dialog__body");
+  expect(await body.evaluate((el) => el.scrollHeight > el.clientHeight)).toBe(true);
+
+  await page.close();
+});
