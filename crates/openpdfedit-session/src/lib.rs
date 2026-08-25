@@ -1906,8 +1906,7 @@ mod tests {
         let Some(engine) = shared_handle() else {
             return;
         };
-        let plain =
-            crate::test_support::text_page_pdf_bytes("secret contents", 72.0, 700.0, 24.0);
+        let plain = crate::test_support::text_page_pdf_bytes("secret contents", 72.0, 700.0, 24.0);
         let protected = openpdfedit_crypt::encrypt_document(
             &plain,
             "hunter2",
@@ -1929,14 +1928,13 @@ mod tests {
             Ok(_) => panic!("opened a protected document with no password"),
         }
 
-        let opened = open_document_bytes_with_password(
-            &state,
-            "protected.pdf",
-            protected,
-            Some("hunter2"),
-        )
-        .expect("should open with the right password");
-        assert!(opened.page_count >= 1, "the decrypted document should have pages");
+        let opened =
+            open_document_bytes_with_password(&state, "protected.pdf", protected, Some("hunter2"))
+                .expect("should open with the right password");
+        assert!(
+            opened.page_count >= 1,
+            "the decrypted document should have pages"
+        );
     }
 
     /// The same open path, against AES-256 documents produced by other
@@ -1978,9 +1976,8 @@ mod tests {
                 Err(other) => panic!("{name}: expected PasswordRequired, got {other:?}"),
                 Ok(_) => panic!("{name}: opened with no password"),
             }
-            let opened =
-                open_document_bytes_with_password(&state, name, bytes, Some("asdfasdf"))
-                    .unwrap_or_else(|e| panic!("{name}: should open with its password: {e:?}"));
+            let opened = open_document_bytes_with_password(&state, name, bytes, Some("asdfasdf"))
+                .unwrap_or_else(|e| panic!("{name}: should open with its password: {e:?}"));
             assert!(opened.page_count >= 1, "{name}: should have pages");
         }
     }
@@ -2012,9 +2009,8 @@ mod tests {
             history: Mutex::new(HashMap::new()),
             store: Box::new(MemWorkingStore::default()),
         };
-        let opened =
-            open_document_bytes_with_password(&state, "p.pdf", protected, Some("hunter2"))
-                .expect("should open with the right password");
+        let opened = open_document_bytes_with_password(&state, "p.pdf", protected, Some("hunter2"))
+            .expect("should open with the right password");
 
         let saved = working_copy_bytes(&state, opened.handle).expect("should produce save bytes");
         assert!(
@@ -3394,5 +3390,3 @@ mod tests {
         state.engine.close(final_handle);
     }
 }
-
-
