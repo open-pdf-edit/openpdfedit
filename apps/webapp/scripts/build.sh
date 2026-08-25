@@ -104,6 +104,12 @@ cp "$WORKSPACE_DIR/.vendor/tesseract/eng.traineddata" "$OCR_DIR/eng.traineddata"
 # which is the whole claim, and only demonstrable if it's true offline.
 log "Adding the offline service worker"
 cp "$WEBAPP_DIR/manifest.webmanifest" "$DIST_DIR/manifest.webmanifest"
+# The install icons. Separate from static/favicon.png, which is 256px and
+# is what the manifest used to point at while claiming 512 — a size no
+# browser could verify without downloading it, and one that stops Chrome
+# treating the app as installable at all.
+mkdir -p "$DIST_DIR/icons"
+cp "$WEBAPP_DIR/icons/"*.png "$DIST_DIR/icons/"
 
 # The cache name carries a digest of everything in dist/, so it changes
 # exactly when the build does. Deriving it rather than hand-bumping a
@@ -144,7 +150,29 @@ const html = readFileSync(file, "utf8");
 if (html.includes("service-worker.js")) process.exit(0);
 const inject = [
   '<link rel="manifest" href="./manifest.webmanifest">',
+  // iOS reads none of the manifest's icons: it wants this tag, and puts
+  // a white card behind anything transparent, which is why the file is
+  // full-bleed rather than the artwork as drawn.
+  '<link rel="apple-touch-icon" href="./icons/apple-touch-icon.png">',
+  // Colours the address bar on Android and the status bar in a
+  // standalone iOS window, so an installed app does not open with a
+  // white strip above a dark UI.
+  '<meta name="theme-color" content="#111111">',
+  '<meta name="apple-mobile-web-app-capable" content="yes">',
+  '<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">',
+  '<meta name="apple-mobile-web-app-title" content="OpenPdfEdit">',
   "<script>",
+  // Catch beforeinstallprompt before the app exists. Chromium fires it
+  // as soon as it decides the page is installable, which can be before
+  // the SPA has hydrated — and the event is not replayed, so a listener
+  // that arrives late never sees it and the install offer simply never
+  // appears. Found by screenshotting the offer and not finding it.
+  "window.__installPromptEvent = null;",
+  "addEventListener('beforeinstallprompt', function (e) {",
+  "  e.preventDefault();",
+  "  window.__installPromptEvent = e;",
+  "  dispatchEvent(new Event('openpdfedit:installable'));",
+  "});",
   "if ('serviceWorker' in navigator) {",
   "  addEventListener('load', () => {",
   "    navigator.serviceWorker.register('./service-worker.js').catch(() => {});",
