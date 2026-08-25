@@ -23,7 +23,8 @@
   // whichever task builds the extension's login flow (after Task 8).
   import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
   import { listen, type UnlistenFn } from "@tauri-apps/api/event";
-  import { getClient, onChange } from "@openapps/ui";
+  import { getClient, onChange, notify } from "@openapps/ui";
+  import { SESSION_STORAGE_KEY, SIGNIN_DONE_MESSAGE } from "$lib/openapps";
   import Icon from "./Icon.svelte";
   import { showToast } from "./toast.svelte";
 
@@ -69,21 +70,61 @@
         else stopRemote = un;
       });
     }
+
+    // The browser equivalent of that Tauri event, in two parts because
+    // neither alone is enough. `storage` fires in *other* same-origin
+    // windows when one writes — that catches the sign-in popup finishing,
+    // and equally a sign-out in another tab — but never in the window
+    // that did the writing. The `message` is what the popup sends
+    // explicitly, and arrives immediately rather than waiting for a
+    // storage write to land.
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === null || e.key === SESSION_STORAGE_KEY) sessionChangedElsewhere();
+    };
+    const onMessage = (e: MessageEvent) => {
+      if (e.origin !== window.location.origin) return;
+      if ((e.data as { type?: string } | null)?.type === SIGNIN_DONE_MESSAGE) sessionChangedElsewhere();
+    };
+    window.addEventListener("storage", onStorage);
+    window.addEventListener("message", onMessage);
+
     return () => {
       cancelled = true;
       stopLocal();
       stopRemote?.();
+      window.removeEventListener("storage", onStorage);
+      window.removeEventListener("message", onMessage);
     };
   });
 
+  /** A session written by another window of this origin. The client here
+   * needs no re-hydration — its store reads localStorage live — but
+   * nothing has told the rest of the page to look again, so `notify()`
+   * does: every other element that shows a balance or a name re-reads. */
+  function sessionChangedElsewhere(): void {
+    refresh();
+    notify();
+  }
+
   function signIn(): void {
     if (!tauriAvailable) {
-      // Honest short-circuit rather than letting `new WebviewWindow(...)`
-      // throw the same `transformCallback` TypeError `listen()` would
-      // have. The extension's own sign-in flow is follow-up work (see
-      // this module's doc comment) — this just says so instead of
-      // crashing.
-      showToast("Sign-in isn't available in the extension yet.", { tone: "warning", title: "Not available" });
+      // The browser builds (web app, extension page) get a real popup
+      // rather than the short-circuit that used to live here. Same
+      // reasoning as the Tauri window: <openapps-login>'s Google button
+      // navigates the whole window out to accounts.google.com and back,
+      // so it needs a window with no document state to lose.
+      //
+      // Nothing has to be handed back through it. The popup shares this
+      // origin, so it shares this localStorage, and the SDK's store
+      // reads from there on every access — the session it writes is
+      // already visible here. The message below is only a nudge to
+      // re-render; the `storage` listener in the effect above is the
+      // backstop if it never arrives (a popup blocker, or someone
+      // finishing sign-in in a tab they opened themselves).
+      const popup = window.open("/login", "openpdfedit-signin", "width=420,height=680");
+      if (!popup) {
+        showToast("Allow pop-ups for this site to sign in.", { tone: "warning", title: "Pop-up blocked" });
+      }
       return;
     }
     // A fresh label each time — a closed WebviewWindow can't be reused,

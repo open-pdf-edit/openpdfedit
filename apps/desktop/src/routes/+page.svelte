@@ -23,6 +23,9 @@
   import DialogHost from "$lib/DialogHost.svelte";
   import AccountPanel from "$lib/AccountPanel.svelte";
   import WatermarkPanel from "$lib/WatermarkPanel.svelte";
+  import SupporterGate, { type GateState } from "$lib/SupporterGate.svelte";
+  import { WATERMARK_IS_PREMIUM, isSupporterUnlocked, unlockSupporter } from "$lib/openapps";
+  import { getClient } from "@openapps/ui";
   import NumberingPanel from "$lib/NumberingPanel.svelte";
   import EncryptPanel from "$lib/EncryptPanel.svelte";
   import type { EncryptChoices, NumberPagesChoices, WatermarkChoices } from "$lib/backend/types";
@@ -548,6 +551,78 @@
   let showSignaturePad = $state(false);
   let showAccount = $state(false);
   let showWatermark = $state(false);
+  // ---- Watermark: the Supporter gate ----
+  //
+  // The watermark tool is the one paid thing in this app. Clicking it is
+  // the only place any of this is checked; nothing else asks about an
+  // account at all.
+  let gateState = $state<GateState>({ kind: "hidden" });
+  // Once this session has established the tool is unlocked, stop asking:
+  // a round trip on every click would make an unlocked tool feel slower
+  // than a locked one. Deliberately not persisted — the server's answer
+  // is the authority, and a cached "yes" sitting on disk would be a
+  // thing to forge.
+  let supporterUnlocked = $state(false);
+  let gateCheckInFlight = false;
+
+  function accessToken(): string | undefined {
+    return getClient()?.session?.accessToken;
+  }
+
+  /** The watermark button's click. Opens the tool when it's available
+   * and the gate only when it isn't, so the gate never stands in front
+   * of someone who has already paid. */
+  async function handleWatermarkClick(): Promise<void> {
+    if (!WATERMARK_IS_PREMIUM || supporterUnlocked) {
+      showWatermark = true;
+      return;
+    }
+    if (gateCheckInFlight) return;
+    gateCheckInFlight = true;
+    try {
+      gateState = { kind: "checking" };
+      if (!getClient()?.isLoggedIn) {
+        gateState = { kind: "signed-out" };
+        return;
+      }
+      if (await isSupporterUnlocked(accessToken())) {
+        supporterUnlocked = true;
+        gateState = { kind: "hidden" };
+        showWatermark = true;
+        return;
+      }
+      gateState = { kind: "locked" };
+    } finally {
+      gateCheckInFlight = false;
+    }
+  }
+
+  async function handleUnlock(): Promise<void> {
+    gateState = { kind: "unlocking" };
+    const result = await unlockSupporter(accessToken());
+    if (result.ok) {
+      supporterUnlocked = true;
+      gateState = { kind: "hidden" };
+      showWatermark = true;
+      showToast("Watermark unlocked — it stays unlocked on this account.", { title: "Supporter" });
+      return;
+    }
+    if (result.kind === "insufficient") {
+      gateState = { kind: "insufficient", have: result.have, need: result.need };
+      return;
+    }
+    gateState = { kind: "error", message: "Couldn't unlock — please try again." };
+  }
+
+  /** From the gate's "Sign in" / "Buy credits": hand over to the account
+   * panel. The gate closes rather than stacking behind it — clicking
+   * Watermark again re-checks, and that is what picks up a sign-in or a
+   * top-up that happened in between. */
+  function handleGateAccount(): void {
+    gateState = { kind: "hidden" };
+    showAccount = true;
+  }
+
   let armedSignatureId = $state<string | null>(null);
   let annotations = $state<(AnnotationSummaryDto & { pageIndex: number })[]>([]);
   let annotationsLoading = $state(false);
@@ -1826,7 +1901,7 @@
         <button
           class="oa-icon-btn oa-icon-btn--sm"
           class:oa-icon-btn--selected={showWatermark}
-          onclick={() => (showWatermark = true)}
+          onclick={handleWatermarkClick}
           disabled={mutationBusy}
           use:tooltip={"Watermark — tile text or a logo across every page"}
           aria-label="Watermark document"
@@ -1876,6 +1951,13 @@
     onClose={() => (showNumbering = false)}
   />
   <WatermarkPanel open={showWatermark} busy={mutationBusy} onApply={handleApplyWatermark} onClose={() => (showWatermark = false)} />
+  <SupporterGate
+    state={gateState}
+    onAccount={handleGateAccount}
+    onUnlock={handleUnlock}
+    onRetry={handleWatermarkClick}
+    onClose={() => (gateState = { kind: "hidden" })}
+  />
 
   {#if doc && showSearch}
     <div class="find-bar">

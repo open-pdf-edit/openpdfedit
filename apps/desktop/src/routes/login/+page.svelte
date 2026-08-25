@@ -10,10 +10,25 @@
   import { emit } from "@tauri-apps/api/event";
   import { getCurrentWindow } from "@tauri-apps/api/window";
   import { getClient } from "@openapps/ui";
+  import { SIGNIN_DONE_MESSAGE } from "$lib/openapps";
 
   let containerEl: HTMLDivElement | null = null;
 
+  // Same check AccountPanel makes, and for the same reason: these calls
+  // reach into `window.__TAURI_INTERNALS__` when invoked, so in a browser
+  // they throw rather than reject and no `.catch` would help.
+  const tauriAvailable = "__TAURI_INTERNALS__" in window;
+
   async function finish(): Promise<void> {
+    if (!tauriAvailable) {
+      // The browser build. The session is already in this origin's
+      // localStorage, which the opener shares and reads live, so there
+      // is nothing to hand over — this only says "look again", so the
+      // opener doesn't have to wait for a storage event or a refocus.
+      window.opener?.postMessage({ type: SIGNIN_DONE_MESSAGE }, window.location.origin);
+      window.close();
+      return;
+    }
     await emit("openapps-session-changed");
     await getCurrentWindow().close();
   }
