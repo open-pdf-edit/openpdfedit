@@ -1,0 +1,27 @@
+# Git guesses text-vs-binary from a file's first few thousand bytes, and
+# for one of our PDF fixtures it guessed wrong: pr6531_2.pdf happens to
+# contain no NUL early on, so git filed it as text. On a Windows checkout
+# with core.autocrlf=true — the default on GitHub's Windows runners — that
+# means every LF becomes CRLF, which shifts every byte offset after the
+# first newline. A PDF's cross-reference table is a list of byte offsets,
+# so the file arrives structurally broken: "invalid file trailer", on
+# Windows only, from a file that is byte-perfect in the repository.
+#
+# Marking the formats explicitly is the fix, and it has to be explicit —
+# a heuristic that is right most of the time is exactly what produced a
+# platform-specific failure in the first place.
+*.pdf binary
+*.wasm binary
+*.woff2 binary
+*.otf binary
+*.ttf binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.ico binary
+*.zip binary
+*.dmg binary
+*.exe binary
+*.dylib binary
+*.dll binary
+*.so binary
