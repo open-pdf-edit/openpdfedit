@@ -87,6 +87,16 @@ export declare class OpenAppsLogin extends OpenAppsElement {
 /** Middle-truncate long identifiers (addresses, npubs) for display. */
 export declare function shorten(value: string, head?: number, tail?: number): string;
 /** Pick up `?ref=CODE` so a shared link attributes the signup. */
+/**
+ * The referral code to attribute this signup to.
+ *
+ * The name is historical: it used to read only this page's query string,
+ * which silently lost every signup that finished somewhere other than the
+ * page the link pointed at — a `/login` popup, most commonly. It now falls
+ * back to a code captured earlier on this origin (see `referral-code.ts`).
+ *
+ * URL first, so arriving through a fresh link beats a stale stored one.
+ */
 export declare function referralFromUrl(): string | undefined;
 declare global {
     interface HTMLElementTagNameMap {

@@ -18,6 +18,7 @@ import { customElement, property, state } from "lit/decorators.js";
 import { OpenAppsElement } from "./base.js";
 import { ethereumMark, googleMark, nostrMark } from "./provider-marks.js";
 import { notify } from "./context.js";
+import { clearReferral, referralInUrl, storedReferral } from "./referral-code.js";
 import { connectEthereum, nostrProviderNames, signNostr, signNostrWithBunker, signNostrWithSecretKey, signSiwe, waitForNostrProvider, } from "./wallet.js";
 let OpenAppsLogin = class OpenAppsLogin extends OpenAppsElement {
     constructor() {
@@ -77,6 +78,7 @@ let OpenAppsLogin = class OpenAppsLogin extends OpenAppsElement {
         // signed-in user rather than briefly rendering the sign-in buttons.
         const redirected = await this.run(() => this.sdk.auth.completeRedirect());
         if (redirected) {
+            clearReferral();
             this.emit("openapps-login", redirected);
             notify();
         }
@@ -103,6 +105,7 @@ let OpenAppsLogin = class OpenAppsLogin extends OpenAppsElement {
             const result = await this.sdk.auth.verify(challenge.challenge_id, proof, {
                 referralCode: referralFromUrl(),
             });
+            clearReferral();
             this.emit("openapps-login", result);
             notify();
         });
@@ -126,6 +129,7 @@ let OpenAppsLogin = class OpenAppsLogin extends OpenAppsElement {
             const result = await this.sdk.auth.verify(challenge.challenge_id, proof, {
                 referralCode: referralFromUrl(),
             });
+            clearReferral();
             this.emit("openapps-login", result);
             notify();
         });
@@ -152,6 +156,7 @@ let OpenAppsLogin = class OpenAppsLogin extends OpenAppsElement {
             });
             this.nostrFallback = "none";
             this.authUrl = null;
+            clearReferral();
             this.emit("openapps-login", result);
             notify();
         });
@@ -171,6 +176,7 @@ let OpenAppsLogin = class OpenAppsLogin extends OpenAppsElement {
                     referralCode: referralFromUrl(),
                 });
                 this.nostrFallback = "none";
+                clearReferral();
                 this.emit("openapps-login", result);
                 notify();
             }
@@ -535,10 +541,17 @@ export function shorten(value, head = 10, tail = 6) {
         : `${value.slice(0, head)}…${value.slice(-tail)}`;
 }
 /** Pick up `?ref=CODE` so a shared link attributes the signup. */
+/**
+ * The referral code to attribute this signup to.
+ *
+ * The name is historical: it used to read only this page's query string,
+ * which silently lost every signup that finished somewhere other than the
+ * page the link pointed at — a `/login` popup, most commonly. It now falls
+ * back to a code captured earlier on this origin (see `referral-code.ts`).
+ *
+ * URL first, so arriving through a fresh link beats a stale stored one.
+ */
 export function referralFromUrl() {
-    if (typeof location === "undefined")
-        return undefined;
-    const code = new URLSearchParams(location.search).get("ref");
-    return code ?? undefined;
+    return referralInUrl() ?? storedReferral();
 }
 //# sourceMappingURL=openapps-login.js.map

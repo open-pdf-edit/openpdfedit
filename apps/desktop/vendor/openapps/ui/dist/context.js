@@ -8,10 +8,17 @@
  * instance, which matters because the session lives inside it.
  */
 import { OpenApps } from "@openapps/sdk";
+import { captureReferral } from "./referral-code.js";
 let shared = null;
 /** Configure the shared client. Call once, before the elements render. */
 export function configure(options) {
     shared = new OpenApps(options);
+    // Capture `?ref=` here rather than at sign-in time. Every app calls
+    // configure() once per page, including the landing page a referral link
+    // actually points at — which usually mounts no OpenApps element at all,
+    // and so would see the code and drop it. Sign-in frequently happens on a
+    // different URL (a /login popup), where the query string is long gone.
+    captureReferral();
     notify();
     return shared;
 }
