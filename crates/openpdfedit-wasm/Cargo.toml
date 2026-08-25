@@ -14,6 +14,12 @@ openpdfedit-engine = { path = "../openpdfedit-engine" }
 # module doc for why this crate no longer talks to `openpdfedit-annot`/
 # `openpdfedit-doc` directly the way the pre-Task-8 `WasmDocument` did.
 openpdfedit-session = { path = "../openpdfedit-session" }
+# The portable half of OCR: `add_text_layer`, which turns recognised
+# words into an invisible text layer. Recognition itself is native-only
+# (it shells out to tesseract) and is cfg'd out of this target — the
+# browser hands in words from tesseract.js instead, and reaches exactly
+# the same PDF-writing code.
+openpdfedit-ocr = { path = "../openpdfedit-ocr" }
 serde = { workspace = true }
 serde_json = { workspace = true }
 

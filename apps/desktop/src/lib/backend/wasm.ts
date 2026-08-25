@@ -247,6 +247,10 @@ interface RenderedPageHandle {
  * mapping. */
 interface WasmSessionHandle {
   openDocument(displayName: string, bytes: Uint8Array, password?: string): string;
+  /** Writes an invisible text layer from words recognised in the browser
+   * — see `WasmSession::add_ocr_text_layer`'s Rust doc. Takes every page
+   * at once so the document's OCR is a single undo step. */
+  addOcrTextLayer(requestJson: string): string;
   /** A full PDFium rewrite of the in-memory document — NOT what saving
    * should write to disk (see `workingCopyBytes` below, and its Rust doc,
    * for why: a full rewrite can restructure the whole file and breaks the
@@ -689,6 +693,14 @@ type FileTarget =
 
 /** Whether this browser can write back to a file the user picked. False
  * in Firefox and Safari today. */
+/** What width to render a page at before reading it.
+ *
+ * Tesseract wants roughly 300 DPI; a Letter page is 8.5in wide, so ~2550
+ * px. Screen-size renders (what the viewer asks for) give it about a
+ * third of that and the recognition gets noticeably worse — this is the
+ * single number that most affects whether OCR output is usable. */
+const OCR_TARGET_WIDTH_PX = 2550;
+
 export function supportsFileSystemAccess(): boolean {
   return (
     typeof window !== "undefined" &&
@@ -1720,8 +1732,56 @@ export const wasmBackend: Backend = {
     return JSON.parse(json) as CompareReportDto;
   },
 
-  async ocrDocument() {
-    return notAvailableInExtension("ocrDocument");
+  /**
+   * OCR, in the browser.
+   *
+   * Recognition runs in a worker (tesseract.js — see ocr-browser.ts);
+   * everything after it is the same Rust the desktop uses, reached
+   * through `addOcrTextLayer`. Pages are recognised one at a time and
+   * written back in a single call, so the whole document's OCR is one
+   * undo step rather than one per page.
+   *
+   * Rendered at `OCR_TARGET_WIDTH_PX` rather than at screen size:
+   * recognition accuracy tracks the resolution it reads, and a page
+   * rendered for a 900px-wide viewport gives Tesseract about half the
+   * pixels per character it wants.
+   */
+  async ocrDocument(request) {
+    const { recognisePage } = await import("./ocr-browser");
+    const session = await ensureSession();
+    const entry = openDocs.get(request.handle);
+    if (!entry) throw new Error(`ocrDocument: unknown document handle ${request.handle}`);
+
+    const sizes = JSON.parse(session.pageSizes(request.handle)) as {
+      width: number;
+      height: number;
+    }[];
+
+    const pages = [];
+    for (let pageIndex = 0; pageIndex < sizes.length; pageIndex++) {
+      const page = session.renderPage(request.handle, pageIndex, OCR_TARGET_WIDTH_PX);
+      let words;
+      try {
+        const rgba = page.rgba;
+        words = await recognisePage({ width: page.width, height: page.height, data: rgba });
+        pages.push({
+          page_index: pageIndex,
+          page_width_pt: sizes[pageIndex].width,
+          page_height_pt: sizes[pageIndex].height,
+          image_width_px: page.width,
+          image_height_px: page.height,
+          words,
+        });
+      } finally {
+        page.free();
+      }
+    }
+
+    const doc = parseOpenedDocument(
+      session.addOcrTextLayer(JSON.stringify({ handle: request.handle, pages })),
+    );
+    entry.doc = { ...doc, file_path: entry.doc.file_path };
+    return entry.doc;
   },
 
   // --- file-picker primitives (real — open/save-as depend on these) ---
