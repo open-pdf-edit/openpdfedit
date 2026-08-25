@@ -359,7 +359,16 @@
   padding: 0 var(--space-5) var(--space-5);
   font: var(--type-body);
   color: var(--text-muted);
-  white-space: pre-wrap;
+  /* No `white-space: pre-wrap` here, deliberately.
+     `white-space` is inherited, and inherited properties cross shadow
+     boundaries — so this turned every newline and every line of
+     indentation inside a dialog into rendered blank space, including
+     inside the shadow DOM of any custom element the dialog contained.
+     The account panel showed it worst: three <openapps-*> elements whose
+     Lit templates are full of newlines, each one drawn as a line break,
+     stretching the panel to nearly twice its content's height.
+     It existed for one case — an alert whose text carries \n — and
+     DialogHost already scopes it there, on its own .message. */
   /* The body is what scrolls, so the header stays put and the footer's
      buttons stay reachable. `min-height: 0` is what actually allows it:
      a flex item's default `min-height: auto` refuses to shrink below its

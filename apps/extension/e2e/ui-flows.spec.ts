@@ -729,8 +729,11 @@ test("the account panel: a tall dialog stays inside a short window and scrolls",
   extensionId,
 }) => {
   const page = await context.newPage();
-  // Deliberately short — a laptop with the browser chrome taking its cut.
-  const viewport = { width: 1280, height: 560 };
+  // Short enough that this panel's content genuinely exceeds the cap, so
+  // the scrolling half is exercised rather than merely available. 560
+  // used to overflow too; the pre-wrap fix below took ~60% off the
+  // panel's height, which is why this had to come down.
+  const viewport = { width: 1280, height: 420 };
   await page.setViewportSize(viewport);
 
   await page.addInitScript(() => {
@@ -771,7 +774,7 @@ test("the account panel: a tall dialog stays inside a short window and scrolls",
   // Wait for the packages to land, since they are what makes it tall.
   await expect
     .poll(async () => (await card.boundingBox())?.height ?? 0, { timeout: 10_000 })
-    .toBeGreaterThan(300);
+    .toBeGreaterThan(200);
 
   const box = await card.boundingBox();
   expect(box).not.toBeNull();
@@ -785,6 +788,22 @@ test("the account panel: a tall dialog stays inside a short window and scrolls",
   // everything past the fold.
   const body = dialog.locator(".oa-dialog__body");
   expect(await body.evaluate((el) => el.scrollHeight > el.clientHeight)).toBe(true);
+
+  // `white-space` is inherited and inherited properties cross shadow
+  // boundaries, so a `pre-wrap` here would render every newline and
+  // every line of indentation — including inside these elements' own
+  // templates — as blank space, and did: it added ~60% to this panel's
+  // height. Asserted where it lands rather than where it is written,
+  // since the harm is what it does to the shadow DOM.
+  const whitespace = await page.evaluate(() => {
+    const el = document.querySelector("openapps-account");
+    const inner = el?.shadowRoot?.firstElementChild;
+    return {
+      body: getComputedStyle(document.querySelector(".oa-dialog__body")!).whiteSpace,
+      insideShadowDom: inner ? getComputedStyle(inner).whiteSpace : "no-element",
+    };
+  });
+  expect(whitespace).toEqual({ body: "normal", insideShadowDom: "normal" });
 
   await page.close();
 });

@@ -173,6 +173,15 @@
           <openapps-account></openapps-account>
           <openapps-credits poll-seconds="30"></openapps-credits>
           <openapps-buy></openapps-buy>
+          <!-- Same reason the extension sets one: this is a Tauri webview,
+               so the page's own URL is a tauri:// (or localhost) origin that
+               means nothing to whoever the link is sent to. `app-id` lets
+               the registered domain win once the server knows it, so this
+               attribute only has to be right until then. -->
+          <openapps-referral
+            app-id="openpdfedit"
+            invite-url="https://openpdfedit.com/"
+          ></openapps-referral>
         {:else}
           <p class="message">Sign in to see your credits and buy more.</p>
           <button class="oa-btn oa-btn--primary" onclick={signIn}>Sign in</button>

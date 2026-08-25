@@ -11,10 +11,21 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
  * ever showed a user their own code, so the feature was unreachable in
  * practice: a referral program nobody can see the link for does not run.
  *
- * The share link is built from the *host page's* URL rather than a
- * configured one. Whichever app a user is in is the app they want to invite
- * someone to, and hard-coding a canonical destination would send every
- * invite to the wrong product.
+ * Where the share link points, in order of precedence:
+ *
+ * 1. **The server**, when `app-id` names an app an operator registered a
+ *    domain for. One place to correct a product's URL, and it takes effect
+ *    without shipping a release of that product.
+ * 2. **The `invite-url` attribute**, for an app that is not registered — or
+ *    is running against a server that predates the registry.
+ * 3. **The host page**, which is right for an ordinary web app: whichever
+ *    app a user is in is the app they want to invite someone to.
+ *
+ * The fallback order matters most where (3) is actively wrong. Inside a
+ * browser extension the host page is a `chrome-extension://…` URL, so a link
+ * built from it resolves on nobody else's machine — an extension must set at
+ * least one of the first two, or it will hand users a broken invite that
+ * looks perfectly fine to whoever copied it.
  */
 import { css, html, nothing } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
@@ -29,6 +40,11 @@ function shortDate(seconds) {
 let OpenAppsReferral = class OpenAppsReferral extends OpenAppsElement {
     constructor() {
         super(...arguments);
+        /**
+         * Which product this is, e.g. `opencapture`. Lets the server return a link
+         * on the app's own registered domain — see the class doc for precedence.
+         */
+        this.appId = "";
         this.info = null;
         this.earnings = null;
         this.referees = null;
@@ -52,11 +68,23 @@ let OpenAppsReferral = class OpenAppsReferral extends OpenAppsElement {
             this.referees = null;
             return;
         }
-        this.info = (await this.run(() => sdk.referral.code())) ?? null;
+        this.info =
+            (await this.run(() => sdk.referral.code(this.appId || undefined))) ?? null;
         this.earnings = (await this.run(() => sdk.referral.earnings())) ?? null;
         this.referees = (await this.run(() => sdk.referral.referees())) ?? null;
     }
+    updated(changed) {
+        // `app-id` decides which domain the server answers with, so a late or
+        // changed one has to re-ask. Guarded on the property itself rather than
+        // any render, or every state write from load() would re-enter it.
+        if (changed.has("appId"))
+            void this.load();
+    }
     get link() {
+        // Registered server-side: already a complete link with `?ref=` attached,
+        // so appending anything here would double the parameter.
+        if (this.info?.invite_url)
+            return this.info.invite_url;
         const base = this.inviteUrl ??
             (typeof location === "undefined"
                 ? ""
@@ -294,6 +322,9 @@ let OpenAppsReferral = class OpenAppsReferral extends OpenAppsElement {
     `,
     ]; }
 };
+__decorate([
+    property({ type: String, attribute: "app-id" })
+], OpenAppsReferral.prototype, "appId", void 0);
 __decorate([
     property({ type: String, attribute: "invite-url" })
 ], OpenAppsReferral.prototype, "inviteUrl", void 0);
