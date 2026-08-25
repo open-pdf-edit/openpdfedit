@@ -46,6 +46,9 @@
      * `PdfPage`'s own prop. Passed to every page; only the one that
      * renders a field by that name acts on it. */
     focusField?: { name: string; nonce: number } | null;
+    /** A pinch asked for this zoom. Unclamped — the parent owns the
+     * limits, and applying them here would mean two places to change. */
+    onZoom?: (zoom: number) => void;
   }
 
   let {
@@ -68,6 +71,7 @@
     formFields = [],
     onFillField,
     focusField = null,
+    onZoom,
   }: Props = $props();
 
   // 96 CSS px per inch, 72 PDF points per inch — the standard point-to-CSS-px
@@ -81,6 +85,99 @@
   const HIT_VIEWPORT_FRACTION = 1 / 3;
 
   let scrollEl = $state<HTMLDivElement | null>(null);
+
+  // --- Pinch to zoom ---
+  //
+  // Not the browser's own. A browser pinch scales the visual viewport,
+  // which magnifies the rendered bitmap — a page zoomed to 300% that way
+  // is a 100% page enlarged, blurred, with the rest of the interface
+  // enlarged along with it. Pinching here changes the app's zoom, so
+  // pages are re-rendered at the new size and stay sharp, and the topbar
+  // stays where it was. `.scroll-container` sets `touch-action: pan-y`
+  // to reserve the gesture: panning stays with the browser, pinching
+  // does not.
+
+  /** Every finger currently down, by pointer id. */
+  const touches = new Map<number, { x: number; y: number }>();
+
+  /** What the pinch started from, so the zoom follows the *total* spread
+   * of the fingers rather than accumulating per-frame ratios, which
+   * drift. `midpoint` is relative to the container's top; `scrollTop` is
+   * where it sat then. Together they anchor the point between the
+   * fingers, so the document appears to zoom around it. */
+  let pinch: { distance: number; zoom: number; midpoint: number; scrollTop: number } | null = null;
+
+  /** Bumped when a pinch begins, to tell the page under the first finger
+   * that its gesture has been taken over. */
+  let gestureCancel = $state(0);
+
+  /** Where the zoom effect should scroll to once the pages have been
+   * laid out at their new size. */
+  let pendingScrollTop: number | null = null;
+
+  function spread(): { distance: number; midpoint: number } {
+    const [a, b] = [...touches.values()];
+    return {
+      distance: Math.hypot(a.x - b.x, a.y - b.y),
+      midpoint: (a.y + b.y) / 2,
+    };
+  }
+
+  function onPointerDown(e: PointerEvent) {
+    if (e.pointerType !== "touch") return;
+    touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (touches.size !== 2 || !scrollEl) return;
+
+    const { distance, midpoint } = spread();
+    const top = scrollEl.getBoundingClientRect().top;
+    pinch = { distance, zoom, midpoint: midpoint - top, scrollTop: scrollEl.scrollTop };
+    // The first finger may have started drawing something. It is now
+    // half of a zoom.
+    gestureCancel += 1;
+  }
+
+  function onPointerMove(e: PointerEvent) {
+    if (e.pointerType !== "touch" || !touches.has(e.pointerId)) return;
+    touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (!pinch || touches.size !== 2 || !scrollEl) return;
+
+    const { distance } = spread();
+    // A pinch that starts as a tap can report a distance of nearly zero
+    // for a frame, which would send the zoom to infinity.
+    if (pinch.distance < 1) return;
+
+    const next = pinch.zoom * (distance / pinch.distance);
+    // Keep the point between the fingers where it is: everything above
+    // it grows by the same factor, so the scroll offset must too.
+    pendingScrollTop = (pinch.scrollTop + pinch.midpoint) * (next / pinch.zoom) - pinch.midpoint;
+    onZoom?.(next);
+  }
+
+  function endTouch(e: PointerEvent) {
+    if (e.pointerType !== "touch") return;
+    touches.delete(e.pointerId);
+    // A pinch is over as soon as it stops being two fingers. Lifting one
+    // of three does not resume anything: the geometry it started from is
+    // gone.
+    if (touches.size < 2) {
+      pinch = null;
+      // A pinch against the zoom limit changes nothing, so the effect
+      // that consumes this never runs. Left set, it would jump the
+      // document the next time the zoom buttons were used.
+      pendingScrollTop = null;
+    }
+  }
+
+  $effect(() => {
+    // Runs after the pages have been re-laid out at the new zoom, which
+    // is the only moment `scrollTop` can be set without being clamped to
+    // the old, shorter document.
+    void zoom;
+    const target = pendingScrollTop;
+    if (target === null || !scrollEl) return;
+    pendingScrollTop = null;
+    scrollEl.scrollTop = Math.max(0, target);
+  });
 
   // Grouped once per search rather than filtered inside every page: a
   // 500-hit result set across a long document would otherwise cost a full
@@ -192,7 +289,16 @@
   }
 </script>
 
-<div class="scroll-container" bind:this={scrollEl} onscroll={onScroll}>
+<div
+  class="scroll-container"
+  bind:this={scrollEl}
+  onscroll={onScroll}
+  onpointerdown={onPointerDown}
+  onpointermove={onPointerMove}
+  onpointerup={endTouch}
+  onpointercancel={endTouch}
+  role="presentation"
+>
   {#each pageSizes as size, i (i)}
     <PdfPage
       {handle}
@@ -214,6 +320,7 @@
       formFields={fieldsByPage.get(i) ?? []}
       {onFillField}
       {focusField}
+      {gestureCancel}
     />
   {/each}
 </div>
@@ -225,5 +332,11 @@
     overflow-x: hidden;
     padding: 16px 0;
     background: var(--bg-sunken);
+    /* Panning stays with the browser; pinching is handled above, and
+       would otherwise scale the whole interface instead of the page.
+       Set here rather than on the pages because touch-action is
+       intersected up the ancestor chain — the pages can only give away
+       more, never take this back. */
+    touch-action: pan-y;
   }
 </style>
