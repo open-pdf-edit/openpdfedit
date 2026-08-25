@@ -1,4 +1,4 @@
-import{d as p,e as b,f}from"./chunk-WUUXWBJ2.js";import{a as k,b as i,d as o,e as y,g as l,h as g,l as c,m as u}from"./chunk-OUMOJ2PH.js";import{a as r}from"./chunk-LCQWCHVU.js";var v={google:"Google",eip155:"Wallet",nostr:"Nostr"},a=class extends u{constructor(){super(...arguments);this.me=null;this.enabled=null;this.pending=null;this.notice=null;this.blocked=null}connectedCallback(){super.connectedCallback(),this.load()}onSessionChange(){this.load()}async load(){if(await Promise.resolve(),this.handleLinkRedirect(),this.enabled||(this.enabled=await this.run(()=>this.sdk.auth.methods())??null),!this.sdk.isLoggedIn){this.me=null;return}this.me=await this.run(()=>this.sdk.auth.me())??null}linked(e){return(this.me?.linked_accounts??[]).some(t=>t.namespace===e)}get connectable(){return["eip155","nostr"].filter(e=>this.enabled?.[e]&&!this.linked(e))}get canConnectGoogle(){return(this.enabled?.google??!1)&&!this.linked("google")}async signOut(){await this.run(()=>this.sdk.auth.logout()),this.me=null,this.emit("openapps-logout",null),c()}async connectGoogle(e=!1){await this.run(async()=>{let t=`${location.origin}${location.pathname}${location.search}`,s=await this.sdk.auth.googleLinkStart(t,{merge:e});window.location.href=s})}handleLinkRedirect(){let e;try{e=this.sdk.auth.completeLinkRedirect()}catch{return}if(e)switch(e.status){case"linked":this.notice=e.merged?`Accounts combined \u2014 ${e.credits.toLocaleString()} credits moved across.`:"Google connected.",this.emit("openapps-identity-linked",e),c();break;case"conflict":this.pending={namespace:"google",other:{id:"",balance:e.balance}};break;case"blocked":this.blocked=e.message;break;case"error":this.error=e.message;break}}async connect(e){this.blocked=null,await this.run(async()=>{let t=e==="eip155"?await p():void 0,s=await this.sdk.auth.linkChallenge(e,t),m=e==="eip155"?await b(s.message,t):await f(s.message);try{let n=await this.sdk.auth.linkVerify(s.challenge_id,m);this.afterLink(n)}catch(n){if(n instanceof g&&(n.detail?.code==="merge_blocked_by_duplicate_namespace"||n.detail?.code==="namespace_already_linked")){this.blocked=n.message;return}if(n instanceof g&&n.detail?.code==="identity_belongs_to_another_account"){this.pending={namespace:e,other:n.detail.other_account};return}throw n}})}async confirmMerge(){let e=this.pending;if(e){if(e.namespace==="google"){this.pending=null,await this.connectGoogle(!0);return}await this.run(async()=>{let t=e.namespace==="eip155"?await p():void 0,s=await this.sdk.auth.linkChallenge(e.namespace,t),m=e.namespace==="eip155"?await b(s.message,t):await f(s.message),n=await this.sdk.auth.linkVerify(s.challenge_id,m,{merge:!0});this.pending=null,this.afterLink(n)})}}afterLink(e){this.notice=e.merged?`Accounts combined \u2014 ${(e.credits_transferred??0).toLocaleString()} credits moved across.`:"Connected.",this.emit("openapps-identity-linked",e),c(),this.load()}async unlink(e){await this.run(async()=>{await this.sdk.auth.unlink(e),this.notice="Disconnected.",this.emit("openapps-identity-unlinked",{caip10:e}),await this.load()})}render(){if(!this.sdkOrNull)return i`<p class="muted">Loading…</p>`;if(!this.sdk.isLoggedIn)return i`<p class="muted">Sign in to manage your account.</p>`;if(!this.me)return i`<p class="muted">Loading…</p>`;if(this.pending)return this.renderMergePrompt(this.pending);let e=this.me.linked_accounts;return i`
+import{d as g,e as b,f}from"./chunk-WUUXWBJ2.js";import{a as k,b as i,d as o,e as w,g as l,h as p,l as c,m as u}from"./chunk-OUMOJ2PH.js";import{a as r}from"./chunk-LCQWCHVU.js";var v={google:"Google",eip155:"Wallet",nostr:"Nostr"},n=class extends u{constructor(){super(...arguments);this.me=null;this.enabled=null;this.pending=null;this.notice=null;this.blocked=null}connectedCallback(){super.connectedCallback(),this.load()}onSessionChange(){this.load()}async load(){if(await Promise.resolve(),this.handleLinkRedirect(),this.enabled||(this.enabled=await this.run(()=>this.sdk.auth.methods())??null),!this.sdk.isLoggedIn){this.me=null;return}this.me=await this.run(()=>this.sdk.auth.me())??null}linked(e){return(this.me?.linked_accounts??[]).some(t=>t.namespace===e)}get connectable(){return["eip155","nostr"].filter(e=>this.enabled?.[e]&&!this.linked(e))}get canConnectGoogle(){return(this.enabled?.google??!1)&&!this.linked("google")}async signOut(){await this.run(()=>this.sdk.auth.logout()),this.me=null,this.emit("openapps-logout",null),c()}async connectGoogle(e=!1){await this.run(async()=>{let t=`${location.origin}${location.pathname}${location.search}`,s=await this.sdk.auth.googleLinkStart(t,{merge:e});window.location.href=s})}handleLinkRedirect(){let e;try{e=this.sdk.auth.completeLinkRedirect()}catch{return}if(e)switch(e.status){case"linked":this.notice=e.merged?`Accounts combined \u2014 ${e.credits.toLocaleString()} credits moved across.`:"Google connected.",this.emit("openapps-identity-linked",e),c();break;case"conflict":this.pending={namespace:"google",other:{id:"",balance:e.balance}};break;case"blocked":this.blocked=e.message;break;case"error":this.error=e.message;break}}async connect(e){this.blocked=null,await this.run(async()=>{let t=e==="eip155"?await g():void 0,s=await this.sdk.auth.linkChallenge(e,t),m=e==="eip155"?await b(s.message,t):await f(s.message);try{let a=await this.sdk.auth.linkVerify(s.challenge_id,m);this.afterLink(a)}catch(a){if(a instanceof p&&(a.detail?.code==="merge_blocked_by_duplicate_namespace"||a.detail?.code==="namespace_already_linked")){this.blocked=a.message;return}if(a instanceof p&&a.detail?.code==="identity_belongs_to_another_account"){this.pending={namespace:e,other:a.detail.other_account};return}throw a}})}async confirmMerge(){let e=this.pending;if(e){if(e.namespace==="google"){this.pending=null,await this.connectGoogle(!0);return}await this.run(async()=>{let t=e.namespace==="eip155"?await g():void 0,s=await this.sdk.auth.linkChallenge(e.namespace,t),m=e.namespace==="eip155"?await b(s.message,t):await f(s.message),a=await this.sdk.auth.linkVerify(s.challenge_id,m,{merge:!0});this.pending=null,this.afterLink(a)})}}afterLink(e){this.notice=e.merged?`Accounts combined \u2014 ${(e.credits_transferred??0).toLocaleString()} credits moved across.`:"Connected.",this.emit("openapps-identity-linked",e),c(),this.load()}async unlink(e){await this.run(async()=>{await this.sdk.auth.unlink(e),this.notice="Disconnected.",this.emit("openapps-identity-unlinked",{caip10:e}),await this.load()})}render(){if(!this.sdkOrNull)return i`<p class="muted">Loading…</p>`;if(!this.sdk.isLoggedIn)return i`<p class="muted">Sign in to manage your account.</p>`;if(!this.me)return i`<p class="muted">Loading…</p>`;if(this.pending)return this.renderMergePrompt(this.pending);let e=this.me.linked_accounts;return i`
       <div class="card">
         <div class="head">
           <div>
@@ -8,13 +8,6 @@ import{d as p,e as b,f}from"./chunk-WUUXWBJ2.js";import{a as k,b as i,d as o,e a
           <div class="right">
             <div class="balance">${this.me.balance.toLocaleString()}</div>
             <div class="muted small">credits</div>
-            <button
-              class="signout"
-              ?disabled=${this.busy}
-              @click=${this.signOut}
-            >
-              Sign out
-            </button>
           </div>
         </div>
 
@@ -24,7 +17,7 @@ import{d as p,e as b,f}from"./chunk-WUUXWBJ2.js";import{a as k,b as i,d as o,e a
               <li>
                 <span class="tag">${v[t.namespace]??t.namespace}</span>
                 <code title=${t.caip10}
-                  >${w(t.label??t.caip10)}</code
+                  >${y(t.label??t.caip10)}</code
                 >
                 ${e.length>1?i`<button
                       class="link"
@@ -59,6 +52,10 @@ import{d as p,e as b,f}from"./chunk-WUUXWBJ2.js";import{a as k,b as i,d as o,e a
         ${this.notice?i`<p class="notice">${this.notice}</p>`:o}
         ${this.error?i`<p class="error" role="alert">${this.error}</p>`:o}
       </div>
+
+      <button class="signout" ?disabled=${this.busy} @click=${this.signOut}>
+        Sign out
+      </button>
     `}renderMergePrompt(e){return i`
       <div class="card">
         <h3>Combine two accounts?</h3>
@@ -80,8 +77,7 @@ import{d as p,e as b,f}from"./chunk-WUUXWBJ2.js";import{a as k,b as i,d as o,e a
           </button>
         </div>
         ${this.error?i`<p class="error" role="alert">${this.error}</p>`:o}
-      </div>
-    `}};a.styles=[u.baseStyles,k`
+    `}};n.styles=[u.baseStyles,k`
       .card {
         border: 1px solid var(--border-hairline, var(--fb-hairline));
         border-radius: var(--radius-lg, 12px);
@@ -98,18 +94,21 @@ import{d as p,e as b,f}from"./chunk-WUUXWBJ2.js";import{a as k,b as i,d as o,e a
       }
       .right {
         text-align: right;
-        display: flex;
-        flex-direction: column;
-        align-items: flex-end;
-        gap: 6px;
       }
-      /* Quiet by default. Signing out is not the thing anyone came to this
-         panel to do, and a button styled to invite the click would be
-         reaching for the one action here that throws work away. */
+      /* Below the card, full width, quiet — the same shape and place
+         OpenCapture arrived at independently when it had to build this
+         itself. Bottom is where a finished-with action belongs: nobody
+         opens an account panel in order to sign out, and putting it
+         beside the balance makes the one control that throws a session
+         away the easiest one to reach by accident. */
       .signout {
-        font-size: 0.8125rem;
-        padding: 3px 10px;
-        border-radius: 999px;
+        display: block;
+        width: 100%;
+        margin-top: 16px;
+        font: inherit;
+        font-size: 0.875rem;
+        padding: 9px 12px;
+        border-radius: var(--radius-md, 8px);
         border: 1px solid var(--border-hairline, var(--fb-hairline));
         background: transparent;
         color: var(--text-muted, var(--fb-muted));
@@ -195,5 +194,5 @@ import{d as p,e as b,f}from"./chunk-WUUXWBJ2.js";import{a as k,b as i,d as o,e a
         background: var(--warning-bg, #fef3c7);
         color: var(--warning-fg, #92400e);
       }
-    `],r([l()],a.prototype,"me",2),r([l()],a.prototype,"enabled",2),r([l()],a.prototype,"pending",2),r([l()],a.prototype,"notice",2),r([l()],a.prototype,"blocked",2),a=r([y("openapps-account")],a);function w(d,h=18,e=8){return d.length<=h+e+1?d:`${d.slice(0,h)}\u2026${d.slice(-e)}`}export{a as OpenAppsAccount};
+    `],r([l()],n.prototype,"me",2),r([l()],n.prototype,"enabled",2),r([l()],n.prototype,"pending",2),r([l()],n.prototype,"notice",2),r([l()],n.prototype,"blocked",2),n=r([w("openapps-account")],n);function y(d,h=18,e=8){return d.length<=h+e+1?d:`${d.slice(0,h)}\u2026${d.slice(-e)}`}export{n as OpenAppsAccount};
 //# sourceMappingURL=openapps-account.js.map
