@@ -135,6 +135,8 @@ OpenPdfEdit becomes the **first real app on the OpenApps platform** (this monore
 - **Work item this creates:** the OpenApps **Tauri 2 plugin** (platform milestone M7, currently not started) — checkout window, entitlement fetch, license-file storage. OpenPdfEdit is its first consumer; build it as `sdk/tauri` in the platform tree.
 - **Licensing structure of the code:** core + free features MIT/Apache dual (matches workspace); premium features live in a separate non-OSS-licensed directory à la Stirling (`app/proprietary/` precedent) — honest open-core, clearly separated. Decision needed (see §10): fully-open Aseprite-style (everything source-available, binaries paid) vs. open-core split.
 
+> **Superseded (2026-08-25).** Most of this section describes a design that was not built. What shipped instead is the credit ledger and a single server-verified entitlement — no signed offline licence file, no Tauri plugin, no proprietary directory, no perpetual-licence or anonymous-purchase path. See §11.2 for what was actually decided and why. This section is kept as the record of what was planned, not as a description of the product.
+
 ---
 
 ## 5. Tech stack (recommended)
@@ -274,12 +276,20 @@ Each milestone ships something usable; free features land first (adoption), prem
 ## 11. Open questions — resolution status (2026-08-01)
 
 1. **Name.** RESOLVED: **OpenPdfEdit** (user decision; avoids the OpenPDF Java library collision). Display/product branding only — the crate prefixes (`openpdfedit-*`), the workspace directory, and the `openpdfedit` CLI binary stay lowercase-kebab, matching ordinary Rust/npm package-naming convention.
-2. **Open-core structure.** DEFERRED: develop all features first, ungated; decide split mechanics later. Keep the `openpdfedit-license` scaffold (M6) so gating is a flip, not a refactor. Everything stays MIT/Apache dual-licensed until the tiering decision is made.
-3. **Pricing.** DEFERRED with #2.
+2. **Open-core structure.** RESOLVED (2026-08-25), and not the way this section anticipated. One feature is gated — the watermark tool — and it is gated *at the entitlement*, not at the source: the code stays in this repository under the same MIT/Apache dual licence as everything else. No `app/proprietary/` split, and the signed-offline-licence design in §4 is unbuilt and unused.
+
+   What actually ships is the OpenApps credit ledger: the app asks `/v1/credits/entitlement` whether this account has redeemed `openpdfedit_supporter_unlock`, and openapps-gateway is the only thing that can charge for it. Server-verified rather than locally-verified, which is the opposite of §4's "no phone-home required to keep working, ever" — a deliberate trade, since it is one optional tool rather than the product, and every other feature works with no account and no network.
+
+   The honest consequence: because the watermark source is public and permissively licensed, anyone can build an unlocked copy. The gate is a request, not a wall. It is worth having anyway — the people who would compile their own were never going to pay, and the ones who would pay are not inconvenienced — but it should not be mistaken for enforcement. `WATERMARK_IS_PREMIUM` in `apps/desktop/src/lib/openapps.ts` reverses it in one line.
+
+   Also worth recording: the tool shipped **free in v0.1.1–v0.1.4** and was gated in v0.1.5. Taking something back is a real cost, paid once.
+3. **Pricing.** RESOLVED (2026-08-25): 1,000 credits, charged once, per account rather than per device — the entitlement is a server fact, so reinstalling or switching machines costs nothing further. Not a subscription and not per document. Matches OpenCapture's Supporter unlock exactly, deliberately: two products with the same shape of purchase should not teach a user two different models.
 4. **Front-end framework within Tauri:** RESOLVED: **Svelte 5**. Fine-grained reactivity fits editor-style UI (many small independent panels/state slices — tool palettes, page thumbnails, annotation properties) better than React's re-render model; ~30–40% less boilerplate; smallest runtime, which matters for the "instant, tiny binary" positioning. Traded off: thinner component ecosystem than React (expect to hand-roll more a11y primitives — virtualized lists, comboboxes, dialogs), smaller contributor pool, and Svelte 5 runes are new enough that AI-assisted code generation and Stack Overflow coverage lag React's. Mitigation: keep UI logic thin and push state/behavior into Rust/Tauri commands wherever practical, so the front-end framework stays a rendering shell, not the source of truth.
 5. **Cloud conversion.** RESOLVED: local-only in v1; cloud fidelity service revisited post-1.0.
 
 **Approval: GO.** User approved starting implementation at M0 (2026-08-01).
+
+**Shipping since (2026-08-25).** Desktop (macOS/Windows), a Chrome extension, and a web app at `app.openpdfedit.com` — one Svelte UI over one Rust core, compiled natively or to WebAssembly. Sign-in via `auth.openpdfedit.com`. See `docs/PRODUCTION.md` for what runs where.
 
 ---
 
