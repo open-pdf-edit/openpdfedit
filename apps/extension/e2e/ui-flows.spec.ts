@@ -559,3 +559,143 @@ test("the real UI: drawing a text field leaves it focused and typeable, with no 
 
   await page.close();
 });
+
+/** The Supporter gate on the watermark tool — the one paid path, and the
+ * one that takes something away if it misbehaves: a bug here doesn't
+ * degrade the feature, it removes it.
+ *
+ * The account endpoints are stubbed rather than reached. What is being
+ * tested is this app's branching — signed out, locked, can't afford it,
+ * unlocked — and each branch is defined by a response the server gives;
+ * pointing at a real one would make four deterministic cases into four
+ * network-dependent ones, and couldn't produce the 402 at all without an
+ * account genuinely short of credits.
+ */
+async function installAccountStubs(
+  page: Page,
+  options: { signedIn: boolean; unlocked: boolean; unlock?: "ok" | "insufficient" },
+): Promise<void> {
+  await page.addInitScript((opts) => {
+    if (opts.signedIn) {
+      // What the SDK's browser store reads; `isLoggedIn` is "is there a
+      // session here", so this is the whole of being signed in.
+      localStorage.setItem(
+        "openapps.session",
+        JSON.stringify({ accessToken: "test-access", refreshToken: "test-refresh" }),
+      );
+    } else {
+      localStorage.removeItem("openapps.session");
+    }
+
+    const realFetch = window.fetch.bind(window);
+    const json = (status: number, body: unknown) =>
+      new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
+
+    window.fetch = ((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+      if (url.includes("/v1/credits/entitlement")) {
+        return Promise.resolve(json(200, { unlocked: opts.unlocked }));
+      }
+      if (url.includes("/openpdfedit/supporter/unlock")) {
+        return Promise.resolve(
+          opts.unlock === "insufficient"
+            ? json(402, { have: 250, need: 1000 })
+            : json(200, { unlocked: true, new_balance: 4000, already_unlocked: false }),
+        );
+      }
+      // Everything else — the wasm binaries, pdfium, the fixtures — must
+      // still go to the network, or the app never loads at all.
+      return realFetch(input as RequestInfo, init);
+    }) as typeof window.fetch;
+  }, options);
+}
+
+async function openFixtureAndClickWatermark(page: Page, extensionId: string): Promise<void> {
+  await installFilePickerStubs(page);
+  await page.setViewportSize({ width: 1200, height: 1400 });
+  await page.goto(`chrome-extension://${extensionId}/index.html`);
+  await seedFile(page, "a.pdf", TEXT_PDF_BASE64);
+  await queueOpenPick(page, ["a.pdf"]);
+  await page.locator("header.topbar").getByRole("button", { name: "Open PDF…" }).click();
+  await expect(page.locator(".path-bar__text")).toHaveText("a.pdf");
+  await page.getByRole("button", { name: "Watermark document" }).click();
+}
+
+const watermarkDialog = (page: Page) => page.getByRole("dialog", { name: "Watermark" });
+const gate = (page: Page) => page.getByRole("dialog", { name: "Supporter feature" });
+
+test("the Supporter gate: signed out, the watermark tool asks for an account", async ({
+  context,
+  extensionId,
+}) => {
+  const page = await context.newPage();
+  await installAccountStubs(page, { signedIn: false, unlocked: false });
+  await openFixtureAndClickWatermark(page, extensionId);
+
+  await expect(gate(page)).toBeVisible({ timeout: 15_000 });
+  await expect(gate(page)).toContainText("Sign in to unlock");
+  await expect(gate(page).getByRole("button", { name: "Sign in" })).toBeVisible();
+  // The point of a gate: the tool itself must not be reachable behind it.
+  await expect(watermarkDialog(page)).toBeHidden();
+
+  await page.close();
+});
+
+test("the Supporter gate: already unlocked, the tool opens with no gate at all", async ({
+  context,
+  extensionId,
+}) => {
+  const page = await context.newPage();
+  await installAccountStubs(page, { signedIn: true, unlocked: true });
+  await openFixtureAndClickWatermark(page, extensionId);
+
+  // Someone who has already paid should never see the gate — not even
+  // briefly enough to click.
+  await expect(watermarkDialog(page)).toBeVisible({ timeout: 15_000 });
+  await expect(gate(page)).toBeHidden();
+
+  await page.close();
+});
+
+test("the Supporter gate: locked, then unlocked, opens the tool", async ({
+  context,
+  extensionId,
+}) => {
+  const page = await context.newPage();
+  await installAccountStubs(page, { signedIn: true, unlocked: false, unlock: "ok" });
+  await openFixtureAndClickWatermark(page, extensionId);
+
+  await expect(gate(page)).toBeVisible({ timeout: 15_000 });
+  const unlockButton = gate(page).getByRole("button", { name: /Unlock for/ });
+  await expect(unlockButton).toContainText("1,000 credits");
+  await unlockButton.click();
+
+  // A successful unlock opens the tool directly — paying and then having
+  // to click the same button again would be a poor way to spend 1,000
+  // credits.
+  await expect(watermarkDialog(page)).toBeVisible({ timeout: 15_000 });
+  await expect(gate(page)).toBeHidden();
+
+  await page.close();
+});
+
+test("the Supporter gate: too few credits says how many, and doesn't open the tool", async ({
+  context,
+  extensionId,
+}) => {
+  const page = await context.newPage();
+  await installAccountStubs(page, { signedIn: true, unlocked: false, unlock: "insufficient" });
+  await openFixtureAndClickWatermark(page, extensionId);
+
+  await expect(gate(page)).toBeVisible({ timeout: 15_000 });
+  await gate(page).getByRole("button", { name: /Unlock for/ }).click();
+
+  // Both numbers, not just "not enough": how short the account is, is the
+  // thing that decides what to do next.
+  await expect(gate(page)).toContainText("250");
+  await expect(gate(page)).toContainText("1,000");
+  await expect(gate(page).getByRole("button", { name: "Buy credits" })).toBeVisible();
+  await expect(watermarkDialog(page)).toBeHidden();
+
+  await page.close();
+});
