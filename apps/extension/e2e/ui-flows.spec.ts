@@ -541,8 +541,17 @@ test("the real UI: drawing a text field leaves it focused and typeable, with no 
   // ...and the cursor is already in it, so typing needs no click first.
   await expect(field).toBeFocused();
 
+  // While focused the input is the editor, so its text is visible over an
+  // opaque background.
+  await expect(field).toHaveCSS("color", "rgb(0, 0, 0)");
+
   await page.keyboard.type("typed on the page");
   await field.blur();
+
+  // Unfocused it must paint nothing: PDFium already renders form data
+  // into the page bitmap, so an input that also drew its value showed the
+  // text twice — once at the PDF's font size, once at this element's.
+  await expect(field).toHaveCSS("color", "rgba(0, 0, 0, 0)");
 
   // Committed through the real backend rather than left sitting in the
   // DOM: the value survives a re-read of the field list.

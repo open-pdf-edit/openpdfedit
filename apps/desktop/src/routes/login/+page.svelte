@@ -48,7 +48,20 @@
 </script>
 
 <div bind:this={containerEl} class="login-shell">
-  <openapps-login variant="panel"></openapps-login>
+  <!-- The panel's framing is ours, not the platform's. The element
+       defaults to "Sign in to OpenApps", which is right on OpenApps' own
+       pages and wrong in a window titled OpenPdfEdit — a heading naming
+       a service the user has never heard of, asking for a password,
+       reads exactly like the thing people are told to be suspicious of.
+       The account behind it is the same one either way; only the framing
+       changes. Sign-in itself already runs against auth.openpdfedit.com
+       (see $lib/openapps), so the address bar agrees with the heading. -->
+  <openapps-login
+    variant="panel"
+    mark="P"
+    heading="Sign in to OpenPdfEdit"
+    description="Your account unlocks Supporter features and carries them to every device you sign in on. Everything else works without it."
+  ></openapps-login>
 </div>
 
 <style>

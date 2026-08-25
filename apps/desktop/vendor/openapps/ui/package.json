@@ -19,7 +19,8 @@
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
     },
-    "./bundle": "./dist/bundle/openapps-ui.js"
+    "./bundle": "./dist/bundle/openapps-ui.js",
+    "./bundle/*": "./dist/bundle/*.js"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json && node build-bundle.mjs",

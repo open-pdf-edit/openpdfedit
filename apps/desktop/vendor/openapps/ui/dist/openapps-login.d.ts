@@ -31,6 +31,21 @@ export declare class OpenAppsLogin extends OpenAppsElement {
      * duplicating them is how the two drift apart.
      */
     variant: "inline" | "panel";
+    /**
+     * The panel's heading and supporting line.
+     *
+     * They default to naming OpenApps, which is right on OpenApps' own
+     * pages and wrong everywhere else: this element is embedded inside
+     * host products, each with its own name in its own window, and a
+     * heading that announces the platform reads as a third party asking
+     * for a password. A host that has its own framing sets these; one that
+     * doesn't gets the defaults unchanged.
+     *
+     * `mark` is the glyph in the circle, for the same reason.
+     */
+    heading: string;
+    description: string;
+    mark: string;
     /** Which Nostr fallback the user has opened, if any. */
     private nostrFallback;
     private nostrHint;

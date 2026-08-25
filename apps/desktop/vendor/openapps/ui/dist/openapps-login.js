@@ -43,6 +43,21 @@ let OpenAppsLogin = class OpenAppsLogin extends OpenAppsElement {
          * duplicating them is how the two drift apart.
          */
         this.variant = "inline";
+        /**
+         * The panel's heading and supporting line.
+         *
+         * They default to naming OpenApps, which is right on OpenApps' own
+         * pages and wrong everywhere else: this element is embedded inside
+         * host products, each with its own name in its own window, and a
+         * heading that announces the platform reads as a third party asking
+         * for a password. A host that has its own framing sets these; one that
+         * doesn't gets the defaults unchanged.
+         *
+         * `mark` is the glyph in the circle, for the same reason.
+         */
+        this.heading = "Sign in to OpenApps";
+        this.description = "One account for every app in the suite. Optional — the apps work without it.";
+        this.mark = "O";
         /** Which Nostr fallback the user has opened, if any. */
         this.nostrFallback = "none";
         this.nostrHint = null;
@@ -254,12 +269,11 @@ let OpenAppsLogin = class OpenAppsLogin extends OpenAppsElement {
         return html `
       <div class="panel">
         <div class="head">
-          <span class="mark" aria-hidden="true">O</span>
-          <h1 class="title">Sign in to OpenApps</h1>
-          <p class="desc">
-            One account for every app in the suite. Optional — the apps work
-            without it.
-          </p>
+          <span class="mark" aria-hidden="true">${this.mark}</span>
+          <h1 class="title">${this.heading}</h1>
+          ${this.description
+            ? html `<p class="desc">${this.description}</p>`
+            : nothing}
         </div>
         <div class="body">${inner}</div>
       </div>
@@ -492,6 +506,15 @@ __decorate([
 __decorate([
     property({ type: String })
 ], OpenAppsLogin.prototype, "variant", void 0);
+__decorate([
+    property({ type: String })
+], OpenAppsLogin.prototype, "heading", void 0);
+__decorate([
+    property({ type: String })
+], OpenAppsLogin.prototype, "description", void 0);
+__decorate([
+    property({ type: String })
+], OpenAppsLogin.prototype, "mark", void 0);
 __decorate([
     state()
 ], OpenAppsLogin.prototype, "nostrFallback", void 0);
