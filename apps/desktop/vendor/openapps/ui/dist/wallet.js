@@ -236,6 +236,24 @@ export async function connectEthereum(chosen) {
     if (!provider)
         throw new WalletError("no Ethereum wallet found in this browser");
     const name = ethereumProviderName(provider);
+    // Ask what we already have before asking for more. `eth_accounts` is
+    // silent — no prompt, no permission request — and returns the accounts
+    // this origin has already been granted. Going straight to
+    // `eth_requestAccounts` raises a fresh permission request every time,
+    // which is both a needless prompt for anyone who has connected before
+    // and the thing that collides with an approval still sitting unanswered
+    // in the wallet ("already pending for origin …"). One of those can be
+    // left behind by a window that closed before the user got to it, and it
+    // then blocks every later attempt until they go and clear it.
+    try {
+        const existing = await provider.request({ method: "eth_accounts" });
+        const already = Array.isArray(existing) ? existing[0] : undefined;
+        if (typeof already === "string" && already)
+            return already;
+    }
+    catch {
+        // A wallet that doesn't answer this still gets the full request below.
+    }
     let accounts;
     try {
         accounts = await provider.request({ method: "eth_requestAccounts" });
@@ -425,6 +443,13 @@ function rejectionMessage(cause, fallback) {
         // there.
         if (error.code === 4001)
             return fallback;
+        // -32002 is "a request is already open". The wallet's own wording
+        // ends "Please wait", which is misleading: the pending request is
+        // usually one nobody is looking at — left by a window that closed
+        // before it was answered — and waiting never clears it.
+        if (error.code === -32002) {
+            return "Your wallet already has a request waiting. Open the wallet, finish or dismiss it, then try again.";
+        }
         const detail = error.message ?? error.reason;
         if (detail)
             return looksLikeRejection(detail) ? fallback : detail;
