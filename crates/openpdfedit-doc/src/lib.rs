@@ -636,6 +636,71 @@ impl Document {
         Ok(())
     }
 
+    /// Removes `field_id` from the document's `/AcroForm`/`/Fields`
+    /// array. The exact inverse of
+    /// [`Document::ensure_acroform_and_append_field`], and handles the
+    /// same two shapes (`/Fields` direct or indirect).
+    ///
+    /// This exists because unlinking a widget from a page is *not*
+    /// enough to delete a form field. A field's identity is its name, and
+    /// its value lives on the AcroForm entry — so a widget removed from
+    /// `/Annots` while its entry stays behind leaves a field that nothing
+    /// draws and nothing can reach, still holding whatever value it had.
+    /// Create a new field with the same name afterwards and the two are,
+    /// by the spec, *one field*: the new widget inherits the old value
+    /// and edits to either fight over it.
+    ///
+    /// Returns whether anything was removed, so a caller deleting an
+    /// ordinary annotation — which is never in `/Fields` — can tell
+    /// "nothing to do" from "done" without treating either as an error.
+    pub fn remove_acroform_field(&mut self, field_id: ObjectId) -> Result<bool, DocError> {
+        let root_id = self
+            .current
+            .trailer
+            .get(b"Root")
+            .ok()
+            .and_then(|o| o.as_reference().ok())
+            .ok_or(DocError::NoRootPages)?;
+        // Deliberately not `find_or_create_acroform`: a document with no
+        // AcroForm has no field to remove, and creating one in order to
+        // discover that would add a structure to a file that never had it.
+        let acroform_id = match self.dict_at(root_id)?.get(b"AcroForm") {
+            Ok(Object::Reference(id)) => *id,
+            _ => return Ok(false),
+        };
+        let mut acroform_dict = self.dict_at(acroform_id)?.clone();
+
+        let (container, mut fields) = match acroform_dict.get(b"Fields") {
+            Ok(Object::Reference(fields_id)) => {
+                let fields_id = *fields_id;
+                (Some(fields_id), self.array_at(fields_id)?.clone())
+            }
+            Ok(Object::Array(inline)) => (None, inline.clone()),
+            _ => return Ok(false),
+        };
+
+        let before = fields.len();
+        fields.retain(|o| !matches!(o, Object::Reference(id) if *id == field_id));
+        if fields.len() == before {
+            return Ok(false);
+        }
+
+        match container {
+            Some(fields_id) => {
+                self.current
+                    .objects
+                    .insert(fields_id, Object::Array(fields));
+            }
+            None => {
+                acroform_dict.set("Fields", fields);
+                self.current
+                    .objects
+                    .insert(acroform_id, Object::Dictionary(acroform_dict));
+            }
+        }
+        Ok(true)
+    }
+
     /// The object ids referenced by the given page's `/Annots` array
     /// (whether stored inline in the page dict or as a separate indirect
     /// array — see `append_annotation_ref`), in document order.

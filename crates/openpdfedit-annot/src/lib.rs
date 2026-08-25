@@ -248,12 +248,27 @@ pub fn add_annotation(
 /// means (unlinked from the page's `/Annots` array; the annotation's own
 /// object and appearance stream are left as orphaned, unreferenced
 /// objects, not scrubbed from the file).
+///
+/// A form field's widget needs a second unlink. Its identity and its
+/// value live on the document's `/AcroForm`/`/Fields` entry, not on the
+/// page — so removing it from `/Annots` alone leaves a field nothing
+/// draws and nothing can reach, still holding its value. Creating a
+/// field with the same name afterwards then produces, by the spec, *one*
+/// field with two widgets: the new one appears pre-filled with the old
+/// one's value, and neither can be edited independently. That is not a
+/// hypothetical — it is what deleting a text field and drawing another
+/// did.
 pub fn delete_annotation(
     doc: &mut Document,
     page_index: u32,
     annot_id: ObjectId,
 ) -> Result<(), AnnotError> {
     doc.remove_annotation_ref(page_index, annot_id)?;
+    // Unconditional, and cheap: an ordinary annotation is never in
+    // `/Fields`, so this is a no-op for everything that isn't a widget.
+    // Asking "is this a widget?" first would mean reading the annotation
+    // dict to reach the same answer the array lookup already gives.
+    doc.remove_acroform_field(annot_id)?;
     Ok(())
 }
 
