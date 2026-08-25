@@ -581,10 +581,17 @@
     position: absolute;
     margin: 0;
     padding: 0 3px;
+    /* The page bitmap already shows this field's value: PDFium renders
+       form data (FPDF_FFLDraw) as part of the page, so an input that
+       also painted its value drew it twice — once at the PDF's own font
+       size and once at this element's, which is what "the text appears
+       twice, in two sizes" was. The input is the editor, not the
+       display: it goes visible only while it has focus, where its opaque
+       background covers the rendering underneath. */
+    color: transparent;
     border: 1px solid color-mix(in oklab, var(--info-fg, #15b9eb) 55%, transparent);
     border-radius: 2px;
     background: color-mix(in oklab, var(--info-fg, #15b9eb) 8%, transparent);
-    color: var(--black, #000);
     font-family: inherit;
     line-height: 1;
     /* Inert unless the select tool is active, so drawing a highlight
@@ -600,6 +607,7 @@
     outline: 2px solid var(--info-fg, #15b9eb);
     outline-offset: 0;
     background: var(--white, #fff);
+    color: var(--black, #000);
   }
 
   .search-hit {
