@@ -18,6 +18,10 @@ export declare class OpenAppsAccount extends OpenAppsElement {
     private notice;
     /** Set when the two accounts share a sign-in method and cannot combine. */
     private blocked;
+    /** Wallets to choose between, once more than one has announced itself.
+     * Null while there is nothing to choose — one wallet connects straight
+     * away rather than making the user confirm which of one. */
+    private wallets;
     connectedCallback(): void;
     protected onSessionChange(): void;
     private load;
@@ -51,6 +55,16 @@ export declare class OpenAppsAccount extends OpenAppsElement {
     private connectGoogle;
     /** Read the outcome of a Google link redirect, if we just came back. */
     private handleLinkRedirect;
+    /**
+     * Start connecting a wallet.
+     *
+     * With two wallets installed, `window.ethereum` holds whichever
+     * injected last — so connecting blind prompts a wallet the user may
+     * not have meant, and dismissing that prompt looks like a failure of
+     * this app. Asking EIP-6963 who is present turns that into a choice:
+     * one wallet connects immediately, several are offered by name.
+     */
+    private beginEthereumConnect;
     private connect;
     private confirmMerge;
     private afterLink;

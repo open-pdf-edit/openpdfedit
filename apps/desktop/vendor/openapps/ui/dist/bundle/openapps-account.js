@@ -1,4 +1,4 @@
-import{d as g,e as b,f}from"./chunk-TDED3WJS.js";import{a as k,b as i,d as o,e as w,g as l,h as p,l as c,m as u}from"./chunk-OUMOJ2PH.js";import{a as r}from"./chunk-LCQWCHVU.js";var v={google:"Google",eip155:"Wallet",nostr:"Nostr"},n=class extends u{constructor(){super(...arguments);this.me=null;this.enabled=null;this.pending=null;this.notice=null;this.blocked=null}connectedCallback(){super.connectedCallback(),this.load()}onSessionChange(){this.load()}async load(){if(await Promise.resolve(),this.handleLinkRedirect(),this.enabled||(this.enabled=await this.run(()=>this.sdk.auth.methods())??null),!this.sdk.isLoggedIn){this.me=null;return}this.me=await this.run(()=>this.sdk.auth.me())??null}linked(e){return(this.me?.linked_accounts??[]).some(t=>t.namespace===e)}get connectable(){return["eip155","nostr"].filter(e=>this.enabled?.[e]&&!this.linked(e))}get canConnectGoogle(){return(this.enabled?.google??!1)&&!this.linked("google")}async signOut(){await this.run(()=>this.sdk.auth.logout()),this.me=null,this.emit("openapps-logout",null),c()}async connectGoogle(e=!1){await this.run(async()=>{let t=`${location.origin}${location.pathname}${location.search}`,s=await this.sdk.auth.googleLinkStart(t,{merge:e});window.location.href=s})}handleLinkRedirect(){let e;try{e=this.sdk.auth.completeLinkRedirect()}catch{return}if(e)switch(e.status){case"linked":this.notice=e.merged?`Accounts combined \u2014 ${e.credits.toLocaleString()} credits moved across.`:"Google connected.",this.emit("openapps-identity-linked",e),c();break;case"conflict":this.pending={namespace:"google",other:{id:"",balance:e.balance}};break;case"blocked":this.blocked=e.message;break;case"error":this.error=e.message;break}}async connect(e){this.blocked=null,await this.run(async()=>{let t=e==="eip155"?await g():void 0,s=await this.sdk.auth.linkChallenge(e,t),m=e==="eip155"?await b(s.message,t):await f(s.message);try{let a=await this.sdk.auth.linkVerify(s.challenge_id,m);this.afterLink(a)}catch(a){if(a instanceof p&&(a.detail?.code==="merge_blocked_by_duplicate_namespace"||a.detail?.code==="namespace_already_linked")){this.blocked=a.message;return}if(a instanceof p&&a.detail?.code==="identity_belongs_to_another_account"){this.pending={namespace:e,other:a.detail.other_account};return}throw a}})}async confirmMerge(){let e=this.pending;if(e){if(e.namespace==="google"){this.pending=null,await this.connectGoogle(!0);return}await this.run(async()=>{let t=e.namespace==="eip155"?await g():void 0,s=await this.sdk.auth.linkChallenge(e.namespace,t),m=e.namespace==="eip155"?await b(s.message,t):await f(s.message),a=await this.sdk.auth.linkVerify(s.challenge_id,m,{merge:!0});this.pending=null,this.afterLink(a)})}}afterLink(e){this.notice=e.merged?`Accounts combined \u2014 ${(e.credits_transferred??0).toLocaleString()} credits moved across.`:"Connected.",this.emit("openapps-identity-linked",e),c(),this.load()}async unlink(e){await this.run(async()=>{await this.sdk.auth.unlink(e),this.notice="Disconnected.",this.emit("openapps-identity-unlinked",{caip10:e}),await this.load()})}render(){if(!this.sdkOrNull)return i`<p class="muted">Loading…</p>`;if(!this.sdk.isLoggedIn)return i`<p class="muted">Sign in to manage your account.</p>`;if(!this.me)return i`<p class="muted">Loading…</p>`;if(this.pending)return this.renderMergePrompt(this.pending);let e=this.me.linked_accounts;return i`
+import{c as $,e as b,f as v,g as f}from"./chunk-AX62CXKP.js";import{a as w,b as i,d as l,e as y,g as o,h as p,l as h,m as g}from"./chunk-OUMOJ2PH.js";import{a as r}from"./chunk-LCQWCHVU.js";var k={google:"Google",eip155:"Wallet",nostr:"Nostr"},n=class extends g{constructor(){super(...arguments);this.me=null;this.enabled=null;this.pending=null;this.notice=null;this.blocked=null;this.wallets=null}connectedCallback(){super.connectedCallback(),this.load()}onSessionChange(){this.load()}async load(){if(await Promise.resolve(),this.handleLinkRedirect(),this.enabled||(this.enabled=await this.run(()=>this.sdk.auth.methods())??null),!this.sdk.isLoggedIn){this.me=null;return}this.me=await this.run(()=>this.sdk.auth.me())??null}linked(e){return(this.me?.linked_accounts??[]).some(t=>t.namespace===e)}get connectable(){return["eip155","nostr"].filter(e=>this.enabled?.[e]&&!this.linked(e))}get canConnectGoogle(){return(this.enabled?.google??!1)&&!this.linked("google")}async signOut(){await this.run(()=>this.sdk.auth.logout()),this.me=null,this.emit("openapps-logout",null),h()}async connectGoogle(e=!1){await this.run(async()=>{let t=`${location.origin}${location.pathname}${location.search}`,a=await this.sdk.auth.googleLinkStart(t,{merge:e});window.location.href=a})}handleLinkRedirect(){let e;try{e=this.sdk.auth.completeLinkRedirect()}catch{return}if(e)switch(e.status){case"linked":this.notice=e.merged?`Accounts combined \u2014 ${e.credits.toLocaleString()} credits moved across.`:"Google connected.",this.emit("openapps-identity-linked",e),h();break;case"conflict":this.pending={namespace:"google",other:{id:"",balance:e.balance}};break;case"blocked":this.blocked=e.message;break;case"error":this.error=e.message;break}}async beginEthereumConnect(){this.blocked=null;let e=await $();if(e.length>1){this.wallets=e;return}await this.connect("eip155",e[0])}async connect(e,t){this.blocked=null,this.wallets=null,await this.run(async()=>{let a=e==="eip155"?await b(t?.provider):void 0,c=await this.sdk.auth.linkChallenge(e,a),u=e==="eip155"?await v(c.message,a,t?.provider):await f(c.message);try{let s=await this.sdk.auth.linkVerify(c.challenge_id,u);this.afterLink(s)}catch(s){if(s instanceof p&&(s.detail?.code==="merge_blocked_by_duplicate_namespace"||s.detail?.code==="namespace_already_linked")){this.blocked=s.message;return}if(s instanceof p&&s.detail?.code==="identity_belongs_to_another_account"){this.pending={namespace:e,other:s.detail.other_account};return}throw s}})}async confirmMerge(){let e=this.pending;if(e){if(e.namespace==="google"){this.pending=null,await this.connectGoogle(!0);return}await this.run(async()=>{let t=e.namespace==="eip155"?await b():void 0,a=await this.sdk.auth.linkChallenge(e.namespace,t),c=e.namespace==="eip155"?await v(a.message,t):await f(a.message),u=await this.sdk.auth.linkVerify(a.challenge_id,c,{merge:!0});this.pending=null,this.afterLink(u)})}}afterLink(e){this.notice=e.merged?`Accounts combined \u2014 ${(e.credits_transferred??0).toLocaleString()} credits moved across.`:"Connected.",this.emit("openapps-identity-linked",e),h(),this.load()}async unlink(e){await this.run(async()=>{await this.sdk.auth.unlink(e),this.notice="Disconnected.",this.emit("openapps-identity-unlinked",{caip10:e}),await this.load()})}render(){if(!this.sdkOrNull)return i`<p class="muted">Loading…</p>`;if(!this.sdk.isLoggedIn)return i`<p class="muted">Sign in to manage your account.</p>`;if(!this.me)return i`<p class="muted">Loading…</p>`;if(this.pending)return this.renderMergePrompt(this.pending);let e=this.me.linked_accounts;return i`
       <div class="card">
         <div class="head">
           <div>
@@ -15,9 +15,9 @@ import{d as g,e as b,f}from"./chunk-TDED3WJS.js";import{a as k,b as i,d as o,e a
         <ul class="identities">
           ${e.map(t=>i`
               <li>
-                <span class="tag">${v[t.namespace]??t.namespace}</span>
+                <span class="tag">${k[t.namespace]??t.namespace}</span>
                 <code title=${t.caip10}
-                  >${y(t.label??t.caip10)}</code
+                  >${x(t.label??t.caip10)}</code
                 >
                 ${e.length>1?i`<button
                       class="link"
@@ -35,12 +35,19 @@ import{d as g,e as b,f}from"./chunk-TDED3WJS.js";import{a as k,b as i,d as o,e a
               <div class="row">
                 ${this.canConnectGoogle?i`<button ?disabled=${this.busy} @click=${()=>this.connectGoogle()}>
                       Connect Google
-                    </button>`:o}
-                ${this.connectable.map(t=>i`
-                    <button ?disabled=${this.busy} @click=${()=>this.connect(t)}>
-                      Connect ${v[t]}
-                    </button>
-                  `)}
+                    </button>`:l}
+                ${this.connectable.map(t=>t==="eip155"&&this.wallets?this.wallets.map(a=>i`
+                          <button ?disabled=${this.busy} @click=${()=>this.connect(t,a)}>
+                            Connect ${a.name}
+                          </button>
+                        `):i`
+                        <button
+                          ?disabled=${this.busy}
+                          @click=${()=>t==="eip155"?this.beginEthereumConnect():this.connect(t)}
+                        >
+                          Connect ${k[t]}
+                        </button>
+                      `)}
               </div>
               <p class="muted small">
                 Connecting a method that is already on another account will offer to
@@ -48,9 +55,9 @@ import{d as g,e as b,f}from"./chunk-TDED3WJS.js";import{a as k,b as i,d as o,e a
               </p>
             `:i`<p class="muted small">Every available method is connected.</p>`}
 
-        ${this.blocked?i`<p class="warn" role="alert">${this.blocked}</p>`:o}
-        ${this.notice?i`<p class="notice">${this.notice}</p>`:o}
-        ${this.error?i`<p class="error" role="alert">${this.error}</p>`:o}
+        ${this.blocked?i`<p class="warn" role="alert">${this.blocked}</p>`:l}
+        ${this.notice?i`<p class="notice">${this.notice}</p>`:l}
+        ${this.error?i`<p class="error" role="alert">${this.error}</p>`:l}
       </div>
 
       <button class="signout" ?disabled=${this.busy} @click=${this.signOut}>
@@ -60,7 +67,7 @@ import{d as g,e as b,f}from"./chunk-TDED3WJS.js";import{a as k,b as i,d as o,e a
       <div class="card">
         <h3>Combine two accounts?</h3>
         <p>
-          That ${v[e.namespace]??e.namespace} identity already
+          That ${k[e.namespace]??e.namespace} identity already
           belongs to another account holding
           <strong>${e.other.balance.toLocaleString()} credits</strong>.
         </p>
@@ -76,8 +83,8 @@ import{d as g,e as b,f}from"./chunk-TDED3WJS.js";import{a as k,b as i,d as o,e a
             Cancel
           </button>
         </div>
-        ${this.error?i`<p class="error" role="alert">${this.error}</p>`:o}
-    `}};n.styles=[u.baseStyles,k`
+        ${this.error?i`<p class="error" role="alert">${this.error}</p>`:l}
+    `}};n.styles=[g.baseStyles,w`
       .card {
         border: 1px solid var(--border-hairline, var(--fb-hairline));
         border-radius: var(--radius-lg, 12px);
@@ -194,5 +201,5 @@ import{d as g,e as b,f}from"./chunk-TDED3WJS.js";import{a as k,b as i,d as o,e a
         background: var(--warning-bg, #fef3c7);
         color: var(--warning-fg, #92400e);
       }
-    `],r([l()],n.prototype,"me",2),r([l()],n.prototype,"enabled",2),r([l()],n.prototype,"pending",2),r([l()],n.prototype,"notice",2),r([l()],n.prototype,"blocked",2),n=r([w("openapps-account")],n);function y(d,h=18,e=8){return d.length<=h+e+1?d:`${d.slice(0,h)}\u2026${d.slice(-e)}`}export{n as OpenAppsAccount};
+    `],r([o()],n.prototype,"me",2),r([o()],n.prototype,"enabled",2),r([o()],n.prototype,"pending",2),r([o()],n.prototype,"notice",2),r([o()],n.prototype,"blocked",2),r([o()],n.prototype,"wallets",2),n=r([y("openapps-account")],n);function x(d,m=18,e=8){return d.length<=m+e+1?d:`${d.slice(0,m)}\u2026${d.slice(-e)}`}export{n as OpenAppsAccount};
 //# sourceMappingURL=openapps-account.js.map

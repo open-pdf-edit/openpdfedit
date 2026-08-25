@@ -46,6 +46,8 @@ export declare class OpenAppsLogin extends OpenAppsElement {
     heading: string;
     description: string;
     mark: string;
+    /** Wallets to choose between, once more than one has announced. */
+    private wallets;
     /** Which Nostr fallback the user has opened, if any. */
     private nostrFallback;
     private nostrHint;
@@ -54,6 +56,10 @@ export declare class OpenAppsLogin extends OpenAppsElement {
     connectedCallback(): void;
     protected onSessionChange(): void;
     private load;
+    /** See `<openapps-account>`'s own version: one wallet connects, several
+     * are offered by name, because `window.ethereum` holds only whichever
+     * injected last and cannot express a choice. */
+    private beginWalletLogin;
     private loginWithWallet;
     private loginWithNostr;
     /** Sign through a remote signer (NIP-46). The key never comes here. */

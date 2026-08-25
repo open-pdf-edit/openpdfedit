@@ -20,7 +20,7 @@ import { customElement, state } from "lit/decorators.js";
 import { OpenAppsError } from "@openapps/sdk";
 import { OpenAppsElement } from "./base.js";
 import { notify } from "./context.js";
-import { connectEthereum, signNostr, signSiwe } from "./wallet.js";
+import { connectEthereum, discoverEthereumWallets, signNostr, signSiwe, } from "./wallet.js";
 const LABELS = {
     google: "Google",
     eip155: "Wallet",
@@ -35,6 +35,10 @@ let OpenAppsAccount = class OpenAppsAccount extends OpenAppsElement {
         this.notice = null;
         /** Set when the two accounts share a sign-in method and cannot combine. */
         this.blocked = null;
+        /** Wallets to choose between, once more than one has announced itself.
+         * Null while there is nothing to choose — one wallet connects straight
+         * away rather than making the user confirm which of one. */
+        this.wallets = null;
     }
     connectedCallback() {
         super.connectedCallback();
@@ -147,15 +151,34 @@ let OpenAppsAccount = class OpenAppsAccount extends OpenAppsElement {
                 break;
         }
     }
-    async connect(namespace) {
+    /**
+     * Start connecting a wallet.
+     *
+     * With two wallets installed, `window.ethereum` holds whichever
+     * injected last — so connecting blind prompts a wallet the user may
+     * not have meant, and dismissing that prompt looks like a failure of
+     * this app. Asking EIP-6963 who is present turns that into a choice:
+     * one wallet connects immediately, several are offered by name.
+     */
+    async beginEthereumConnect() {
         this.blocked = null;
+        const wallets = await discoverEthereumWallets();
+        if (wallets.length > 1) {
+            this.wallets = wallets;
+            return;
+        }
+        await this.connect("eip155", wallets[0]);
+    }
+    async connect(namespace, wallet) {
+        this.blocked = null;
+        this.wallets = null;
         await this.run(async () => {
             // Sign the same challenge the login flow uses — linking differs only
             // in which endpoint verifies it.
-            const address = namespace === "eip155" ? await connectEthereum() : undefined;
+            const address = namespace === "eip155" ? await connectEthereum(wallet?.provider) : undefined;
             const challenge = await this.sdk.auth.linkChallenge(namespace, address);
             const proof = namespace === "eip155"
-                ? await signSiwe(challenge.message, address)
+                ? await signSiwe(challenge.message, address, wallet?.provider)
                 : await signNostr(challenge.message);
             try {
                 const result = await this.sdk.auth.linkVerify(challenge.challenge_id, proof);
@@ -280,11 +303,25 @@ let OpenAppsAccount = class OpenAppsAccount extends OpenAppsElement {
                       Connect Google
                     </button>`
                 : nothing}
-                ${this.connectable.map((ns) => html `
-                    <button ?disabled=${this.busy} @click=${() => this.connect(ns)}>
-                      Connect ${LABELS[ns]}
-                    </button>
-                  `)}
+                ${this.connectable.map((ns) => 
+            // With several wallets installed, the one button becomes
+            // one button per wallet — reusing this same shape rather
+            // than opening a chooser, so the choice appears where the
+            // click already was.
+            ns === "eip155" && this.wallets
+                ? this.wallets.map((w) => html `
+                          <button ?disabled=${this.busy} @click=${() => this.connect(ns, w)}>
+                            Connect ${w.name}
+                          </button>
+                        `)
+                : html `
+                        <button
+                          ?disabled=${this.busy}
+                          @click=${() => ns === "eip155" ? this.beginEthereumConnect() : this.connect(ns)}
+                        >
+                          Connect ${LABELS[ns]}
+                        </button>
+                      `)}
               </div>
               <p class="muted small">
                 Connecting a method that is already on another account will offer to
@@ -466,6 +503,9 @@ __decorate([
 __decorate([
     state()
 ], OpenAppsAccount.prototype, "blocked", void 0);
+__decorate([
+    state()
+], OpenAppsAccount.prototype, "wallets", void 0);
 OpenAppsAccount = __decorate([
     customElement("openapps-account")
 ], OpenAppsAccount);

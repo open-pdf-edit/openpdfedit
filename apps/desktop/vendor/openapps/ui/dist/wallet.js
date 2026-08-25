@@ -63,16 +63,10 @@ export function ethereumProviderName(provider) {
     if (!provider)
         return "wallet";
     const flags = provider;
-    // EIP-6963 gives a real name; the flags are what wallets set on the
-    // injected object and are the only identification available without it.
-    if (typeof flags.__name === "string")
-        return flags.__name;
-    if (flags.isOkxWallet || flags.isOKExWallet)
+    // Only reached without EIP-6963, which carries a real name. These flags
+    // are all a legacy injected object offers.
+    if (flags.isOkxWallet)
         return "OKX Wallet";
-    if (flags.isRabby)
-        return "Rabby";
-    if (flags.isBraveWallet)
-        return "Brave Wallet";
     if (flags.isCoinbaseWallet)
         return "Coinbase Wallet";
     if (flags.isMetaMask)
@@ -101,9 +95,8 @@ function findEthereumProvider() {
 /**
  * Every injected provider this page can see, deduplicated.
  *
- * Exists so a caller can tell "one wallet, connect it" from "several, the
- * user has to say which" — the case a single `window.ethereum` cannot
- * represent at all.
+ * Legacy globals only. `discoverEthereumWallets` is the one to use: this
+ * is its fallback for wallets that predate EIP-6963.
  */
 export function ethereumProviders() {
     if (typeof window === "undefined")
@@ -119,6 +112,47 @@ export function ethereumProviders() {
         out.push({ name: ethereumProviderName(candidate), provider: candidate });
     }
     return out;
+}
+/**
+ * Ask every wallet in the browser to announce itself (EIP-6963).
+ *
+ * This is the fix for the whole class of problem `window.ethereum`
+ * creates. That global holds exactly one provider, so two installed
+ * wallets fight over it and the winner is whichever injected last — a
+ * user with MetaMask and OKX who wants OKX gets prompted by MetaMask,
+ * dismisses it, and is told the connection was rejected. EIP-6963 exists
+ * precisely because a single global cannot express "the user has more
+ * than one wallet and gets to say which".
+ *
+ * Announcements are synchronous — a wallet's listener responds during the
+ * dispatch below — but the spec allows a later announcement, so this
+ * yields once before answering rather than reading the array immediately.
+ *
+ * Falls back to the legacy globals when nothing announces, so wallets
+ * that predate the standard still work.
+ */
+export async function discoverEthereumWallets() {
+    if (typeof window === "undefined")
+        return [];
+    const found = new Map();
+    const onAnnounce = (event) => {
+        const detail = event.detail;
+        const provider = detail?.provider;
+        const info = detail?.info;
+        if (!provider || typeof provider.request !== "function")
+            return;
+        // Keyed by uuid so a wallet announcing twice — which happens when a
+        // page requests more than once — is still one entry.
+        const key = info?.uuid ?? info?.name ?? String(found.size);
+        if (found.has(key))
+            return;
+        found.set(key, { name: info?.name ?? ethereumProviderName(provider), provider });
+    };
+    window.addEventListener("eip6963:announceProvider", onAnnounce);
+    window.dispatchEvent(new Event("eip6963:requestProvider"));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    window.removeEventListener("eip6963:announceProvider", onAnnounce);
+    return found.size > 0 ? [...found.values()] : ethereumProviders();
 }
 export function hasEthereum() {
     return findEthereumProvider() !== null;
@@ -197,8 +231,8 @@ export async function signNostrWithSecretKey(templateJson, nsec) {
     }
 }
 /** Prompt for account access and return the first address. */
-export async function connectEthereum() {
-    const provider = findEthereumProvider();
+export async function connectEthereum(chosen) {
+    const provider = chosen ?? findEthereumProvider();
     if (!provider)
         throw new WalletError("no Ethereum wallet found in this browser");
     const name = ethereumProviderName(provider);
@@ -227,8 +261,11 @@ export async function connectEthereum() {
  * Parameter order is [message, address] — the reverse of `eth_sign`, and a
  * classic source of "invalid signature" bugs.
  */
-export async function signSiwe(message, address) {
-    const provider = findEthereumProvider();
+export async function signSiwe(message, address, chosen) {
+    // The same provider that connected, or the signature request goes to a
+    // different wallet than the address came from — which fails, confusingly,
+    // as a signature mismatch rather than as the wrong wallet.
+    const provider = chosen ?? findEthereumProvider();
     if (!provider)
         throw new WalletError("no Ethereum wallet found in this browser");
     try {

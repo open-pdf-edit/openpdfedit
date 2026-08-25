@@ -19,7 +19,7 @@ import { OpenAppsElement } from "./base.js";
 import { ethereumMark, googleMark, nostrMark } from "./provider-marks.js";
 import { notify } from "./context.js";
 import { clearReferral, referralInUrl, storedReferral } from "./referral-code.js";
-import { connectEthereum, nostrProviderNames, signNostr, signNostrWithBunker, signNostrWithSecretKey, signSiwe, waitForNostrProvider, } from "./wallet.js";
+import { connectEthereum, discoverEthereumWallets, nostrProviderNames, signNostr, signNostrWithBunker, signNostrWithSecretKey, signSiwe, waitForNostrProvider, } from "./wallet.js";
 let OpenAppsLogin = class OpenAppsLogin extends OpenAppsElement {
     constructor() {
         super(...arguments);
@@ -59,6 +59,8 @@ let OpenAppsLogin = class OpenAppsLogin extends OpenAppsElement {
         this.heading = "Sign in to OpenApps";
         this.description = "One account for every app in the suite. Optional — the apps work without it.";
         this.mark = "O";
+        /** Wallets to choose between, once more than one has announced. */
+        this.wallets = null;
         /** Which Nostr fallback the user has opened, if any. */
         this.nostrFallback = "none";
         this.nostrHint = null;
@@ -95,13 +97,25 @@ let OpenAppsLogin = class OpenAppsLogin extends OpenAppsElement {
         // is the cheapest way to find out, and the SDK clears it if so.
         this.me = (await this.run(() => this.sdk.auth.me())) ?? null;
     }
-    async loginWithWallet() {
+    /** See `<openapps-account>`'s own version: one wallet connects, several
+     * are offered by name, because `window.ethereum` holds only whichever
+     * injected last and cannot express a choice. */
+    async beginWalletLogin() {
+        const wallets = await discoverEthereumWallets();
+        if (wallets.length > 1) {
+            this.wallets = wallets;
+            return;
+        }
+        await this.loginWithWallet(wallets[0]);
+    }
+    async loginWithWallet(wallet) {
+        this.wallets = null;
         await this.run(async () => {
             // connectEthereum throws a readable WalletError when no provider
             // responded, which is the right moment to find out — not at render.
-            const address = await connectEthereum();
+            const address = await connectEthereum(wallet?.provider);
             const challenge = await this.sdk.auth.challenge("eip155", address);
-            const proof = await signSiwe(challenge.message, address);
+            const proof = await signSiwe(challenge.message, address, wallet?.provider);
             const result = await this.sdk.auth.verify(challenge.challenge_id, proof, {
                 referralCode: referralFromUrl(),
             });
@@ -237,15 +251,25 @@ let OpenAppsLogin = class OpenAppsLogin extends OpenAppsElement {
               ${googleMark}<span>Continue with Google</span>
             </button>`
             : nothing}
-        ${wallet
-            ? html `<button
-              class="provider ${block}"
-              ?disabled=${this.busy}
-              @click=${this.loginWithWallet}
-            >
-              ${ethereumMark}<span>Continue with a wallet</span>
-            </button>`
-            : nothing}
+        ${wallet && this.wallets
+            ? // Several installed: one button each, named, in place of the
+                // generic one — see <openapps-account> for why.
+                this.wallets.map((w) => html `<button
+                class="provider ${block}"
+                ?disabled=${this.busy}
+                @click=${() => this.loginWithWallet(w)}
+              >
+                ${ethereumMark}<span>Continue with ${w.name}</span>
+              </button>`)
+            : wallet
+                ? html `<button
+                class="provider ${block}"
+                ?disabled=${this.busy}
+                @click=${() => this.beginWalletLogin()}
+              >
+                ${ethereumMark}<span>Continue with a wallet</span>
+              </button>`
+                : nothing}
         ${nostr
             ? html `
               <button
@@ -521,6 +545,9 @@ __decorate([
 __decorate([
     property({ type: String })
 ], OpenAppsLogin.prototype, "mark", void 0);
+__decorate([
+    state()
+], OpenAppsLogin.prototype, "wallets", void 0);
 __decorate([
     state()
 ], OpenAppsLogin.prototype, "nostrFallback", void 0);
