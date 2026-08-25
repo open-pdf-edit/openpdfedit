@@ -21,11 +21,16 @@ APP_ROOT="/var/www/openpdfedit-app"
 SITE_ROOT="/var/www/openpdfedit"
 
 WITH_SITE=""
+# Expanded below as ${RSYNC_EXTRA[@]+"${RSYNC_EXTRA[@]}"}, not the bare
+# form. macOS still ships bash 3.2, where expanding an empty array under
+# `set -u` is an unbound-variable error rather than nothing — so the
+# plain spelling worked on every run *with* flags and failed on the
+# ordinary run without them, which is the one everybody makes.
 RSYNC_EXTRA=()
 for arg in "$@"; do
   case "$arg" in
     --site) WITH_SITE=1 ;;
-    --dry-run) RSYNC_EXTRA+=(--dry-run --itemize-changes) ;;
+    --dry-run) RSYNC_EXTRA+=(--dry-run --itemize-changes); DRY_RUN=1 ;;
     *) echo "unknown option: $arg" >&2; exit 2 ;;
   esac
 done
@@ -50,18 +55,19 @@ log "Publishing $BUILD_ID to $HOST:$APP_ROOT"
 # --delete matters: JavaScript filenames are content hashes, so without
 # it every deploy leaves the previous build's chunks behind for good.
 #
-# The first run moves ~47 MB, most of it the OCR engine and language
-# data. Every run after that moves almost nothing — those files never
-# change, and rsync only sends what differs.
-rsync -az --delete --human-readable --stats "${RSYNC_EXTRA[@]}" \
+# The first run moves ~57 MB, most of it the OCR engine and language
+# data — twelve core variants, because tesseract.js picks one at runtime
+# from what the browser supports. Every run after that moves almost
+# nothing: those files never change, and rsync only sends what differs.
+rsync -az --delete --human-readable --stats ${RSYNC_EXTRA[@]+"${RSYNC_EXTRA[@]}"} \
   apps/webapp/dist/ "$HOST:$APP_ROOT/"
 
 if [ -n "$WITH_SITE" ]; then
   log "Publishing the marketing site to $HOST:$SITE_ROOT"
-  rsync -az --delete --human-readable "${RSYNC_EXTRA[@]}" site/ "$HOST:$SITE_ROOT/"
+  rsync -az --delete --human-readable ${RSYNC_EXTRA[@]+"${RSYNC_EXTRA[@]}"} site/ "$HOST:$SITE_ROOT/"
 fi
 
-if [ ${#RSYNC_EXTRA[@]} -gt 0 ]; then
+if [ -n "${DRY_RUN:-}" ]; then
   log "Dry run — nothing was changed"
   exit 0
 fi

@@ -296,9 +296,9 @@ moved; that check is what says the site is serving them.
 **Expect a password prompt per rsync.** If that gets tiresome,
 `ssh-copy-id root@104.36.65.54` once removes it.
 
-**The first run moves about 47 MB** — most of it the OCR engine and
+**The first run moves about 57 MB** — most of it the OCR engine and
 language data, which the app fetches only when someone actually OCRs
-something. Every run after that moves almost nothing: those files never
+something, and only one variant of. Every run after that moves almost nothing: those files never
 change and rsync only sends what differs.
 
 Same `/var/www/<name>` layout as `/var/www/opencapture`. If nginx runs
