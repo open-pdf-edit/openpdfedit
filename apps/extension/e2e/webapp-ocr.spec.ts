@@ -109,27 +109,48 @@ test("every mutating backend method migrates the open-document map", async () =>
     "utf8",
   );
 
-  // Session calls that go through commit_mutation and therefore rotate.
-  const mutators = [
-    "addOcrTextLayer",
-    "addAnnotation",
-    "deleteAnnotation",
-    "createFormField",
-    "fillFormFields",
-  ];
+  // Discovered, not listed. The first version of this test named the
+  // mutators it knew about, which is a list that goes stale the moment
+  // one is added — `numberPages` and `flattenDocument` were both missing
+  // it and both broke undo, after this test was written and passing.
+  //
+  // So the default is inverted: every session call must either migrate
+  // the map or be named here as one that cannot rotate the handle. A new
+  // mutator fails until someone decides which it is, which is the only
+  // arrangement that survives people forgetting.
+  const CANNOT_ROTATE = new Set([
+    // Read-only.
+    "renderPage",
+    "pageSizes",
+    "listSignatures",
+    "searchDocument",
+    "documentOutline",
+    "workingCopyBytes",
+    "saveToBytes",
+    "exportXfdf",
+    "compareDocuments",
+    // Lifecycle: these establish or end a handle rather than rotate one.
+    "openDocument",
+    "closeDocument",
+    "markSaved",
+    // Produce a *new* document, opened separately — nothing to migrate.
+    "extractPages",
+    "mergeDocuments",
+    // Writes a copy without touching the open document.
+    "encryptDocumentBytes",
+  ]);
 
-  for (const mutator of mutators) {
-    // Find the backend method that calls it and check the same statement
-    // hands the result to migrateOpenDoc.
-    const at = source.indexOf(`session.${mutator}(`);
-    if (at === -1) continue; // not wired up in this build
-    // Both directions: some methods pass the call inline as
-    // migrateOpenDoc's argument, others assign it and hand it over on the
-    // next line. Either is fine; not doing it at all is not.
-    const around = source.slice(Math.max(0, at - 600), at + 600);
-    expect(
-      around.includes("migrateOpenDoc("),
-      `session.${mutator}() rotates the handle, so its result must go through migrateOpenDoc`,
-    ).toBe(true);
+  const offenders: string[] = [];
+  for (const match of source.matchAll(/session\.(\w+)\(/g)) {
+    const name = match[1];
+    if (CANNOT_ROTATE.has(name)) continue;
+    const around = source.slice(Math.max(0, match.index! - 700), match.index! + 700);
+    if (!around.includes("migrateOpenDoc(")) offenders.push(name);
   }
+
+  expect(
+    offenders,
+    "these rotate the handle but leave openDocs keyed by the old one — add migrateOpenDoc, " +
+      "or list them in CANNOT_ROTATE if they genuinely cannot rotate",
+  ).toEqual([]);
 });
