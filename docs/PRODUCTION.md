@@ -6,7 +6,7 @@ this server at all:
 | host | what it is | served by |
 |---|---|---|
 | `openpdfedit.com` | the marketing site | static files from `site/` |
-| `www.openpdfedit.com` | redirect to the above | Caddy |
+| `www.openpdfedit.com` | redirect to the above | nginx |
 | `app.openpdfedit.com` | the web app | static files from `apps/webapp/dist/` |
 | `auth.openpdfedit.com` | sign-in | reverse proxy to openapps-server on `:8080` |
 | `gateway.openapps.network` | the credit charge for the watermark unlock | already running; nothing to add |
@@ -40,7 +40,8 @@ CNAME  app    openpdfedit.com.
 ```
 
 Confirm all four resolve to the same address before going further —
-Caddy cannot get a certificate for a name that doesn't resolve:
+certbot proves control by answering a challenge on each name, so one
+without a record fails the whole certificate run:
 
 ```sh
 for h in openpdfedit.com www.openpdfedit.com auth.openpdfedit.com app.openpdfedit.com; do
@@ -52,70 +53,153 @@ All four must print `104.36.65.54`.
 
 ---
 
-## 2. Caddy — four site blocks
+## 2. nginx — four server blocks, then certbot
 
-**You**, on the server. This adds to the existing Caddyfile; leave the
-`accounts.openapps.network` / `app.openapps.network` /
-`gateway.openapps.network` blocks exactly as they are.
+Same shape as the `accounts` / `app` / `gateway` blocks already running,
+and the same `/var/www/<name>` layout as `/var/www/opencapture`. Leave
+the existing `openapps` site file alone; this is a second one.
 
-```sh
-sudo nano /etc/caddy/Caddyfile
-```
+This block was run rather than written: `nginx -t` passes on 1.18, and
+serving the real `apps/webapp/dist` through it gives `application/wasm`
+on the WebAssembly, a 200 on `/login` from the SPA fallback, `no-cache`
+on the service worker against `immutable` on a hashed chunk, and gzip
+taking `pdfium.wasm` from 5,218,943 to 2,634,767 bytes.
 
-Append:
-
-```caddy
-openpdfedit.com {
-	root * /var/www/openpdfedit
-	file_server
-	encode gzip zstd
-}
-
-www.openpdfedit.com {
-	redir https://openpdfedit.com{uri} permanent
-}
-
-app.openpdfedit.com {
-	root * /var/www/openpdfedit-app
-	file_server
-	encode gzip zstd
-
-	# The two WebAssembly binaries are ~9 MB uncompressed and about a
-	# third of that over the wire, so compression is not cosmetic here.
-	# They are also content-addressed by the service worker's cache
-	# name, which is why they can be cached hard while index.html and
-	# the service worker itself must not be.
-	@immutable path /app/immutable/* /fonts/*
-	header @immutable Cache-Control "public, max-age=31536000, immutable"
-
-	@volatile path / /index.html /service-worker.js /manifest.webmanifest
-	header @volatile Cache-Control "no-cache"
-
-	# Single-page app: every unknown path is the app's own route, not a
-	# missing file. Without this, a reload on /login 404s.
-	try_files {path} /index.html
-}
-
-auth.openpdfedit.com {
-	reverse_proxy 127.0.0.1:8080
-}
-```
-
-Those are tabs, not spaces — Caddy cares. Then:
+**You**, on the server over SSH. Paste the whole block — it writes the
+file in one go, with no editor to fight:
 
 ```sh
-sudo caddy validate --config /etc/caddy/Caddyfile
-sudo systemctl reload caddy
+cat > /etc/nginx/sites-available/openpdfedit <<'NGINX'
+# The marketing site.
+server {
+    listen 80;
+    server_name openpdfedit.com;
+    root /var/www/openpdfedit;
+    index index.html;
+}
+
+# www -> apex. A redirect rather than a second copy of the site, so
+# there is one canonical URL and one place to deploy to.
+server {
+    listen 80;
+    server_name www.openpdfedit.com;
+    return 301 https://openpdfedit.com$request_uri;
+}
+
+# The web app.
+server {
+    listen 80;
+    server_name app.openpdfedit.com;
+    root /var/www/openpdfedit-app;
+    index index.html;
+
+    # nginx only learned `application/wasm` in 1.21; Ubuntu 22.04 ships
+    # 1.18, where a .wasm falls back to application/octet-stream. The
+    # browser then refuses the module outright —
+    # WebAssembly.instantiateStreaming checks the MIME type — and the app
+    # doesn't start at all.
+    #
+    # Done as default_type in a location, deliberately, rather than a
+    # `types { application/wasm wasm; }` block: a types block in a server
+    # context *replaces* the inherited map instead of extending it, which
+    # would leave CSS and JS as octet-stream and break far more than it
+    # fixed. default_type only applies when the map produced nothing, so
+    # it is a no-op on a newer nginx and the fix on an older one.
+    location ~ \.wasm$ {
+        default_type application/wasm;
+    }
+
+    gzip on;
+    gzip_vary on;
+    gzip_min_length 1024;
+    # The default gzip_types does not include wasm or the SPA's own
+    # types. The two WebAssembly binaries are ~9 MB uncompressed and
+    # about a third of that compressed, so this is most of the download.
+    gzip_types application/wasm application/javascript text/css
+               application/json image/svg+xml application/manifest+json;
+
+    # Content-hashed filenames: a change makes a new name, so these can
+    # be cached forever.
+    location ~* ^/(app/immutable|fonts)/ {
+        add_header Cache-Control "public, max-age=31536000, immutable";
+    }
+
+    # These three keep their names across builds, so they must always be
+    # revalidated — the service worker in particular. Cache it and a
+    # released update can never reach anyone.
+    location ~* ^/(index\.html|service-worker\.js|manifest\.webmanifest)$ {
+        add_header Cache-Control "no-cache";
+    }
+
+    # Single-page app: an unknown path is the app's own route, not a
+    # missing file. Without this a reload on /login 404s, which breaks
+    # sign-in on the redirect back from Google.
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+}
+
+# Sign-in. Same proxy settings as the accounts block, for the same
+# reasons — X-Forwarded-For is what makes
+# OPENAPPS_SERVER_TRUST_PROXY_HEADERS meaningful, and without it every
+# request looks like it came from the proxy, so one caller can exhaust
+# everyone's rate limit.
+server {
+    listen 80;
+    server_name auth.openpdfedit.com;
+
+    location / {
+        proxy_pass http://127.0.0.1:8080;
+        proxy_set_header Host              $host;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        # Longer than the server's own 30s timeout, so it decides.
+        proxy_read_timeout 60s;
+    }
+}
+NGINX
 ```
 
-Certificates are issued automatically, within a few seconds of the
-reload. `sudo journalctl -u caddy -n 50` if a name doesn't come up.
+The closing `NGINX` must be alone on its own line — that is what ends
+the paste. Check it landed:
 
-> Using nginx instead? Mirror the existing `accounts` block for `auth`,
-> add two static `server` blocks with the same `Cache-Control` split and
-> a `try_files $uri /index.html;` on the app one, and run `certbot
-> --nginx -d openpdfedit.com -d www.openpdfedit.com -d
-> app.openpdfedit.com -d auth.openpdfedit.com`.
+```sh
+cat /etc/nginx/sites-available/openpdfedit
+```
+
+The document roots have to exist before nginx will start cleanly, even
+empty:
+
+```sh
+mkdir -p /var/www/openpdfedit /var/www/openpdfedit-app
+```
+
+Enable it, and check the syntax *before* reloading — a bad config takes
+down every site on the box, including the ones already working:
+
+```sh
+ln -s /etc/nginx/sites-available/openpdfedit /etc/nginx/sites-enabled/
+nginx -t && systemctl reload nginx
+```
+
+Then the certificates. `--nginx` edits the blocks above in place, adding
+the TLS listeners and the HTTP→HTTPS redirect:
+
+```sh
+certbot --nginx -d openpdfedit.com -d www.openpdfedit.com \
+                -d app.openpdfedit.com -d auth.openpdfedit.com
+```
+
+All four names must already resolve here (§1) — certbot proves control
+by answering a challenge on each one, so a name without a DNS record
+fails the whole run. Certbot rewrites the four blocks above to listen on
+443 and adds an HTTP→HTTPS redirect to each; the `return 301` in the www
+block keeps working, since it redirects by name rather than by scheme. Existing certificates are untouched; this adds a
+separate one. Renewal is already scheduled by the certbot package:
+
+```sh
+systemctl list-timers | grep certbot
+```
 
 ---
 
@@ -200,9 +284,17 @@ rsync -av --delete site/              root@104.36.65.54:/var/www/openpdfedit/
 rsync -av --delete apps/webapp/dist/  root@104.36.65.54:/var/www/openpdfedit-app/
 ```
 
-`--delete` matters on the app: its JavaScript filenames are content
-hashes, so without it every deploy leaves the previous build's chunks
-behind forever.
+Same `/var/www/<name>` layout as `/var/www/opencapture`. `--delete`
+matters on the app: its JavaScript filenames are content hashes, so
+without it every deploy leaves the previous build's chunks behind
+forever.
+
+If nginx runs as `www-data` and rsync lands files as root, fix the
+ownership once after the first deploy:
+
+```sh
+chown -R www-data:www-data /var/www/openpdfedit /var/www/openpdfedit-app
+```
 
 **Redeploying the app later:** the service worker's cache name is a
 digest of the build, so a rebuild that changed something gets a new name
@@ -261,7 +353,9 @@ branding alone.
 |---|---|
 | sign-in dead-ends after the Google screen | §3 — the origin isn't in `OPENAPPS_SERVER_ALLOWED_ORIGINS` |
 | reloading `/login` gives a 404 | §2 — `try_files` missing on the app block |
+| the app loads but the editor never appears | §2 — `.wasm` served as `application/octet-stream`; check `curl -sI https://app.openpdfedit.com/pdfium.wasm` |
 | unlock fails with a network error, nothing in the gateway log | §4 — origin missing from `GATEWAY_ALLOWED_ORIGINS`; the browser blocks it before the request is sent |
 | unlock returns 500 | §4 — no `OPENAPPS_KEY_OPENPDFEDIT` in the gateway's environment |
 | the app loads yesterday's build | a stale service worker; hard-reload once, then check §5's `--delete` actually ran |
-| a certificate never appears | §1 — that name has no DNS record, or it doesn't point here yet |
+| certbot fails on one name | §1 — that name has no DNS record yet; certbot must answer a challenge on every `-d` |
+| `nginx -t` fails after editing | a typo in §2's block — nothing is reloaded until it passes, so the running sites are unaffected |
