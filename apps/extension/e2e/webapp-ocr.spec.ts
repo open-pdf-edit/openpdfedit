@@ -83,3 +83,53 @@ test("the app pins OCR to its own origin", async () => {
   const jsdelivrHits = bodies.filter((b) => b.includes("cdn.jsdelivr.net")).length;
   expect(jsdelivrHits, "jsdelivr appears in more chunks than tesseract.js's own default").toBe(1);
 });
+
+/**
+ * Every mutating backend method must re-key its open-document map.
+ *
+ * Committing a mutation rotates the handle — the session reopens the
+ * document and returns a fresh one — so a method that updates the
+ * document without moving the map entry leaves it under the old key.
+ * The call that hit it then arrives with the new handle and is told the
+ * document does not exist. That is "ocrDocument: unknown document handle
+ * 5", reported after OCR had already worked once.
+ *
+ * This reads the source rather than exercising the behaviour, which is
+ * usually the weaker kind of test. It earns its place here because the
+ * invariant genuinely is structural — `migrateOpenDoc` exists precisely
+ * so no method has to remember the two-step — and because the behavioural
+ * version costs five minutes of real recognition to reach a bug that
+ * only shows on the second run. This catches it in milliseconds.
+ */
+test("every mutating backend method migrates the open-document map", async () => {
+  const { readFileSync } = await import("node:fs");
+  const { join } = await import("node:path");
+  const source = readFileSync(
+    join(process.cwd(), "..", "desktop", "src", "lib", "backend", "wasm.ts"),
+    "utf8",
+  );
+
+  // Session calls that go through commit_mutation and therefore rotate.
+  const mutators = [
+    "addOcrTextLayer",
+    "addAnnotation",
+    "deleteAnnotation",
+    "createFormField",
+    "fillFormFields",
+  ];
+
+  for (const mutator of mutators) {
+    // Find the backend method that calls it and check the same statement
+    // hands the result to migrateOpenDoc.
+    const at = source.indexOf(`session.${mutator}(`);
+    if (at === -1) continue; // not wired up in this build
+    // Both directions: some methods pass the call inline as
+    // migrateOpenDoc's argument, others assign it and hand it over on the
+    // next line. Either is fine; not doing it at all is not.
+    const around = source.slice(Math.max(0, at - 600), at + 600);
+    expect(
+      around.includes("migrateOpenDoc("),
+      `session.${mutator}() rotates the handle, so its result must go through migrateOpenDoc`,
+    ).toBe(true);
+  }
+});
