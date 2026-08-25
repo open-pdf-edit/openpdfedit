@@ -450,6 +450,137 @@ pub fn create_form_field_impl<E: Engine>(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Delete a text field, draw another, and the new one must be new.
+    ///
+    /// A field's identity is its name and its value lives on the
+    /// document's `/AcroForm`/`/Fields` entry — not on the page. Deleting
+    /// the widget used to unlink it from `/Annots` only, leaving that
+    /// entry behind holding its value. The next field the UI drew got the
+    /// same auto-generated name, and by the spec two widgets sharing a
+    /// name are *one field*: the new box appeared already containing the
+    /// old text, and neither could be edited away from the other.
+    ///
+    /// Reported as "no matter what I enter, it always goes back to test",
+    /// with the Form fields panel equally unable to change it — both
+    /// symptoms of the same shared field, so both are asserted here.
+    #[test]
+    fn deleting_a_field_and_drawing_another_does_not_resurrect_the_old_value() {
+        let Some(engine) = shared_handle() else {
+            return;
+        };
+        let path = std::env::temp_dir().join(format!(
+            "openpdfedit-refield-{}-{}.pdf",
+            std::process::id(),
+            line!()
+        ));
+        std::fs::write(&path, crate::test_support::minimal_pdf_bytes()).expect("write fixture");
+
+        let state = crate::SessionState {
+            engine: engine.clone(),
+            docs: Mutex::new(HashMap::new()),
+            history: Mutex::new(HashMap::new()),
+            store: Box::new(crate::FsWorkingStore),
+        };
+        let mut handle = crate::open_document_impl(&state, &path)
+            .expect("should open")
+            .handle;
+
+        let values_now = |h: DocHandle| -> Vec<(String, Option<String>)> {
+            state
+                .engine
+                .list_form_fields(h)
+                .expect("should list")
+                .into_iter()
+                .map(|f| (f.name, f.value))
+                .collect()
+        };
+        let add_field = |h: DocHandle, top: f32| {
+            create_form_field_impl(
+                &state.engine,
+                &state.docs,
+                &state.history,
+                &*state.store,
+                CreateFormFieldRequest {
+                    handle: h,
+                    page_index: 0,
+                    name: "text_1".to_string(),
+                    rect: [72.0, top, 272.0, top + 24.0],
+                    kind: NewFieldKindDto::Text,
+                },
+            )
+            .expect("should create")
+            .handle
+        };
+        let fill = |h: DocHandle, value: &str| {
+            fill_form_fields_impl(
+                &state.engine,
+                &state.docs,
+                &state.history,
+                &*state.store,
+                FillFormRequest {
+                    handle: h,
+                    values: [("text_1".to_string(), value.to_string())]
+                        .into_iter()
+                        .collect(),
+                },
+            )
+            .expect("should fill")
+            .handle
+        };
+
+        handle = add_field(handle, 700.0);
+        handle = fill(handle, "test");
+        assert_eq!(
+            values_now(handle),
+            [("text_1".to_string(), Some("test".to_string()))]
+        );
+
+        let annotations = crate::annotations::list_page_annotations_impl(&state.docs, handle, 0)
+            .expect("should list annotations");
+        assert_eq!(
+            annotations.len(),
+            1,
+            "the field's widget should be the only annotation"
+        );
+        handle = crate::annotations::delete_annotation_impl(
+            &state.engine,
+            &state.docs,
+            &state.history,
+            &*state.store,
+            crate::annotations::DeleteAnnotationRequest {
+                handle,
+                page_index: 0,
+                annotation_id: annotations[0].id,
+            },
+        )
+        .expect("should delete")
+        .handle;
+        assert!(
+            values_now(handle).is_empty(),
+            "the deleted field should be gone"
+        );
+
+        // The same name again — which is what the UI generates, since it
+        // is once more the first one free.
+        handle = add_field(handle, 600.0);
+        assert_eq!(
+            values_now(handle),
+            [("text_1".to_string(), None)],
+            "a newly drawn field must be empty, not holding the deleted field's value",
+        );
+
+        // And it must be editable on its own terms.
+        handle = fill(handle, "second");
+        assert_eq!(
+            values_now(handle),
+            [("text_1".to_string(), Some("second".to_string()))],
+            "filling the new field must take effect rather than being shadowed",
+        );
+
+        let _ = std::fs::remove_file(&path);
+    }
+
     use crate::test_support::shared_handle;
     use crate::FsWorkingStore;
     use openpdfedit_doc::Document;
