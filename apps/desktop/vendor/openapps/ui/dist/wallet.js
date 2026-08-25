@@ -395,15 +395,48 @@ function withTimeout(work, ms, message) {
         });
     });
 }
-/** EIP-1193 rejections carry code 4001; anything else keeps its message. */
+/**
+ * Turn whatever a wallet threw into something a person can act on.
+ *
+ * The previous version collapsed too much into `fallback`. A thrown
+ * value with no `code` and no `message` — a bare string, an object of a
+ * shape this code did not expect — came back as "rejected", which
+ * asserts a specific thing (the user said no) about a failure nobody had
+ * identified. Two reports arrived saying exactly that: a wallet
+ * connection and a Nostr signature both "rejected", from providers that
+ * do not even share an error convention, which is the shape of a message
+ * that is guessing.
+ *
+ * So: 4001 is EIP-1193's "user rejected", and a message that says as
+ * much is taken at its word. Everything else keeps whatever detail it
+ * came with — a message, a code, or the value itself — because a strange
+ * string a user can quote beats a confident sentence that is wrong.
+ */
 function rejectionMessage(cause, fallback) {
-    if (cause && typeof cause === "object") {
+    if (cause === null || cause === undefined)
+        return fallback;
+    if (typeof cause === "string") {
+        return looksLikeRejection(cause) ? fallback : cause;
+    }
+    if (typeof cause === "object") {
         const error = cause;
+        // EIP-1193's user-rejection code. Nostr signers have no such
+        // convention, which is why the message check below matters more
+        // there.
         if (error.code === 4001)
             return fallback;
-        if (error.message)
-            return error.message;
+        const detail = error.message ?? error.reason;
+        if (detail)
+            return looksLikeRejection(detail) ? fallback : detail;
+        if (error.code !== undefined)
+            return `${fallback} (code ${error.code})`;
     }
-    return fallback;
+    // Nothing recognisable. Say so, rather than naming a cause.
+    const shown = String(cause);
+    return shown && shown !== "[object Object]" ? shown : fallback;
+}
+/** Whether a provider's own words already say the user declined. */
+function looksLikeRejection(text) {
+    return /\b(reject|denied|declin|cancel)/i.test(text);
 }
 //# sourceMappingURL=wallet.js.map
