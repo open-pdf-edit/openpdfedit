@@ -8,7 +8,8 @@
   // "openapps-session-changed" Tauri event once done. Viewing the
   // balance, buying credits and signing out are all plain API calls with
   // no redirect, so those stay inline here via <openapps-account> /
-  // <openapps-credits> / <openapps-buy>.
+  // <openapps-credits> / <openapps-buy> / <openapps-referral> /
+  // <openapps-signout>.
   //
   // NOT routed through the Backend adapter (Task 7, extension-port
   // Phase 1): this and routes/login/+page.svelte are the one place left
@@ -182,6 +183,13 @@
             app-id="openpdfedit"
             invite-url="https://app.openpdfedit.com/"
           ></openapps-referral>
+          <!-- Last, deliberately. It used to live inside
+               <openapps-account>, which put it beside the balance — the
+               one control here that ends a session, sitting where a
+               stray click lands. Its own element means the platform
+               still decides what it looks like and what it does, while
+               the host decides where it goes. -->
+          <openapps-signout></openapps-signout>
         {:else}
           <p class="message">Sign in to see your credits and buy more.</p>
           <button class="oa-btn oa-btn--primary" onclick={signIn}>Sign in</button>

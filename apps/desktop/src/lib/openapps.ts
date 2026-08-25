@@ -50,13 +50,16 @@ export const SUPPORTER_REF_ID = "openpdfedit_supporter_unlock";
 /// rather than a wrong charge.
 export const SUPPORTER_COST = 1000;
 
-/// Whether the watermark tool is available without an account at all.
+/// Whether the Supporter tools — the watermark and OCR — need an
+/// account.
 ///
-/// It is not, and that is the only paid thing in this product. Kept as a
-/// named constant rather than inlined so the gate is greppable, and so a
-/// build that wants it open (a self-hosted one, say) has one line to
-/// change rather than a flow to unpick.
-export const WATERMARK_IS_PREMIUM = true;
+/// They do, and they are the only paid things in this product. One
+/// unlock covers both: the entitlement is "Supporter", not "watermark",
+/// so nobody who has already paid is asked again when the second tool
+/// appears. Kept as a named constant rather than inlined so the gate is
+/// greppable, and so a build that wants them open (a self-hosted one,
+/// say) has one line to change rather than a flow to unpick.
+export const SUPPORTER_TOOLS_ARE_PREMIUM = true;
 
 /// Has this account already redeemed the unlock?
 ///

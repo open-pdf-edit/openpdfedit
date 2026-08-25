@@ -24,7 +24,7 @@
   import AccountPanel from "$lib/AccountPanel.svelte";
   import WatermarkPanel from "$lib/WatermarkPanel.svelte";
   import SupporterGate, { type GateState } from "$lib/SupporterGate.svelte";
-  import { WATERMARK_IS_PREMIUM, isSupporterUnlocked, unlockSupporter } from "$lib/openapps";
+  import { SUPPORTER_TOOLS_ARE_PREMIUM, isSupporterUnlocked, unlockSupporter } from "$lib/openapps";
   import { getClient } from "@openapps/ui";
   import NumberingPanel from "$lib/NumberingPanel.svelte";
   import EncryptPanel from "$lib/EncryptPanel.svelte";
@@ -551,11 +551,13 @@
   let showSignaturePad = $state(false);
   let showAccount = $state(false);
   let showWatermark = $state(false);
-  // ---- Watermark: the Supporter gate ----
+  // ---- The Supporter gate ----
   //
-  // The watermark tool is the one paid thing in this app. Clicking it is
-  // the only place any of this is checked; nothing else asks about an
-  // account at all.
+  // Two tools are paid: the watermark and OCR. One unlock covers both —
+  // the entitlement is Supporter, not "watermark" — so someone who
+  // bought it for one gets the other, and nobody is asked to pay twice
+  // for the same tier. Clicking either tool is the only place any of
+  // this is checked; nothing else in the app asks about an account.
   let gateState = $state<GateState>({ kind: "hidden" });
   // Once this session has established the tool is unlocked, stop asking:
   // a round trip on every click would make an unlocked tool feel slower
@@ -569,12 +571,23 @@
     return getClient()?.session?.accessToken;
   }
 
-  /** The watermark button's click. Opens the tool when it's available
-   * and the gate only when it isn't, so the gate never stands in front
-   * of someone who has already paid. */
-  async function handleWatermarkClick(): Promise<void> {
-    if (!WATERMARK_IS_PREMIUM || supporterUnlocked) {
-      showWatermark = true;
+  /** Which tool the gate is standing in front of, so unlocking resumes
+   * the thing that was clicked rather than dropping the user back where
+   * they started. */
+  let gatedTool = $state<"watermark" | "ocr">("watermark");
+
+  function runGatedTool(): void {
+    if (gatedTool === "watermark") showWatermark = true;
+    else void runOcr();
+  }
+
+  /** A paid tool's click. Runs it when it's available and shows the gate
+   * only when it isn't, so the gate never stands in front of someone who
+   * has already paid. */
+  async function requireSupporter(tool: "watermark" | "ocr"): Promise<void> {
+    gatedTool = tool;
+    if (!SUPPORTER_TOOLS_ARE_PREMIUM || supporterUnlocked) {
+      runGatedTool();
       return;
     }
     if (gateCheckInFlight) return;
@@ -588,7 +601,7 @@
       if (await isSupporterUnlocked(accessToken())) {
         supporterUnlocked = true;
         gateState = { kind: "hidden" };
-        showWatermark = true;
+        runGatedTool();
         return;
       }
       gateState = { kind: "locked" };
@@ -597,14 +610,18 @@
     }
   }
 
+  const handleWatermarkClick = () => requireSupporter("watermark");
+
   async function handleUnlock(): Promise<void> {
     gateState = { kind: "unlocking" };
     const result = await unlockSupporter(accessToken());
     if (result.ok) {
       supporterUnlocked = true;
       gateState = { kind: "hidden" };
-      showWatermark = true;
-      showToast("Watermark unlocked — it stays unlocked on this account.", { title: "Supporter" });
+      runGatedTool();
+      showToast("Watermark and OCR unlocked — they stay unlocked on this account.", {
+        title: "Supporter",
+      });
       return;
     }
     if (result.kind === "insufficient") {
@@ -1494,7 +1511,11 @@
     }
   }
 
-  async function handleOcrDocument() {
+  /** The OCR button's click — through the Supporter gate, same as the
+   * watermark. `runOcr` below is what actually runs once it's allowed. */
+  const handleOcrDocument = () => requireSupporter("ocr");
+
+  async function runOcr() {
     if (!doc || mutationBusy) return;
     const handle = doc.handle;
     error = null;
@@ -1953,9 +1974,10 @@
   <WatermarkPanel open={showWatermark} busy={mutationBusy} onApply={handleApplyWatermark} onClose={() => (showWatermark = false)} />
   <SupporterGate
     state={gateState}
+    tool={gatedTool}
     onAccount={handleGateAccount}
     onUnlock={handleUnlock}
-    onRetry={handleWatermarkClick}
+    onRetry={() => requireSupporter(gatedTool)}
     onClose={() => (gateState = { kind: "hidden" })}
   />
 

@@ -60,7 +60,13 @@ body{
 a{color:inherit;text-decoration:none}
 img{max-width:100%;display:block}
 .wrap{max-width:var(--max-w);margin:0 auto;padding-left:var(--page-pad);padding-right:var(--page-pad)}
+/* Every section gets the same vertical rhythm. It used to be set per
+   section on .statement/.showcase/.features — class names the markup
+   does not use, so three of the four sections had no vertical padding at
+   all and ran straight into each other under a hairline. The hero keeps
+   its own, larger, figures below. */
 section{border-top:1px solid var(--white-10)}
+section > .wrap{padding-top:clamp(56px,8vw,104px);padding-bottom:clamp(56px,8vw,104px)}
 .mono{font-family:var(--font-mono);font-size:12px;letter-spacing:.02em}
 
 /* ---------- Wordmark ---------- */
@@ -172,7 +178,6 @@ header{
 }
 
 /* ---------- Statement ---------- */
-.statement .wrap{padding-top:clamp(64px,9vw,120px);padding-bottom:clamp(64px,9vw,120px)}
 .statement p{
   font-size:clamp(24px,3.2vw,32px);line-height:1.32;font-weight:500;
   letter-spacing:-0.015em;max-width:30ch;
@@ -229,7 +234,6 @@ header{
 .dl.same .bar{background:var(--white-10)}
 
 /* ---------- Showcase ---------- */
-.showcase .wrap{padding-top:clamp(48px,7vw,88px);padding-bottom:clamp(48px,7vw,88px)}
 .tabs{display:flex;gap:10px;margin-bottom:28px;flex-wrap:wrap}
 .tab{
   display:inline-flex;align-items:center;gap:8px;cursor:pointer;
@@ -260,7 +264,6 @@ header{
 
 /* ---------- Light band ---------- */
 .features{background:var(--color-background);color:var(--color-font)}
-.features .wrap{padding-top:clamp(48px,7vw,88px);padding-bottom:clamp(48px,7vw,88px)}
 .features h2{font-size:clamp(24px,3.2vw,32px);font-weight:500;letter-spacing:-0.02em;max-width:24ch}
 .features .sub{color:var(--gray-600);margin-top:10px;font-weight:300}
 .fgrid{
@@ -281,7 +284,6 @@ header{
 
 /* ---------- CTA ---------- */
 .cta{background:var(--black)}
-.cta .wrap{padding-top:clamp(64px,9vw,110px);padding-bottom:clamp(64px,9vw,110px);text-align:center}
 .cta h2{font-size:clamp(30px,4.5vw,48px);font-weight:500;letter-spacing:-0.025em;max-width:20ch;margin:0 auto}
 .cta .sub{color:var(--white-60);margin:18px auto 0;max-width:46ch;font-weight:300}
 .cta .hero-ctas{margin-top:34px}
@@ -505,7 +507,7 @@ footer{border-top:1px solid var(--white-10);background:var(--color-background-al
         <h3>Protect &amp; finish</h3>
         <div class="tool-grid">
           <div class="tool"><span class="tool-name">Password protect</span><span class="tool-desc">AES-256 encryption, with per-recipient permissions.</span></div>
-          <div class="tool"><span class="tool-name">Watermark <span class="tool-tag">Supporter</span></span><span class="tool-desc">Tiled text or a logo, any angle, any density. The one paid tool — 1,000 credits, once, unlocked for good.</span></div>
+          <div class="tool"><span class="tool-name">Watermark <span class="tool-tag">Supporter</span></span><span class="tool-desc">Tiled text or a logo, any angle, any density.</span></div>
           <div class="tool"><span class="tool-name">Page numbers</span><span class="tool-desc">Any corner, any font, starting from any number.</span></div>
           <div class="tool"><span class="tool-name">Bates numbering</span><span class="tool-desc">Zero-padded, prefixed, for discovery sets.</span></div>
           <div class="tool"><span class="tool-name">Compress</span><span class="tool-desc">Save a smaller copy.</span></div>
@@ -516,8 +518,8 @@ footer{border-top:1px solid var(--white-10);background:var(--color-background-al
         <h3>Read scans &amp; compare drafts</h3>
         <div class="tool-grid">
           <div class="tool">
-            <span class="tool-name">OCR <span class="tool-tag">desktop</span></span>
-            <span class="tool-desc">Make a scan searchable. Needs Tesseract installed locally.</span>
+            <span class="tool-name">OCR <span class="tool-tag">Supporter</span></span>
+            <span class="tool-desc">Make a scan searchable — text you can select, search and copy. In the browser the recogniser downloads once (about 3 MB) and then works offline; on the desktop it uses Tesseract if you have it installed.</span>
           </div>
           <div class="tool"><span class="tool-name">Compare documents</span><span class="tool-desc">Text differences and rendered-pixel differences, side by side.</span></div>
         </div>
@@ -579,7 +581,7 @@ footer{border-top:1px solid var(--white-10);background:var(--color-background-al
     </div>
 
     <div class="count-line">
-      <span>MIT or Apache-2.0 — audit it, fork it, keep it</span>
+      <span>Two Supporter tools — watermark and OCR — are 1,000 credits once, together. Everything else is free.</span>
       <a href="https://github.com/open-pdf-edit/OpenPdfEdit">Read the source</a>
     </div>
   </div>
