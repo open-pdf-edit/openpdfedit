@@ -11,6 +11,8 @@
 //! The bytes come from the working copy rather than from PDFium's own
 //! writer, so the copy carries the edits made in this session.
 
+// Only the path-based save uses this; wasm32 has no filesystem.
+#[cfg(not(target_arch = "wasm32"))]
 use std::path::Path;
 
 use openpdfedit_crypt::{encrypt_document, Permissions};

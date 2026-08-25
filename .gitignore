@@ -10,6 +10,7 @@
 node_modules/
 .DS_Store
 apps/extension/dist/
+apps/webapp/dist/
 apps/desktop/build/
 .svelte-kit/
 apps/extension/test-results/

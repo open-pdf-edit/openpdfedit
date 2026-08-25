@@ -277,6 +277,27 @@ fn to_js_err(e: impl std::fmt::Display) -> JsValue {
     JsValue::from_str(&e.to_string())
 }
 
+/// The one error the UI has to recognise rather than merely display: a
+/// document that needs a password should raise a prompt, not a banner.
+///
+/// The desktop's `CommandError::PasswordRequired` serializes as the exact
+/// string `"password required"`, and `isPasswordRequired` in
+/// `apps/desktop/src/lib/backend/index.ts` matches on it. Mapping to the
+/// same string here keeps that one contract rather than teaching the UI
+/// a second phrasing — `SessionError::PasswordRequired`'s own `Display`
+/// is prose ("this document is password-protected") and would silently
+/// fail that match, which is exactly the shape of the bug this replaced:
+/// the raw engine error reached the user as
+/// `PdfiumLibraryInternalError(PasswordError)`.
+fn session_to_js_err(e: openpdfedit_session::SessionError) -> JsValue {
+    match e {
+        openpdfedit_session::SessionError::PasswordRequired => {
+            JsValue::from_str("password required")
+        }
+        other => to_js_err(other),
+    }
+}
+
 /// One `PdfiumEngine` for the whole extension page's lifetime — mirrors
 /// the desktop app's own rule (see `PdfiumEngine::new`'s doc comment):
 /// PDFium's global init is not safe to run more than once per process.
@@ -437,7 +458,7 @@ impl WasmSession {
 
     /// Opens a document from in-memory `bytes` (no filesystem — there is
     /// none on `wasm32-unknown-unknown`) via
-    /// `openpdfedit_session::open_document_bytes`, registers it under
+    /// `openpdfedit_session::open_document_bytes_with_password`, registers it under
     /// `display_name` (the extension's synthetic identity for a document
     /// with no real on-disk path — typically the picked file's name), and
     /// returns the resulting `OpenedDocumentInfo` DTO serialized as JSON.
@@ -445,11 +466,26 @@ impl WasmSession {
     /// for that struct (no `rename_all`), which is also exactly what
     /// `apps/desktop/src/lib/backend/types.ts`'s `OpenedDocument`
     /// interface expects — see that crate's own doc comment inventory.
+    ///
+    /// `password` is `None`/`undefined` for the ordinary case. A protected
+    /// document opened without one fails with `"password required"` —
+    /// see [`session_to_js_err`] — which is the UI's cue to prompt and
+    /// call again, exactly as the desktop's `open_document` command
+    /// behaves.
     #[wasm_bindgen(js_name = openDocument)]
-    pub fn open_document(&self, display_name: &str, bytes: &[u8]) -> Result<String, JsValue> {
-        let info =
-            openpdfedit_session::open_document_bytes(&self.state, display_name, bytes.to_vec())
-                .map_err(to_js_err)?;
+    pub fn open_document(
+        &self,
+        display_name: &str,
+        bytes: &[u8],
+        password: Option<String>,
+    ) -> Result<String, JsValue> {
+        let info = openpdfedit_session::open_document_bytes_with_password(
+            &self.state,
+            display_name,
+            bytes.to_vec(),
+            password.as_deref(),
+        )
+        .map_err(session_to_js_err)?;
         serde_json::to_string(&info).map_err(to_js_err)
     }
 
@@ -547,15 +583,15 @@ impl WasmSession {
     /// normal path). Read-only against the store — like `saveToBytes`,
     /// does **not** mark the document clean; that's still [`Self::mark_saved`]'s
     /// job, called only after the caller's own write actually succeeds.
+    ///
+    /// Delegates rather than reading the store directly, because the
+    /// working copy of a protected document is stored *decrypted* — see
+    /// `openpdfedit_session::working_copy_bytes`, which is what puts the
+    /// protection back before these bytes reach a file.
     #[wasm_bindgen(js_name = workingCopyBytes)]
     pub fn working_copy_bytes(&self, handle: u32) -> Result<js_sys::Uint8Array, JsValue> {
-        let path = {
-            let docs = self.state.docs.lock().expect("docs lock poisoned");
-            docs.get(&(handle as DocHandle))
-                .map(|d| d.path.clone())
-                .ok_or_else(|| to_js_err(format!("unknown document handle {handle}")))?
-        };
-        let bytes = self.state.store.read(&path).map_err(to_js_err)?;
+        let bytes = openpdfedit_session::working_copy_bytes(&self.state, handle as DocHandle)
+            .map_err(to_js_err)?;
         Ok(js_sys::Uint8Array::from(bytes.as_slice()))
     }
 

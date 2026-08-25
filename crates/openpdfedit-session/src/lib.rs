@@ -1465,6 +1465,46 @@ pub fn open_document_bytes<E: Engine>(
     display_name: &str,
     bytes: Vec<u8>,
 ) -> Result<OpenedDocumentInfo, SessionError> {
+    open_document_bytes_with_password(state, display_name, bytes, None)
+}
+
+/// [`open_document_bytes`] with the password half — the bytes-based
+/// counterpart to [`OpenDoc::open_with_working_copy_password`], and the
+/// only way a browser build can open a protected document at all.
+///
+/// The shape is deliberately identical to the desktop's: an encrypted
+/// document with no password is refused with the *typed*
+/// [`SessionError::PasswordRequired`] so the UI can prompt and retry,
+/// and with one it is decrypted **into the working copy**, so every
+/// mutation, render and undo path downstream operates on plain bytes and
+/// never has to know encryption exists. The password is retained on
+/// [`OpenDoc::encryption`], because that leaves exactly one place — the
+/// save — responsible for putting the protection back (see
+/// [`working_copy_bytes`], which is that place for a byte-opened
+/// document).
+///
+/// Handing the encrypted bytes straight to the engine instead is what
+/// this exists to prevent: PDFium refuses them with an opaque
+/// `PasswordError` that reaches the user as a parser message about a
+/// fact they already knew.
+pub fn open_document_bytes_with_password<E: Engine>(
+    state: &SessionState<E>,
+    display_name: &str,
+    bytes: Vec<u8>,
+    password: Option<&str>,
+) -> Result<OpenedDocumentInfo, SessionError> {
+    let (bytes, encryption) = if openpdfedit_crypt::is_encrypted(&bytes) {
+        let Some(password) = password else {
+            return Err(SessionError::PasswordRequired);
+        };
+        (
+            openpdfedit_crypt::decrypt_document(&bytes, password)?,
+            Some(password.to_string()),
+        )
+    } else {
+        (bytes, None)
+    };
+
     let doc = Document::from_bytes(&bytes)?;
     let n = NEXT_BYTES_WORKING_ID.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     let path = PathBuf::from(format!("{display_name}#{n}"));
@@ -1483,12 +1523,46 @@ pub fn open_document_bytes<E: Engine>(
             original_path,
             dirty: false,
             doc,
-            // The bytes-based open (the extension) has no
-            // password-protected entry point yet.
-            encryption: None,
+            encryption,
         },
     );
     opened_document(&state.engine, &state.docs, &state.history, &path, handle)
+}
+
+/// The bytes a byte-opened document should be saved as — the working
+/// copy, re-encrypted if it was opened from a protected file.
+///
+/// This is the counterpart of the desktop's [`write_working_copy_to`],
+/// and exists for the same reason: the working copy is stored decrypted
+/// so the edit paths can ignore encryption entirely, which makes the
+/// save the single place that has to put it back. A browser build that
+/// read the store directly would hand the user a *decrypted* copy of
+/// their own protected file, under its original name, with no
+/// indication anything had changed.
+pub fn working_copy_bytes<E: Engine>(
+    state: &SessionState<E>,
+    handle: DocHandle,
+) -> Result<Vec<u8>, SessionError> {
+    let (path, encryption) = {
+        let docs = state.docs.lock().expect("docs lock poisoned");
+        let doc = resolve_doc(&docs, handle)?;
+        (doc.path.clone(), doc.encryption.clone())
+    };
+    let bytes = state.store.read(&path)?;
+    let Some(password) = encryption else {
+        return Ok(bytes);
+    };
+    // Same password for user and owner, and default permissions: what
+    // this reproduces is "the file was protected and still is", not the
+    // original handler's exact permission bits — those are not
+    // recoverable from a decrypted working copy. `encrypt_document`'s
+    // own doc covers the format.
+    Ok(openpdfedit_crypt::encrypt_document(
+        &bytes,
+        &password,
+        &password,
+        openpdfedit_crypt::Permissions::default(),
+    )?)
 }
 
 /// Marks the document at `handle` clean — flips [`OpenDoc::dirty`] back to
@@ -1815,6 +1889,106 @@ mod tests {
     /// `open_document_bytes` (and therefore `opened_document`) through a
     /// real `SessionState`, then the raw engine for the save/reopen half
     /// (mutation is out of scope for this task).
+    /// The browser's open path, against a protected document. The
+    /// desktop's path-based open asks for a password and decrypts into
+    /// the working copy; the bytes-based open — the web app and the
+    /// extension — has to reach the same place, or a protected PDF is
+    /// simply unopenable there.
+    ///
+    /// Asserts the *typed* error, not merely that it failed: what makes
+    /// the difference between a password prompt and a dead end is
+    /// whether the UI can tell "needs a password" apart from "this file
+    /// is broken", and only `SessionError::PasswordRequired` carries
+    /// that. Handing PDFium the encrypted bytes instead surfaces its
+    /// `PasswordError` as an opaque engine string.
+    #[test]
+    fn opening_protected_bytes_asks_for_a_password_and_then_opens() {
+        let Some(engine) = shared_handle() else {
+            return;
+        };
+        let plain =
+            crate::test_support::text_page_pdf_bytes("secret contents", 72.0, 700.0, 24.0);
+        let protected = openpdfedit_crypt::encrypt_document(
+            &plain,
+            "hunter2",
+            "hunter2",
+            openpdfedit_crypt::Permissions::default(),
+        )
+        .expect("fixture should encrypt");
+
+        let state = SessionState {
+            engine: engine.clone(),
+            docs: Mutex::new(HashMap::new()),
+            history: Mutex::new(HashMap::new()),
+            store: Box::new(MemWorkingStore::default()),
+        };
+
+        match open_document_bytes_with_password(&state, "protected.pdf", protected.clone(), None) {
+            Err(SessionError::PasswordRequired) => {}
+            Err(other) => panic!("expected PasswordRequired, got {other:?}"),
+            Ok(_) => panic!("opened a protected document with no password"),
+        }
+
+        let opened = open_document_bytes_with_password(
+            &state,
+            "protected.pdf",
+            protected,
+            Some("hunter2"),
+        )
+        .expect("should open with the right password");
+        assert!(opened.page_count >= 1, "the decrypted document should have pages");
+    }
+
+    /// The dangerous direction, for the browser build: a document opened
+    /// with a password must not be *saved* without one. The working copy
+    /// is stored decrypted, so reading it directly — which is what the
+    /// wasm save path used to do — hands the user a plaintext copy of
+    /// their protected file under its original name, with nothing to
+    /// suggest the protection is gone. `encrypt.rs` has the same test for
+    /// the desktop's path-based save.
+    #[test]
+    fn saving_a_protected_byte_opened_document_puts_the_protection_back() {
+        let Some(engine) = shared_handle() else {
+            return;
+        };
+        let plain = crate::test_support::text_page_pdf_bytes("secret", 72.0, 700.0, 24.0);
+        let protected = openpdfedit_crypt::encrypt_document(
+            &plain,
+            "hunter2",
+            "hunter2",
+            openpdfedit_crypt::Permissions::default(),
+        )
+        .expect("fixture should encrypt");
+
+        let state = SessionState {
+            engine: engine.clone(),
+            docs: Mutex::new(HashMap::new()),
+            history: Mutex::new(HashMap::new()),
+            store: Box::new(MemWorkingStore::default()),
+        };
+        let opened =
+            open_document_bytes_with_password(&state, "p.pdf", protected, Some("hunter2"))
+                .expect("should open with the right password");
+
+        let saved = working_copy_bytes(&state, opened.handle).expect("should produce save bytes");
+        assert!(
+            openpdfedit_crypt::is_encrypted(&saved),
+            "the saved bytes must still be protected",
+        );
+        // Encrypted by the same password, not merely encrypted by
+        // something: a re-encryption under a different key would lock the
+        // user out of their own file just as effectively as stripping it.
+        openpdfedit_crypt::decrypt_document(&saved, "hunter2")
+            .expect("the original password should still open it");
+
+        // And the unprotected case is untouched — no gratuitous
+        // encryption of a document that never had any.
+        let plainly_opened = open_document_bytes(&state, "q.pdf", plain).expect("should open");
+        let plainly_saved =
+            working_copy_bytes(&state, plainly_opened.handle).expect("should produce save bytes");
+        assert!(!openpdfedit_crypt::is_encrypted(&plainly_saved));
+    }
+
     #[test]
     fn open_bytes_then_save_to_bytes_then_reopen_page_count_matches() {
         let Some(engine) = shared_handle() else {
@@ -3174,3 +3348,4 @@ mod tests {
         state.engine.close(final_handle);
     }
 }
+

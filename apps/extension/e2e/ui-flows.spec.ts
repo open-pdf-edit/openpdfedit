@@ -33,7 +33,7 @@
 // to grant it to a page without a real user gesture behind a real dialog.
 import type { Page } from "@playwright/test";
 import { expect, test } from "./fixtures";
-import { FORM_PDF_BASE64, TEXT_PDF_BASE64 } from "./pdf-fixtures";
+import { ENCRYPTED_PDF_BASE64, FORM_PDF_BASE64, TEXT_PDF_BASE64 } from "./pdf-fixtures";
 
 // `text_selection_quads_impl` (crates/openpdfedit-session/src/annotations.rs)
 // is NOT a bounding-box-overlap test — it's a click-drag character-range
@@ -221,6 +221,7 @@ test("the real UI: open, paint, highlight, save, delete/undo/redo, merge (incl. 
 
   await seedFile(page, "a.pdf", TEXT_PDF_BASE64);
   await seedFile(page, "b.pdf", FORM_PDF_BASE64);
+  await seedFile(page, "locked.pdf", ENCRYPTED_PDF_BASE64);
 
   // Scoped to the topbar: with no document open, the empty-state view
   // *also* renders an "Open PDF…" button (same text, different element),
@@ -424,6 +425,68 @@ test("the real UI: open, paint, highlight, save, delete/undo/redo, merge (incl. 
   });
   expect(printed.header).toBe("%PDF-");
   expect(printed.length).toBeGreaterThan(0);
+  await expect(page.locator(".banner")).toHaveCount(0);
+
+  // --- 10. A password-protected document: prompt, wrong password, right
+  //         password, and a save that puts the protection back ----------
+  //
+  // The browser build opens from bytes, and that path had no
+  // password entry point at all: the encrypted bytes went straight to
+  // PDFium, which refused them, and its `PasswordError` reached the user
+  // as a parser message about a fact they already knew. Everything below
+  // the prompt is what that fix has to get right, so all of it is
+  // asserted rather than just the happy path.
+  await queueOpenPick(page, ["locked.pdf"]);
+  await openPdfButton.click();
+
+  const passwordDialog = page.getByRole("dialog", { name: "Password required" });
+  await expect(passwordDialog).toBeVisible({ timeout: 10_000 });
+  await expect(passwordDialog).toContainText("is password-protected");
+
+  // A wrong password re-prompts rather than failing the open. This also
+  // covers the pick-lifetime bug the fix had to avoid: the retry calls
+  // openDocument again with the same path, which finds nothing if the
+  // first (failed) attempt consumed the pending pick.
+  await passwordDialog.locator("input").fill("wrong");
+  await passwordDialog.getByRole("button", { name: "Open" }).click();
+  await expect(passwordDialog).toContainText("didn't open", { timeout: 10_000 });
+
+  await passwordDialog.locator("input").fill("hunter2");
+  await passwordDialog.getByRole("button", { name: "Open" }).click();
+  await expect(passwordDialog).toBeHidden({ timeout: 10_000 });
+  await expect(pathBarText).toHaveText("locked.pdf");
+  await expect(page.locator(".banner")).toHaveCount(0);
+
+  // It really decrypted: a page that renders is a page PDFium parsed,
+  // which it cannot do with the encrypted bytes.
+  await page.waitForFunction(() => {
+    const el = document.querySelector("canvas") as HTMLCanvasElement | null;
+    if (!el || el.width === 0 || el.height === 0) return false;
+    const ctx = el.getContext("2d");
+    return !!ctx && ctx.getImageData(el.width >> 1, el.height >> 1, 1, 1).data[3] === 255;
+  }, null, { timeout: 15_000 });
+
+  // And saving writes it back *protected*. The working copy is held
+  // decrypted so the edit paths can ignore encryption, which makes this
+  // the one place that has to put it back — get it wrong and the user
+  // gets a plaintext copy of their own protected file, under its
+  // original name, with nothing to say so.
+  await queueSavePick(page, "locked-copy.pdf");
+  await page.getByRole("button", { name: "Save as" }).click();
+  await expect
+    .poll(async () => (await fakeFileHeader(page, "locked-copy.pdf"))?.length ?? 0, {
+      timeout: 10_000,
+    })
+    .toBeGreaterThan(0);
+  const savedProtected = await page.evaluate(() => {
+    const bytes = (window as unknown as { __e2eFiles: Map<string, Uint8Array> }).__e2eFiles.get(
+      "locked-copy.pdf",
+    )!;
+    // `/Encrypt` in the trailer is what makes a reader ask for a
+    // password; its absence is precisely the silent-strip failure.
+    return new TextDecoder("latin1").decode(bytes).includes("/Encrypt");
+  });
+  expect(savedProtected).toBe(true);
   await expect(page.locator(".banner")).toHaveCount(0);
 
   await page.close();

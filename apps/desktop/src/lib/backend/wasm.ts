@@ -246,7 +246,7 @@ interface RenderedPageHandle {
  * comment for why `u32` was chosen over wasm-bindgen's `u64`-as-`bigint`
  * mapping. */
 interface WasmSessionHandle {
-  openDocument(displayName: string, bytes: Uint8Array): string;
+  openDocument(displayName: string, bytes: Uint8Array, password?: string): string;
   /** A full PDFium rewrite of the in-memory document — NOT what saving
    * should write to disk (see `workingCopyBytes` below, and its Rust doc,
    * for why: a full rewrite can restructure the whole file and breaks the
@@ -990,10 +990,11 @@ function packLengthPrefixedSources(sources: Uint8Array[]): Uint8Array {
 async function openFromTarget(
   displayName: string,
   target: FileTarget,
+  password?: string,
 ): Promise<OpenedDocument> {
   const session = await ensureSession();
   const bytes = await readTarget(target);
-  const doc = parseOpenedDocument(session.openDocument(displayName, bytes));
+  const doc = parseOpenedDocument(session.openDocument(displayName, bytes, password));
   openDocs.set(doc.handle, { target, doc });
   return doc;
 }
@@ -1067,15 +1068,21 @@ export const wasmBackend: Backend = {
    * A `path` this backend never issued (e.g. a real path string, which
    * can't mean anything without a filesystem) fails with a clear error
    * rather than silently doing nothing. */
-  async openDocument(path) {
+  async openDocument(path, password) {
     const target = pendingOpenPicks.get(path);
     if (!target) {
       throw new Error(
         `openDocument: "${path}" is not a pending picked file — the wasm backend has no filesystem, so this must be a key pickOpenPath() returned (see wasm.ts's "Open-document bookkeeping" doc)`,
       );
     }
+    // The pick is consumed only once the open has actually succeeded.
+    // A protected document fails the first call by design, and the UI
+    // answers by prompting and calling straight back with the same path
+    // — which would find nothing here if the failure had already
+    // discarded the pick, turning "wrong password" into "unopenable".
+    const doc = await openFromTarget(path, target, password);
     pendingOpenPicks.delete(path);
-    return openFromTarget(path, target);
+    return doc;
   },
 
   async pickAndOpenDocument() {
