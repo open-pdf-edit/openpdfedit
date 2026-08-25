@@ -324,6 +324,40 @@ footer{border-top:1px solid var(--white-10);background:var(--color-background-al
   color:var(--white-40);border:1px solid var(--white-20);border-radius:99px;padding:1px 7px;
 }
 .tool-tag--note{color:var(--accent);border-color:color-mix(in oklab,var(--accent) 45%,transparent)}
+.ways{
+  display:grid;gap:1px;background:var(--white-10);
+  border:1px solid var(--white-10);border-radius:10px;overflow:hidden;
+  margin-top:48px;
+  /* Three or one, never two. An auto-fit track count leaves three cards
+     in a two-column grid with an empty cell beside the third, which
+     reads as a missing fourth option rather than a layout. */
+  grid-template-columns:1fr;
+}
+@media (min-width:900px){
+  .ways{grid-template-columns:repeat(3,1fr)}
+  /* Only side by side does an uneven note matter: it reserves the space
+     the longest one needs, so a card whose note wraps to an extra line
+     doesn't shove its button off the line the other two sit on. Stacked,
+     there is no line to hold and the reservation is just a gap. */
+  .way-note{min-height:3em}
+}
+.way{
+  background:var(--color-background-alt);padding:26px 24px 24px;
+  display:flex;flex-direction:column;align-items:flex-start;gap:10px;
+}
+.way-tag{
+  font-family:var(--font-mono);font-size:10px;letter-spacing:.06em;text-transform:uppercase;
+  color:var(--white-40);
+}
+.way-name{font-size:19px;font-weight:500;letter-spacing:-0.01em;line-height:1.25}
+/* Pins every card's button to the same line regardless of how long the
+   copy above it runs — three cards whose CTAs sit at three different
+   heights read as three unrelated things. */
+.way .tool-desc{flex:1}
+.way-cta{margin-top:4px}
+.way-note{
+  font-family:var(--font-mono);font-size:11px;line-height:1.5;color:var(--white-40);
+}
 .count-line{
   display:flex;flex-wrap:wrap;gap:10px 22px;align-items:baseline;
   margin-top:28px;color:var(--white-40);font-size:13px;
@@ -498,57 +532,55 @@ footer{border-top:1px solid var(--white-10);background:var(--color-background-al
   </div>
 </section>
 
-<!-- Web app -->
-<section id="webapp">
+<!-- How to run it -->
+<section id="get">
   <div class="wrap">
-    <h2>No install at all</h2>
+    <h2>Three ways to run it</h2>
     <p class="tool-desc tools-intro" style="font-size:16px;margin-top:10px">
-      The same editor as a web page: the identical Rust core compiled to WebAssembly, running
-      entirely in your browser. Your documents are never uploaded, because there is nowhere to
-      upload them to — the page does the work, not a server. Load it once and it keeps working
-      with no network at all.
+      One Rust core, compiled three ways — native for the desktop, WebAssembly for the
+      browser. Same rendering, same editing, same documents-never-leave-your-machine. Pick
+      whichever suits you; nothing is held back in any of them.
     </p>
-    <div class="hero-ctas" style="margin-top:28px">
-      <a class="btn btn-primary" href="https://app.openpdfedit.com">Open the web app</a>
-    </div>
-    <div class="count-line">
-      <span>Chrome, Edge, Firefox, Safari</span>
-      <span>Saving over the original needs Chrome or Edge</span>
-    </div>
-  </div>
-</section>
 
-<!-- Extension -->
-<section id="extension">
-  <div class="wrap">
-    <h2>The same editor, in Chrome</h2>
-    <p class="tool-desc tools-intro" style="font-size:16px;margin-top:10px">
-      The extension runs the identical Rust core compiled to WebAssembly — the same
-      rendering, the same editing, the same nothing-leaves-your-machine. Open a PDF from
-      a page or from disk and edit it in the tab.
-    </p>
-    <div class="hero-ctas" style="margin-top:28px">
-      <a class="btn btn-ghost" href="https://github.com/open-pdf-edit/OpenPdfEdit/releases/latest">Download the extension</a>
-    </div>
-  </div>
-</section>
+    <div class="ways">
+      <div class="way" id="webapp">
+        <span class="way-tag">No install</span>
+        <h3 class="way-name">In your browser</h3>
+        <p class="tool-desc">
+          The editor as a plain web page. Your documents are never uploaded because there is
+          nowhere to upload them to — the page does the work, not a server. Load it once and it
+          keeps working with no network at all.
+        </p>
+        <a class="btn btn-primary way-cta" href="https://app.openpdfedit.com">Open the web app</a>
+        <span class="way-note">Chrome, Edge, Firefox, Safari · saving over the original needs Chrome or Edge</span>
+      </div>
 
-<!-- Download -->
-<section id="download">
-  <div class="wrap">
-    <h2>Download</h2>
-    <p class="tool-desc tools-intro" style="font-size:16px;margin-top:10px">
-      Free, open source, and the same build for everyone. macOS builds carry an ad-hoc
-      signature rather than an Apple Developer ID, and aren't notarised, so the first launch
-      needs <span class="mono">Privacy&nbsp;&amp;&nbsp;Security → Open Anyway</span> once.
-    </p>
-    <div class="hero-ctas" style="margin-top:28px">
-      <a class="btn btn-primary" href="https://github.com/open-pdf-edit/OpenPdfEdit/releases/latest">All downloads</a>
-      <a class="btn btn-ghost" href="https://app.openpdfedit.com">Or skip it — use the web app</a>
+      <div class="way" id="download">
+        <span class="way-tag">Full version</span>
+        <h3 class="way-name">On your desktop</h3>
+        <p class="tool-desc">
+          A native app for macOS and Windows, with the whole toolset and the fastest rendering.
+          Free, open source, and the same build for everyone.
+        </p>
+        <a class="btn btn-primary way-cta" href="https://github.com/open-pdf-edit/OpenPdfEdit/releases/latest">Download</a>
+        <span class="way-note">macOS (Apple Silicon) · Windows · first macOS launch needs one trip through <span class="mono">Open&nbsp;Anyway</span></span>
+      </div>
+
+      <div class="way" id="extension">
+        <span class="way-tag">In the tab</span>
+        <h3 class="way-name">As a Chrome extension</h3>
+        <p class="tool-desc">
+          Open a PDF from a page or from disk and edit it without leaving the tab — the same
+          editor, one click from wherever the file already is.
+        </p>
+        <a class="btn btn-ghost way-cta" href="https://github.com/open-pdf-edit/OpenPdfEdit/releases/latest">Get the extension</a>
+        <span class="way-note">Chrome and Edge · load the unpacked build from the release</span>
+      </div>
     </div>
+
     <div class="count-line">
-      <span>macOS (Apple Silicon) · Windows · Chrome extension</span>
-      <span>MIT or Apache-2.0</span>
+      <span>MIT or Apache-2.0 — audit it, fork it, keep it</span>
+      <a href="https://github.com/open-pdf-edit/OpenPdfEdit">Read the source</a>
     </div>
   </div>
 </section>
