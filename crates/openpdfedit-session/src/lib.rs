@@ -1939,6 +1939,52 @@ mod tests {
         assert!(opened.page_count >= 1, "the decrypted document should have pages");
     }
 
+    /// The same open path, against AES-256 documents produced by other
+    /// tools entirely (pdf.js's test suite — see
+    /// `testdata/encrypted/SOURCE.md`). The fixture in the test above is
+    /// encrypted by this project's own code, so it and the decryption
+    /// agree even if both share a bug; these don't.
+    #[test]
+    fn opening_third_party_protected_bytes_works() {
+        let Some(engine) = shared_handle() else {
+            return;
+        };
+        let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .unwrap()
+            .parent()
+            .unwrap()
+            .join("testdata/encrypted");
+        if !dir.exists() {
+            eprintln!("skipping: {} not present", dir.display());
+            return;
+        }
+
+        for name in ["pr6531_1.pdf", "pr6531_2.pdf"] {
+            let bytes = std::fs::read(dir.join(name)).expect("read the fixture");
+            assert!(
+                openpdfedit_crypt::is_encrypted(&bytes),
+                "{name} should be recognised as protected",
+            );
+
+            let state = SessionState {
+                engine: engine.clone(),
+                docs: Mutex::new(HashMap::new()),
+                history: Mutex::new(HashMap::new()),
+                store: Box::new(MemWorkingStore::default()),
+            };
+            match open_document_bytes_with_password(&state, name, bytes.clone(), None) {
+                Err(SessionError::PasswordRequired) => {}
+                Err(other) => panic!("{name}: expected PasswordRequired, got {other:?}"),
+                Ok(_) => panic!("{name}: opened with no password"),
+            }
+            let opened =
+                open_document_bytes_with_password(&state, name, bytes, Some("asdfasdf"))
+                    .unwrap_or_else(|e| panic!("{name}: should open with its password: {e:?}"));
+            assert!(opened.page_count >= 1, "{name}: should have pages");
+        }
+    }
+
     /// The dangerous direction, for the browser build: a document opened
     /// with a password must not be *saved* without one. The working copy
     /// is stored decrypted, so reading it directly — which is what the
@@ -3348,4 +3394,5 @@ mod tests {
         state.engine.close(final_handle);
     }
 }
+
 
