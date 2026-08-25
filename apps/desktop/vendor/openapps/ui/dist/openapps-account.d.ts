@@ -32,6 +32,22 @@ export declare class OpenAppsAccount extends OpenAppsElement {
     private get connectable();
     /** Google links by redirect rather than by signing in the page. */
     private get canConnectGoogle();
+    /**
+     * Sign out.
+     *
+     * This lives here, and not only on `<openapps-login>`, because signing
+     * out is a property of *having* an account rather than of getting one.
+     * A host that cannot mount the login element — anything whose window
+     * holds unsaved work, since that element's Google button navigates the
+     * whole page away — could otherwise show a signed-in account with no
+     * way to leave it. That is exactly what happened: one app had a sign-out
+     * and another didn't, decided by which elements each happened to mount.
+     *
+     * The event and the notify() are what let the rest of a page react —
+     * a balance elsewhere, a host's own header — without any of them
+     * knowing about each other.
+     */
+    private signOut;
     private connectGoogle;
     /** Read the outcome of a Google link redirect, if we just came back. */
     private handleLinkRedirect;
