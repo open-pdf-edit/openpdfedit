@@ -68,25 +68,37 @@ export const SUPPORTER_TOOLS_ARE_PREMIUM = true;
 /// the gateway would put the one service that *can* spend credits in the
 /// path of a question that never should.
 ///
-/// Any failure answers "no". That is the safe direction for a check that
-/// opens a paid feature, and a network blip then costs a retry rather
-/// than a free unlock.
-export async function isSupporterUnlocked(accessToken: string | undefined): Promise<boolean> {
-  if (!accessToken) return false;
+/// Three answers, not two.
+///
+/// "No" used to cover being refused as well as not having bought it,
+/// and the two are not the same thing at all: an expired access token
+/// answers 401, which read as "not unlocked" and asked someone who had
+/// already paid to pay again. `unauthorized` is what tells the caller to
+/// refresh the session and ask once more.
+///
+/// Anything else still answers `locked`. That is the safe direction for
+/// a check that opens a paid feature, and a network blip then costs a
+/// retry rather than a free unlock.
+export type SupporterState = "unlocked" | "locked" | "unauthorized";
+
+export async function supporterState(accessToken: string | undefined): Promise<SupporterState> {
+  if (!accessToken) return "unauthorized";
   try {
     const url = `${OPENAPPS_BASE_URL}/v1/credits/entitlement?ref_id=${encodeURIComponent(SUPPORTER_REF_ID)}`;
     const res = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
-    if (!res.ok) return false;
+    if (res.status === 401 || res.status === 403) return "unauthorized";
+    if (!res.ok) return "locked";
     const body = (await res.json()) as { unlocked?: boolean };
-    return body.unlocked === true;
+    return body.unlocked === true ? "unlocked" : "locked";
   } catch {
-    return false;
+    return "locked";
   }
 }
 
 export type UnlockResult =
   | { ok: true; newBalance: number }
   | { ok: false; kind: "insufficient"; have: number; need: number }
+  | { ok: false; kind: "unauthorized" }
   | { ok: false; kind: "other"; message: string };
 
 /// The one place this app ever spends credits.
@@ -96,7 +108,7 @@ export type UnlockResult =
 /// ledger entry rather than charging again. That is why this can be
 /// retried freely on a network error without risking a double charge.
 export async function unlockSupporter(accessToken: string | undefined): Promise<UnlockResult> {
-  if (!accessToken) return { ok: false, kind: "other", message: "not signed in" };
+  if (!accessToken) return { ok: false, kind: "unauthorized" };
   try {
     const res = await fetch(`${OPENAPPS_GATEWAY_URL}/openpdfedit/supporter/unlock`, {
       method: "POST",
@@ -116,6 +128,13 @@ export async function unlockSupporter(accessToken: string | undefined): Promise<
     // just that it is.
     if (res.status === 402 && typeof body.have === "number" && typeof body.need === "number") {
       return { ok: false, kind: "insufficient", have: body.have, need: body.need };
+    }
+    // A dead or expired token. Distinguished from every other failure
+    // because it has a fix — refresh and try again — and because
+    // "couldn't unlock, please try again" is exactly the wrong thing to
+    // tell someone whose only problem is that their token aged out.
+    if (res.status === 401 || res.status === 403) {
+      return { ok: false, kind: "unauthorized" };
     }
     return { ok: false, kind: "other", message: body.error ?? `unlock failed (${res.status})` };
   } catch (e) {
