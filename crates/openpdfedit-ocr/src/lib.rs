@@ -477,6 +477,14 @@ fn is_cjk(ch: char) -> bool {
 /// Only where at least one side is CJK and the gap is small. Two Latin
 /// words also sit close together, and joining those would turn "Hello
 /// world" into "Helloworld".
+fn ends_cjk(text: &str) -> bool {
+    text.chars().next_back().is_some_and(is_cjk)
+}
+
+fn starts_cjk(text: &str) -> bool {
+    text.chars().next().is_some_and(is_cjk)
+}
+
 fn merge_adjacent_cjk(words: &[OcrWord]) -> Vec<OcrWord> {
     let mut kept: Vec<OcrWord> = Vec::with_capacity(words.len());
 
@@ -494,10 +502,22 @@ fn merge_adjacent_cjk(words: &[OcrWord]) -> Vec<OcrWord> {
         let same_line = (mid_previous - mid_word).abs() < previous.height.max(word.height) / 3.0;
 
         let gap = word.left - (previous.left + previous.width);
-        let touching = gap < previous.height.max(word.height) * 0.4 && gap > -word.width;
+        // Nine tenths of a line height. More generous than it sounds:
+        // the recogniser's boxes are drawn tight around the ink, so a
+        // CJK character 56 units tall is reported about 35 wide, and the
+        // gap to the next one includes both sidebearings. A tracked-out
+        // title — "2026 年四年级暑期思维花园探秘活动模拟卷", set with the
+        // loose letter-spacing headings use — reports gaps of 23 to 49
+        // against a height of 56, and a tighter rule left every one of
+        // those characters a separate run: the title could be found one
+        // character at a time and never as itself.
+        //
+        // Erring generous is the right direction. Merging two things
+        // that were separate leaves each still findable on its own;
+        // splitting one phrase makes the phrase unfindable.
+        let touching = gap < previous.height.max(word.height) * 0.9 && gap > -word.width;
 
-        let joins_cjk = previous.text.chars().next_back().is_some_and(is_cjk)
-            || word.text.chars().next().is_some_and(is_cjk);
+        let joins_cjk = ends_cjk(&previous.text) || starts_cjk(&word.text);
 
         if same_line && touching && joins_cjk {
             let right = (word.left + word.width).max(previous.left + previous.width);
@@ -505,6 +525,15 @@ fn merge_adjacent_cjk(words: &[OcrWord]) -> Vec<OcrWord> {
             previous.top = previous.top.min(word.top);
             previous.height = bottom - previous.top;
             previous.width = right - previous.left;
+            // A space where the scripts change, none where they do not.
+            // Chinese typesetting puts a thin space either side of Latin
+            // numerals — "2026 年四年级", "共 40 分" — so a document's own
+            // text has one there and a reader searching for the title
+            // types one. Between two Chinese characters there is never a
+            // space, and inserting one would break every phrase.
+            if !ends_cjk(&previous.text) || !starts_cjk(&word.text) {
+                previous.text.push(' ');
+            }
             previous.text.push_str(&word.text);
             previous.confidence = previous.confidence.min(word.confidence);
         } else {
@@ -872,6 +901,54 @@ mod tests {
             cmaps[0].contains("<0004> <00E9>"),
             "the accented character must map back to U+00E9: {}",
             cmaps[0]
+        );
+    }
+
+    /// A real title, with the boxes the recogniser actually reported.
+    ///
+    /// "2026 年四年级暑期思维花园探秘活动模拟卷" is set with the loose
+    /// letter-spacing a heading uses, so Tesseract returns it as twelve
+    /// separate words with gaps of 23 to 49 against a line height of 56.
+    /// The first threshold this had — four tenths of a height — merged
+    /// none of them, and the title could be found one character at a
+    /// time but never as itself, which is what it was searched for.
+    #[test]
+    fn a_tracked_out_title_comes_back_as_one_phrase() {
+        // text, left, top, width, height — measured, not invented.
+        let measured = [
+            ("2026", 514.0, 315.0, 117.0, 43.0),
+            ("年", 680.0, 308.0, 38.0, 56.0),
+            ("四", 741.0, 313.0, 33.0, 50.0),
+            ("年", 802.0, 308.0, 35.0, 56.0),
+            ("级", 867.0, 309.0, 30.0, 56.0),
+            ("暑期", 920.0, 309.0, 111.0, 55.0),
+            ("思维", 1042.0, 308.0, 90.0, 56.0),
+            ("花园", 1160.0, 309.0, 88.0, 55.0),
+            ("探秘", 1281.0, 304.0, 115.0, 65.0),
+            ("活动", 1395.0, 309.0, 92.0, 56.0),
+            ("模拟", 1517.0, 308.0, 90.0, 57.0),
+            ("卷", 1631.0, 308.0, 35.0, 54.0),
+            // Far enough away to be something else on the same line.
+            ("arn", 1947.0, 276.0, 178.0, 68.0),
+        ];
+        let words: Vec<OcrWord> = measured
+            .into_iter()
+            .map(|(text, left, top, width, height)| OcrWord {
+                text: text.to_string(),
+                left,
+                top,
+                width,
+                height,
+                confidence: 90.0,
+            })
+            .collect();
+
+        let merged = merge_adjacent_cjk(&words);
+        let texts: Vec<&str> = merged.iter().map(|w| w.text.as_str()).collect();
+        assert_eq!(
+            texts,
+            vec!["2026 年四年级暑期思维花园探秘活动模拟卷", "arn"],
+            "the title is one phrase; what is across the page is not part of it"
         );
     }
 

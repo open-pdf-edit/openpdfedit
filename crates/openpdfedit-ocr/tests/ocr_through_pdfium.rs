@@ -221,6 +221,21 @@ fn a_non_latin_word_is_searchable_through_real_pdfium() {
             confidence: 95.0,
         });
 
+    // A year and a Chinese word, as a title sets them: Chinese
+    // typesetting puts a space either side of Latin numerals, so the
+    // document reads "2026 年" and that is what someone searching types.
+    let mixed_scripts =
+        [("2026", 100.0_f32), ("年四年级", 190.0)]
+            .into_iter()
+            .map(|(text, left)| openpdfedit_ocr::OcrWord {
+                text: text.to_string(),
+                left,
+                top: 500.0,
+                width: 80.0,
+                height: 40.0,
+                confidence: 95.0,
+            });
+
     let words: Vec<openpdfedit_ocr::OcrWord> =
         [("Привет", 200.0_f32), ("café", 300.0), ("Hello", 400.0)]
             .into_iter()
@@ -233,13 +248,14 @@ fn a_non_latin_word_is_searchable_through_real_pdfium() {
                 confidence: 95.0,
             })
             .chain(split_phrase)
+            .chain(mixed_scripts)
             .collect();
 
     let added = openpdfedit_ocr::add_text_layer(&mut doc, 0, 612.0, 792.0, 612, 792, &words)
         .expect("add_text_layer should succeed");
     assert_eq!(
-        added, 4,
-        "three separate words, and the two halves of the phrase as one run"
+        added, 5,
+        "three separate words, plus each merged pair as one run"
     );
 
     let saved = doc.save_incremental().expect("incremental save");
@@ -248,7 +264,7 @@ fn a_non_latin_word_is_searchable_through_real_pdfium() {
     let handle = engine
         .open(&tmp_path)
         .expect("PDFium should reopen the file");
-    for query in ["注意事项", "Привет", "café", "Hello"] {
+    for query in ["注意事项", "2026 年四年级", "Привет", "café", "Hello"] {
         let hits = engine
             .search_document(handle, query, Default::default(), 10)
             .unwrap_or_else(|e| panic!("search for {query} failed: {e}"));
