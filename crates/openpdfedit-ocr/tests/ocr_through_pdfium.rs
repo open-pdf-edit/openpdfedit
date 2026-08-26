@@ -219,6 +219,7 @@ fn a_non_latin_word_is_searchable_through_real_pdfium() {
             width: 80.0,
             height: 40.0,
             confidence: 95.0,
+            chars: Vec::new(),
         });
 
     // A year and a Chinese word, as a title sets them: Chinese
@@ -234,6 +235,7 @@ fn a_non_latin_word_is_searchable_through_real_pdfium() {
                 width: 80.0,
                 height: 40.0,
                 confidence: 95.0,
+                chars: Vec::new(),
             });
 
     let words: Vec<openpdfedit_ocr::OcrWord> =
@@ -246,6 +248,7 @@ fn a_non_latin_word_is_searchable_through_real_pdfium() {
                 width: 200.0,
                 height: 40.0,
                 confidence: 95.0,
+                chars: Vec::new(),
             })
             .chain(split_phrase)
             .chain(mixed_scripts)
@@ -325,6 +328,7 @@ fn a_search_hit_is_drawn_where_the_characters_actually_are() {
                 width: 70.0,
                 height: 56.0,
                 confidence: 95.0,
+                chars: Vec::new(),
             })
             .collect();
     openpdfedit_ocr::add_text_layer(&mut doc, 0, 612.0, 792.0, 612, 792, &words)
@@ -353,6 +357,92 @@ fn a_search_hit_is_drawn_where_the_characters_actually_are() {
     assert!(
         (right - 360.0).abs() < 14.0,
         "the highlight ends at {right}, but 己 ends at 360"
+    );
+
+    engine.close(handle);
+    let _ = std::fs::remove_file(&tmp_path);
+}
+
+/// And with the recogniser's own character boxes, exactly.
+///
+/// Spreading a word's characters evenly across its box is as much as the
+/// `tesseract` binary's word-level output allows, and for CJK — where
+/// every character is the same square — it is very nearly right. For a
+/// proportional Latin face it is not: an `i` and a `W` differ by a
+/// factor of five, so an evenly spread "Wilt" puts three of its four
+/// letters somewhere they are not. The browser recogniser reports each
+/// character's box, and when it does they are used verbatim.
+#[test]
+fn character_boxes_from_the_recogniser_are_used_verbatim() {
+    let Some(engine) = shared_engine() else {
+        eprintln!("skipping: PDFium not available (run scripts/fetch-pdfium.sh)");
+        return;
+    };
+
+    let tmp_path = std::env::temp_dir().join(format!(
+        "openpdfedit-ocr-symbols-{}.pdf",
+        std::process::id()
+    ));
+    std::fs::write(&tmp_path, text_page_pdf_bytes(".", 8.0)).expect("should write temp file");
+
+    // A word whose letters are nothing like equal width. Spread evenly
+    // across 200 units they would sit at 100, 150, 200 and 250; these
+    // are where they actually are.
+    let measured = [
+        ("W", 100.0_f32, 60.0),
+        ("i", 165.0, 15.0),
+        ("l", 185.0, 15.0),
+        ("t", 205.0, 25.0),
+    ];
+    let word = openpdfedit_ocr::OcrWord {
+        text: "Wilt".to_string(),
+        left: 100.0,
+        top: 100.0,
+        width: 130.0,
+        height: 50.0,
+        confidence: 95.0,
+        chars: measured
+            .iter()
+            .map(|(text, left, width)| openpdfedit_ocr::OcrChar {
+                text: text.to_string(),
+                left: *left,
+                width: *width,
+            })
+            .collect(),
+    };
+    // Alongside a Chinese character, so the whole run takes the
+    // composite path where the placement work happens.
+    let anchor = openpdfedit_ocr::OcrWord {
+        text: "字".to_string(),
+        left: 240.0,
+        top: 100.0,
+        width: 50.0,
+        height: 50.0,
+        confidence: 95.0,
+        chars: Vec::new(),
+    };
+
+    let mut doc = Document::open(&tmp_path).expect("doc crate should open the temp file");
+    openpdfedit_ocr::add_text_layer(&mut doc, 0, 612.0, 792.0, 612, 792, &[word, anchor])
+        .expect("add_text_layer should succeed");
+    let saved = doc.save_incremental().expect("incremental save");
+    std::fs::write(&tmp_path, &saved).expect("overwrite with the OCR'd bytes");
+
+    let handle = engine
+        .open(&tmp_path)
+        .expect("PDFium should reopen the file");
+    let hits = engine
+        .search_document(handle, "lt", Default::default(), 5)
+        .expect("search should succeed");
+    assert_eq!(hits.len(), 1, "the letters must be findable");
+    let quad = hits[0].quads.first().copied().expect("a hit has geometry");
+
+    // `l` starts at 185. Spread evenly it would have been at 165.
+    assert!(
+        (quad[0] - 185.0).abs() < 6.0,
+        "the highlight starts at {}, but `l` is at 185 — the recogniser's own \
+         character boxes are being thrown away in favour of an even spread",
+        quad[0]
     );
 
     engine.close(handle);

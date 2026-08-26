@@ -23,7 +23,7 @@ use std::path::PathBuf;
 use std::sync::Mutex;
 
 use openpdfedit_engine::{DocHandle, Engine};
-use openpdfedit_ocr::OcrWord;
+use openpdfedit_ocr::{OcrChar, OcrWord};
 use serde::{Deserialize, Serialize};
 
 use crate::{commit_mutation, DocHistory, OpenDoc, OpenedDocumentInfo, SessionError, WorkingStore};
@@ -43,6 +43,19 @@ pub struct OcrWordDto {
     /// too uncertain to write is a product decision, and the caller is
     /// the one that knows which recogniser produced the number.
     pub confidence: f32,
+    /// Where each character sits, if the recogniser said. Absent means
+    /// it did not, and the word's characters get spread evenly across
+    /// its box — see `OcrWord::chars`.
+    #[serde(default)]
+    pub chars: Vec<OcrCharDto>,
+}
+
+/// One character's horizontal extent, in the same pixel space.
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct OcrCharDto {
+    pub text: String,
+    pub left: f32,
+    pub width: f32,
 }
 
 /// One page's recognition result.
@@ -89,6 +102,15 @@ pub fn add_ocr_text_layer_impl<E: Engine>(
                     width: w.width,
                     height: w.height,
                     confidence: w.confidence,
+                    chars: w
+                        .chars
+                        .iter()
+                        .map(|c| OcrChar {
+                            text: c.text.clone(),
+                            left: c.left,
+                            width: c.width,
+                        })
+                        .collect(),
                 })
                 .collect();
             openpdfedit_ocr::add_text_layer(
@@ -157,6 +179,7 @@ mod tests {
                         width: 400.0,
                         height: 50.0,
                         confidence: 92.0,
+                        chars: Vec::new(),
                     }],
                 }],
             },
