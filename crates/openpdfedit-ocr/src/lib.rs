@@ -98,6 +98,15 @@ impl From<EngineError> for OcrError {
     }
 }
 
+/// One character, where the recogniser found it. Same pixel space as
+/// [`OcrWord`].
+#[derive(Debug, Clone, PartialEq)]
+pub struct OcrChar {
+    pub text: String,
+    pub left: f32,
+    pub width: f32,
+}
+
 /// One word Tesseract recognized, in *pixel* space relative to the image
 /// that was OCR'd (top-left origin, y-down — image-space, not PDF's
 /// bottom-left/y-up page space; [`add_text_layer`] converts).
@@ -110,6 +119,16 @@ pub struct OcrWord {
     pub height: f32,
     /// Tesseract's own 0-100 confidence for this word.
     pub confidence: f32,
+    /// Where each character of `text` sits, when the recogniser said.
+    ///
+    /// Empty means it did not, and the characters are spread evenly
+    /// across the word instead — which is what the `tesseract` binary's
+    /// word-level TSV forces, and is close enough for CJK, where every
+    /// character occupies the same square. It is not close enough for a
+    /// proportional Latin face, where an `i` and a `W` are told apart by
+    /// a factor of five, so the browser recogniser hands over what it
+    /// knows.
+    pub chars: Vec<OcrChar>,
 }
 
 // Everything from here to `add_text_layer` shells out to the tesseract
@@ -328,6 +347,9 @@ fn parse_tsv(tsv: &str) -> Vec<OcrWord> {
             width,
             height,
             confidence,
+            // Word-level TSV: the binary is not asked for character
+            // boxes, so there are none to carry.
+            chars: Vec::new(),
         });
     }
     words
@@ -596,14 +618,29 @@ impl PlacedWord {
     fn from(word: &OcrWord) -> Self {
         let count = word.text.chars().count().max(1);
         let advance = word.width / count as f32;
+        // The recogniser's own character boxes when there are as many of
+        // them as there are characters. A mismatch means the two
+        // disagree about what the word says — one of them having merged
+        // or dropped something — and guessing which is right would put
+        // characters in the wrong places, so the even spread is used
+        // instead.
+        let measured: Option<Vec<(char, f32, f32)>> =
+            (word.chars.len() == word.text.chars().count()).then(|| {
+                word.text
+                    .chars()
+                    .zip(word.chars.iter())
+                    .map(|(ch, box_)| (ch, box_.left, box_.width))
+                    .collect()
+            });
         Self {
             text: word.text.clone(),
-            chars: word
-                .text
-                .chars()
-                .enumerate()
-                .map(|(i, ch)| (ch, word.left + i as f32 * advance, advance))
-                .collect(),
+            chars: measured.unwrap_or_else(|| {
+                word.text
+                    .chars()
+                    .enumerate()
+                    .map(|(i, ch)| (ch, word.left + i as f32 * advance, advance))
+                    .collect()
+            }),
             left: word.left,
             top: word.top,
             width: word.width,
@@ -933,6 +970,7 @@ mod tests {
                 width: 50.0,
                 height: 20.0,
                 confidence: 90.0,
+                chars: Vec::new(),
             },
             OcrWord {
                 text: "café".into(), // non-ASCII: the case a simple font cannot carry
@@ -941,6 +979,7 @@ mod tests {
                 width: 50.0,
                 height: 20.0,
                 confidence: 90.0,
+                chars: Vec::new(),
             },
         ];
 
@@ -1032,6 +1071,7 @@ mod tests {
                 width,
                 height,
                 confidence: 90.0,
+                chars: Vec::new(),
             })
             .collect();
 

@@ -36,6 +36,12 @@ interface RecognisedWord {
   text: string;
   confidence: number;
   bbox: { x0: number; y0: number; x1: number; y1: number };
+  /** One per character, when the engine reports them. This is the whole
+   * reason the layout tree is asked for rather than the plain text: a
+   * word box alone leaves the characters inside it to be spaced by
+   * arithmetic, and a search highlight drawn from that arithmetic sits
+   * beside the word it found rather than on it. */
+  symbols?: { text: string; bbox: { x0: number; y0: number; x1: number; y1: number } }[];
 }
 
 /** Where the words actually are.
@@ -62,6 +68,9 @@ export interface OcrWordDto {
   width: number;
   height: number;
   confidence: number;
+  /** Each character's own horizontal extent, in the same pixel space.
+   * Empty when the engine did not say. */
+  chars: { text: string; left: number; width: number }[];
 }
 
 export interface OcrProgress {
@@ -185,6 +194,11 @@ export async function recognisePage(
             width: word.bbox.x1 - word.bbox.x0,
             height: word.bbox.y1 - word.bbox.y0,
             confidence: word.confidence,
+            chars: (word.symbols ?? []).map((symbol) => ({
+              text: symbol.text,
+              left: symbol.bbox.x0,
+              width: symbol.bbox.x1 - symbol.bbox.x0,
+            })),
           });
         }
       }
