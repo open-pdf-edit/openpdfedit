@@ -36,6 +36,7 @@
   import { untrack } from "svelte";
   import type { AnnotationPayload } from "$lib/PdfPage.svelte";
   import BrandMark from "$lib/BrandMark.svelte";
+  import ZoomControl from "$lib/ZoomControl.svelte";
   import InstallPrompt from "$lib/InstallPrompt.svelte";
   import Icon from "$lib/Icon.svelte";
   import { tooltip } from "$lib/tooltip";
@@ -1819,13 +1820,14 @@
       </div>
 
       <div class="topbar__group topbar__group--zoom">
-        <button class="oa-icon-btn oa-icon-btn--sm" onclick={zoomOut} disabled={zoom <= MIN_ZOOM} aria-label="Zoom out">
-          <Icon name="zoom-out" size={15} />
-        </button>
-        <button class="zoom-level oa-mono" onclick={zoomReset} use:tooltip={"Reset zoom"}>{Math.round(zoom * 100)}%</button>
-        <button class="oa-icon-btn oa-icon-btn--sm" onclick={zoomIn} disabled={zoom >= MAX_ZOOM} aria-label="Zoom in">
-          <Icon name="zoom-in" size={15} />
-        </button>
+        <ZoomControl
+          {zoom}
+          canZoomOut={zoom > MIN_ZOOM}
+          canZoomIn={zoom < MAX_ZOOM}
+          onZoomOut={zoomOut}
+          onZoomIn={zoomIn}
+          onReset={zoomReset}
+        />
       </div>
 
       <span class="oa-caption topbar__meta">
@@ -2171,6 +2173,24 @@
       <Icon name="file-pen" size={12} />
       <span class="path-bar__text">{filePath}</span>
       {#if doc?.is_dirty}<span class="oa-tag path-bar__dirty">Unsaved</span>{/if}
+      {#if doc}
+        <!-- Phone only. On a desktop these live in the topbar, where
+             there is room for them; on a phone there is not, and this
+             strip is the only other place they belong next to the name
+             of the document they describe. Hidden above 720px by the
+             rule on `.path-bar__meta`. -->
+        <div class="path-bar__meta">
+          <span class="path-bar__pages">{currentPage + 1} / {doc.page_count}</span>
+          <ZoomControl
+            {zoom}
+            canZoomOut={zoom > MIN_ZOOM}
+            canZoomIn={zoom < MAX_ZOOM}
+            onZoomOut={zoomOut}
+            onZoomIn={zoomIn}
+            onReset={zoomReset}
+          />
+        </div>
+      {/if}
     </div>
   {/if}
 
@@ -2482,22 +2502,6 @@
     filter: brightness(0.97);
   }
 
-  .zoom-level {
-    min-width: 3.2rem;
-    height: var(--control-h-sm);
-    padding: 0 4px;
-    border: 0;
-    background: transparent;
-    cursor: pointer;
-    text-align: center;
-    font-variant-numeric: tabular-nums;
-    border-radius: var(--radius-sm);
-    transition: var(--transition-control);
-  }
-  .zoom-level:hover {
-    background: var(--surface-hover);
-  }
-
   /* ---- Secondary strip: the open file's path ---- */
   .path-bar {
     flex: 0 0 auto;
@@ -2519,6 +2523,12 @@
     text-overflow: ellipsis;
     white-space: nowrap;
   }
+  /* Phone only — see the markup. Kept out of the way of a desktop,
+     which shows the same two things in the topbar. */
+  .path-bar__meta {
+    display: none;
+  }
+
   .path-bar__dirty {
     flex: 0 0 auto;
     color: var(--warning-fg);
@@ -2621,10 +2631,30 @@
    * two arrangements.
    * ---------------------------------------------------------------- */
   @media (max-width: 720px) {
-    /* The page gets the room. Everything below is in service of that. */
+    /* The page gets the room — but 2px between controls made a row of
+       buttons read as one undifferentiated strip, and put their tap
+       targets closer together than a fingertip can resolve. The space
+       comes from the wordmark instead: the app is already open, and the
+       empty state carries the mark in the middle of the screen where
+       there is room for it. */
     .topbar {
-      gap: 2px;
-      padding: 0 var(--space-2);
+      gap: var(--space-2);
+      padding: 0 var(--space-3);
+      height: 56px;
+    }
+
+    .topbar :global(.oa-brandmark) {
+      display: none;
+    }
+
+    /* 40px, up from 28: the smallest thing worth aiming a thumb at. */
+    .topbar :global(.oa-icon-btn) {
+      width: 40px;
+      height: 40px;
+    }
+
+    .topbar :global(.oa-btn) {
+      height: 40px;
     }
 
     .topbar__more {
@@ -2727,23 +2757,39 @@
       overflow-y: auto;
     }
 
+    /* The file strip carries what the topbar cannot: which page you are
+       on and what the zoom is. Taller than the desktop's 26px hairline
+       because it holds controls now, and because the name of the
+       document was previously jammed against the toolbar above it. */
     .path-bar {
-      padding: 4px var(--space-3);
+      height: auto;
+      min-height: 44px;
+      padding: 6px var(--space-3);
+      gap: var(--space-2);
     }
 
-    /* Zoom buttons go, rather than joining the sheet. A phone already
-       fits the page to its width when a document opens, and pinch is the
-       gesture people reach for — two more buttons would be a worse
-       answer than the one the platform already has. They were briefly in
-       the sheet, where they sat underneath the document tools at the
-       same fixed position and could not be tapped at all. */
-    .topbar__group--zoom {
-      display: none;
+    .path-bar__meta {
+      display: flex;
+      align-items: center;
+      gap: 2px;
+      /* Pushed right, away from the name, which takes what it needs of
+         the rest and ellipsises the remainder. */
+      margin-left: auto;
+      flex: 0 0 auto;
     }
 
-    /* "Page 1 of 12" is the first thing to go when the topbar is full:
-       the path bar already names the document, and the page a reader is
-       on is obvious from the page. */
+    .path-bar__pages {
+      font: var(--type-caption);
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
+      padding-right: var(--space-1, 4px);
+    }
+
+    /* Both of these moved to the file strip rather than disappearing.
+       The topbar copies stay hidden: they were briefly in the tools
+       sheet, where they sat underneath the document tools at the same
+       fixed position and could not be tapped at all. */
+    .topbar__group--zoom,
     .topbar__meta {
       display: none;
     }
