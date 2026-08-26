@@ -68,8 +68,6 @@
 #[cfg(not(target_arch = "wasm32"))]
 use std::process::Command;
 
-use std::collections::BTreeMap;
-
 use lopdf::content::{Content, Operation};
 use lopdf::{dictionary, Object, Stream};
 use openpdfedit_doc::{DocError, Document};
@@ -364,25 +362,20 @@ pub fn add_text_layer(
     let scale_x = page_width_pt / image_width_px.max(1) as f32;
     let scale_y = page_height_pt / image_height_px.max(1) as f32;
 
-    // Codes for the composite font, assigned in first-seen order. CID 0
-    // is `notdef` by convention, so numbering starts at 1. Only the
-    // characters that actually need it get one — a page of English adds
-    // no font and no CMap.
-    let mut cid_of: BTreeMap<char, u16> = BTreeMap::new();
-    let mut next_cid: u16 = 1;
-    for word in &kept {
-        if word.text.is_ascii() {
-            continue;
-        }
-        for ch in word.text.chars() {
-            cid_of.entry(ch).or_insert_with(|| {
-                let cid = next_cid;
-                next_cid = next_cid.saturating_add(1);
-                cid
-            });
-        }
-    }
-    let uses_unicode_font = !cid_of.is_empty();
+    // One code per *occurrence*, not per character.
+    //
+    // A composite font gives each code a width, and the width is what
+    // carries the pen from one character to the next. Sharing a code
+    // between every 年 on the page would mean sharing one width between
+    // them, so they could not each sit where they were found — and they
+    // must, because the search highlight is drawn from these positions.
+    // Looking for 四年级 in a Chinese title used to light up 暑期思:
+    // right characters, wrong place, three along.
+    //
+    // The cost is a wider font dictionary — a width and a `ToUnicode`
+    // entry per character on the page rather than per distinct one. That
+    // is some tens of kilobytes beside a scan of several hundred.
+    let mut occurrences: Vec<Occurrence> = Vec::new();
 
     let mut operations = vec![
         Operation::new("BT", vec![]),
@@ -410,20 +403,42 @@ pub fn add_text_layer(
             "Tm",
             vec![1.into(), 0.into(), 0.into(), 1.into(), x.into(), y.into()],
         ));
-        let shown = if ascii {
-            Object::string_literal(word.text.clone())
-        } else {
-            // Two bytes per character, big-endian, matching Identity-H.
-            let mut bytes = Vec::with_capacity(word.text.chars().count() * 2);
-            for ch in word.text.chars() {
-                let cid = cid_of[&ch];
-                bytes.push((cid >> 8) as u8);
-                bytes.push((cid & 0xff) as u8);
-            }
-            Object::String(bytes, lopdf::StringFormat::Hexadecimal)
-        };
-        operations.push(Operation::new("Tj", vec![shown]));
+
+        if ascii {
+            operations.push(Operation::new(
+                "Tj",
+                vec![Object::string_literal(word.text.clone())],
+            ));
+            continue;
+        }
+
+        // Two bytes per code, big-endian, matching Identity-H.
+        let mut bytes = Vec::with_capacity(word.chars.len() * 2);
+        for (index, (ch, left, own_advance)) in word.chars.iter().enumerate() {
+            // How far to the next character, or this one's own width if
+            // it is the last. In glyph space: thousandths of the em, so
+            // the same number means the same distance whatever size the
+            // run is set at.
+            let advance_px = match word.chars.get(index + 1) {
+                Some((_, next_left, _)) => next_left - left,
+                None => *own_advance,
+            };
+            let width = 1000.0 * (advance_px * scale_x) / font_size;
+
+            let cid = (occurrences.len() + 1) as u16;
+            occurrences.push(Occurrence {
+                ch: *ch,
+                width: width.max(0.0),
+            });
+            bytes.push((cid >> 8) as u8);
+            bytes.push((cid & 0xff) as u8);
+        }
+        operations.push(Operation::new(
+            "Tj",
+            vec![Object::String(bytes, lopdf::StringFormat::Hexadecimal)],
+        ));
     }
+
     operations.push(Operation::new("ET", vec![]));
 
     let content = Content { operations };
@@ -438,8 +453,8 @@ pub fn add_text_layer(
         "Encoding" => "WinAnsiEncoding",
     }));
     let mut page_fonts: Vec<(&str, lopdf::ObjectId)> = vec![("OcrHelv", helvetica_id)];
-    if uses_unicode_font {
-        page_fonts.push((OCR_UNICODE_FONT, add_unicode_font(doc, &cid_of)));
+    if !occurrences.is_empty() {
+        page_fonts.push((OCR_UNICODE_FONT, add_unicode_font(doc, &occurrences)));
     }
 
     let stream_id = doc.add_object(Object::Stream(Stream::new(dictionary! {}, encoded)));
@@ -485,12 +500,12 @@ fn starts_cjk(text: &str) -> bool {
     text.chars().next().is_some_and(is_cjk)
 }
 
-fn merge_adjacent_cjk(words: &[OcrWord]) -> Vec<OcrWord> {
-    let mut kept: Vec<OcrWord> = Vec::with_capacity(words.len());
+fn merge_adjacent_cjk(words: &[OcrWord]) -> Vec<PlacedWord> {
+    let mut kept: Vec<PlacedWord> = Vec::with_capacity(words.len());
 
     for word in words.iter().filter(|w| !w.text.trim().is_empty()) {
         let Some(previous) = kept.last_mut() else {
-            kept.push(word.clone());
+            kept.push(PlacedWord::from(word));
             continue;
         };
 
@@ -533,20 +548,82 @@ fn merge_adjacent_cjk(words: &[OcrWord]) -> Vec<OcrWord> {
             // space, and inserting one would break every phrase.
             if !ends_cjk(&previous.text) || !starts_cjk(&word.text) {
                 previous.text.push(' ');
+                // The space is never drawn — it exists only in the text
+                // — so it sits where the character after it begins and
+                // takes no width of its own.
+                previous.chars.push((' ', word.left, 0.0));
             }
             previous.text.push_str(&word.text);
+            previous.chars.extend(PlacedWord::from(word).chars);
             previous.confidence = previous.confidence.min(word.confidence);
         } else {
-            kept.push(word.clone());
+            kept.push(PlacedWord::from(word));
         }
     }
 
     kept
 }
 
+/// A word, or a run of them joined together, with somewhere to put every
+/// character.
+///
+/// The positions are the point. A merged run used to be drawn as one
+/// string from its left edge, letting the font's own one-em advance
+/// carry each character to the next — which is right only if the text
+/// was set at exactly that spacing. A tracked-out title is not, and the
+/// drift accumulated: searching a Chinese title for 四年级 highlighted
+/// 暑期思, three characters further along, because that is where this
+/// code had drawn them.
+#[derive(Debug, Clone)]
+struct PlacedWord {
+    text: String,
+    /// Each character with its left edge and advance, in image pixels.
+    chars: Vec<(char, f32, f32)>,
+    left: f32,
+    top: f32,
+    width: f32,
+    height: f32,
+    confidence: f32,
+}
+
+impl PlacedWord {
+    /// Character positions within a recognised word, spread evenly
+    /// across its box.
+    ///
+    /// Tesseract reports boxes per word, not per character, so this is
+    /// as much as is known — and for CJK, where every character occupies
+    /// the same square, it is also very nearly exact.
+    fn from(word: &OcrWord) -> Self {
+        let count = word.text.chars().count().max(1);
+        let advance = word.width / count as f32;
+        Self {
+            text: word.text.clone(),
+            chars: word
+                .text
+                .chars()
+                .enumerate()
+                .map(|(i, ch)| (ch, word.left + i as f32 * advance, advance))
+                .collect(),
+            left: word.left,
+            top: word.top,
+            width: word.width,
+            height: word.height,
+            confidence: word.confidence,
+        }
+    }
+}
+
 /// Resource name for the composite font. Chosen to not collide with
 /// anything a real document is likely to have named its own fonts.
 const OCR_UNICODE_FONT: &str = "OcrUni";
+
+/// One character as it appears once on the page: what it is, and how
+/// far the pen moves after drawing it.
+struct Occurrence {
+    ch: char,
+    /// Thousandths of the em, the units a CID font states widths in.
+    width: f32,
+}
 
 /// Adds the `Type0` font the non-ASCII words are written in, and returns
 /// its object id.
@@ -557,7 +634,7 @@ const OCR_UNICODE_FONT: &str = "OcrUni";
 /// back out is the `ToUnicode` CMap, not glyph outlines. Embedding a CJK
 /// face to satisfy a rule about glyphs nobody will see would add
 /// megabytes to every OCR'd page.
-fn add_unicode_font(doc: &mut Document, cid_of: &BTreeMap<char, u16>) -> lopdf::ObjectId {
+fn add_unicode_font(doc: &mut Document, occurrences: &[Occurrence]) -> lopdf::ObjectId {
     let descriptor_id = doc.add_object(Object::Dictionary(dictionary! {
         "Type" => "FontDescriptor",
         "FontName" => Object::Name(OCR_UNICODE_FONT.as_bytes().to_vec()),
@@ -583,15 +660,27 @@ fn add_unicode_font(doc: &mut Document, cid_of: &BTreeMap<char, u16>) -> lopdf::
             "Supplement" => 0,
         },
         "FontDescriptor" => Object::Reference(descriptor_id),
-        // One em per character. Nothing is drawn, and each word is
-        // positioned by its own `Tm`, so this only has to be sane.
+        // Only for codes the `W` array below does not cover, which is
+        // none of them.
         "DW" => 1000,
+        // Every code's own width, which is what puts each character
+        // where it was recognised. `[ 1 [w1 w2 ...] ]` — one run
+        // starting at code 1, since codes were handed out in order.
+        "W" => vec![
+            1.into(),
+            Object::Array(
+                occurrences
+                    .iter()
+                    .map(|o| Object::Real(o.width))
+                    .collect::<Vec<_>>(),
+            ),
+        ],
         "CIDToGIDMap" => Object::Name(b"Identity".to_vec()),
     }));
 
     let to_unicode_id = doc.add_object(Object::Stream(Stream::new(
         dictionary! {},
-        to_unicode_cmap(cid_of),
+        to_unicode_cmap(occurrences),
     )));
 
     doc.add_object(Object::Dictionary(dictionary! {
@@ -609,7 +698,7 @@ fn add_unicode_font(doc: &mut Document, cid_of: &BTreeMap<char, u16>) -> lopdf::
 /// This is the whole point of the composite path. Without it a reader
 /// sees two-byte codes into a font it cannot resolve and extracts
 /// nothing.
-fn to_unicode_cmap(cid_of: &BTreeMap<char, u16>) -> Vec<u8> {
+fn to_unicode_cmap(occurrences: &[Occurrence]) -> Vec<u8> {
     let mut out = String::from(
         "/CIDInit /ProcSet findresource begin\n\
          12 dict begin\n\
@@ -622,10 +711,13 @@ fn to_unicode_cmap(cid_of: &BTreeMap<char, u16>) -> Vec<u8> {
          endcodespacerange\n",
     );
 
-    // Sorted by code so the file reads in order, and chunked: the spec
-    // caps a `bfchar` block at 100 entries.
-    let mut entries: Vec<(u16, char)> = cid_of.iter().map(|(ch, cid)| (*cid, *ch)).collect();
-    entries.sort_unstable();
+    // Codes were handed out in order, so this is already sorted.
+    // Chunked because the spec caps a `bfchar` block at 100 entries.
+    let entries: Vec<(u16, char)> = occurrences
+        .iter()
+        .enumerate()
+        .map(|(index, o)| ((index + 1) as u16, o.ch))
+        .collect();
 
     for chunk in entries.chunks(100) {
         out.push_str(&format!("{} beginbfchar\n", chunk.len()));
@@ -868,8 +960,8 @@ mod tests {
             text.contains("/OcrUni"),
             "the non-ASCII word needs the composite font: {text}"
         );
-        // c=0063 a=0061 f=0066 é=00E9 — codes assigned in first-seen
-        // order, so 1..4 here.
+        // One code per character *occurrence*, handed out in order, so
+        // the four letters of café are codes 1 to 4.
         assert!(
             text.contains("<0001000200030004>"),
             "expected four codes for cafe-with-an-accent: {text}"
