@@ -62,3 +62,38 @@ pub fn import_xfdf_cmd(
     )
     .map_err(Into::into)
 }
+
+/// The open document as Markdown, written to `output_path`.
+///
+/// Here rather than in a module of its own because it is the same shape
+/// as the XFDF export beside it: convert what is open, write it where
+/// the user pointed. See `openpdfedit_session::markdown` for what the
+/// conversion is and why it happens locally.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExportMarkdownRequest {
+    handle: DocHandle,
+    output_path: String,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExportMarkdownResult {
+    path: String,
+    /// How much text there was. Zero is the answer for a scan nobody has
+    /// OCR'd, and saying so beats handing back an empty file.
+    characters: usize,
+}
+
+#[tauri::command]
+pub fn export_markdown_cmd(
+    state: State<'_, AppState>,
+    request: ExportMarkdownRequest,
+) -> Result<ExportMarkdownResult, CommandError> {
+    let markdown = openpdfedit_session::markdown::export_markdown_impl(&state, request.handle)?;
+    std::fs::write(&request.output_path, markdown.as_bytes())?;
+    Ok(ExportMarkdownResult {
+        path: request.output_path,
+        characters: markdown.chars().count(),
+    })
+}

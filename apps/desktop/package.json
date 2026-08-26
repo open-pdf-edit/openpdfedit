@@ -13,6 +13,7 @@
   },
   "license": "MIT OR Apache-2.0",
   "dependencies": {
+    "@firecrawl/anydoc-wasm": "^0.2.3",
     "@openapps/sdk": "file:vendor/openapps/sdk",
     "@openapps/ui": "file:vendor/openapps/ui",
     "@tauri-apps/api": "^2",

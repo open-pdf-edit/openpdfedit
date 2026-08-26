@@ -243,6 +243,7 @@ pub mod compare;
 pub mod encrypt;
 pub mod flatten;
 pub mod forms;
+pub mod markdown;
 pub mod numbering;
 pub mod ocr;
 pub mod outline;

@@ -265,6 +265,27 @@ export interface TextSelection {
   text: string;
 }
 
+export interface ExportMarkdownRequest {
+  handle: number;
+  /** What to call the file, without a directory: "report.md". */
+  fileName: string;
+  /** Where it should go, when the user has chosen somewhere — a
+   * directory path on the desktop, or the key of a directory the
+   * browser has granted access to. Absent means "ask, or download". */
+  vault?: string | null;
+}
+
+export interface ExportMarkdownResult {
+  /** Where it ended up, for saying so afterwards. Null when the file was
+   * handed to the browser's downloads instead of written somewhere
+   * nameable. */
+  path: string | null;
+  /** How much text there was, so an empty result can be explained
+   * rather than looking like a failure. A scan that has not been OCR'd
+   * has no text to convert. */
+  characters: number;
+}
+
 export interface EditTextRunRequest {
   handle: number;
   pageIndex: number;
@@ -490,6 +511,27 @@ export interface Backend {
    * Both come from one character range on the backend, so they cannot
    * disagree about what was selected. */
   selectText(request: TextSelectionQuadsRequest): Promise<TextSelection>;
+
+  /** The open document converted to Markdown, and where it was put.
+   *
+   * The two backends differ in what "put" can mean, which is why this
+   * takes a target rather than returning a string. The desktop writes to
+   * a path; a browser has no paths, so it writes into a directory the
+   * user picked (Chromium) or hands over a download (everywhere else).
+   * See `Backend.savesByDownloading` for the same split on saving. */
+  exportMarkdown(request: ExportMarkdownRequest): Promise<ExportMarkdownResult>;
+
+  /** Whether this backend can write into a folder the user names — an
+   * Obsidian vault, most usefully. True on the desktop; in a browser,
+   * true only where the File System Access API exists (Chromium), since
+   * everywhere else a file can only be handed to the downloads folder. */
+  supportsVault(): boolean;
+
+  /** Ask the user for that folder. Returns something to pass back as
+   * `ExportMarkdownRequest.vault`, plus a name to show them. Null if
+   * they cancelled. Must be called from a click: a browser will not open
+   * a directory picker otherwise. */
+  pickVault(): Promise<{ key: string; name: string } | null>;
 
   // --- text/image editing ---
   listTextRuns(handle: number, pageIndex: number): Promise<TextRunDto[]>;

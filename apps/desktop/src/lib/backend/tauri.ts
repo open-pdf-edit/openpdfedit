@@ -40,6 +40,7 @@ import type {
   SearchResultsDto,
   SignatureInfoDto,
   TextRunDto,
+  ExportMarkdownResult,
   TextSelection,
   TextSelectionQuadsRequest,
 } from "./types";
@@ -232,6 +233,35 @@ export const tauriBackend: Backend = {
     return invoke<ExportXfdfResult>("export_xfdf_cmd", {
       request: { handle, outputPath },
     });
+  },
+
+  /** A directory on disk, so the vault is a path and writing into it is
+   * ordinary. When one is given the file goes straight there without a
+   * dialog — which is the point of remembering a vault. */
+  async exportMarkdown({ handle, fileName, vault }) {
+    let outputPath: string | null;
+    if (vault) {
+      outputPath = `${vault.replace(/\/+$/, "")}/${fileName}`;
+    } else {
+      outputPath = await save({
+        defaultPath: fileName,
+        filters: [{ name: "Markdown", extensions: ["md"] }],
+      });
+    }
+    if (!outputPath) return { path: null, characters: 0 };
+    return invoke<ExportMarkdownResult>("export_markdown_cmd", {
+      request: { handle, outputPath },
+    });
+  },
+
+  supportsVault() {
+    return true;
+  },
+
+  async pickVault() {
+    const picked = await open({ directory: true, multiple: false });
+    if (!picked || Array.isArray(picked)) return null;
+    return { key: picked, name: picked.split("/").pop() || picked };
   },
 
   async importXfdf(handle) {

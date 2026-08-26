@@ -52,6 +52,11 @@ openpdfedit-batch = { path = "crates/openpdfedit-batch" }
 openpdfedit-license = { path = "crates/openpdfedit-license" }
 
 # --- PDF: rendering / manipulation (MIT/Apache/BSD only — see docs/research/04-oss-borrow-map.md) ---
+# Documents to Markdown, in Rust, entirely locally — which is the only
+# kind of converter this product can use. It compiles for wasm32, so the
+# browser build gets the same conversion as the desktop rather than a
+# second implementation or a round trip to somebody's server.
+anydoc = "0.2"
 pdfium-render = "0.9"
 lopdf = "0.44"
 lru = "0.18"
