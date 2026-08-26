@@ -16,11 +16,13 @@
     if (dialog?.kind === "prompt") {
       value = dialog.defaultValue;
       queueMicrotask(() => inputEl?.select());
+    } else if (dialog?.kind === "choice") {
+      value = dialog.defaultValue;
     }
   });
 
   function confirm() {
-    resolveDialog(dialog?.kind === "prompt" ? value : "");
+    resolveDialog(dialog?.kind === "prompt" || dialog?.kind === "choice" ? value : "");
   }
   function cancel() {
     resolveDialog(null);
@@ -74,6 +76,15 @@
             autofocus
             spellcheck="false"
           />
+        {/if}
+
+        {#if dialog.kind === "choice"}
+          <!-- svelte-ignore a11y_autofocus -->
+          <select class="oa-input" bind:value aria-label={dialog.message} autofocus>
+            {#each dialog.options as option (option.value)}
+              <option value={option.value}>{option.label}</option>
+            {/each}
+          </select>
         {/if}
       </div>
 

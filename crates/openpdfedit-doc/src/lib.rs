@@ -920,6 +920,23 @@ impl Document {
         font_name: &str,
         font_id: ObjectId,
     ) -> Result<(), DocError> {
+        self.append_content_stream_with_fonts(page_index, stream_id, &[(font_name, font_id)])
+    }
+
+    /// As [`append_content_stream`](Self::append_content_stream), but for
+    /// a stream that switches between several fonts.
+    ///
+    /// One font was enough while the only text this appended was ASCII
+    /// drawn in Helvetica. An OCR layer over a document that mixes
+    /// scripts needs two: a simple font for the Latin words and a
+    /// composite one for everything else, because a single-byte font
+    /// cannot address a character outside its 256-code encoding.
+    pub fn append_content_stream_with_fonts(
+        &mut self,
+        page_index: u32,
+        stream_id: ObjectId,
+        page_fonts: &[(&str, ObjectId)],
+    ) -> Result<(), DocError> {
         let page_id = self.page_object_id(page_index)?;
         let mut page_dict = self.dict_at(page_id)?.clone();
 
@@ -949,7 +966,9 @@ impl Document {
             Ok(Object::Dictionary(d)) => d.clone(),
             _ => Dictionary::new(),
         };
-        fonts.set(font_name, Object::Reference(font_id));
+        for (font_name, font_id) in page_fonts {
+            fonts.set(*font_name, Object::Reference(*font_id));
+        }
         resources.set("Font", Object::Dictionary(fonts));
         page_dict.set("Resources", Object::Dictionary(resources));
 

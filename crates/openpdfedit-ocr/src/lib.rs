@@ -41,18 +41,34 @@
 //! one path that's genuinely been exercised and flag the other as
 //! deferred than to pretend both are done.
 //!
-//! ## Scope: ASCII-range text only
+//! ## Text encoding: any script, not just ASCII
 //!
-//! Recognized words are written as PDF literal strings (`(text)` — raw
-//! bytes, PDFDocEncoding/Latin-1-ish), not UTF-16BE hex strings with a
-//! `ToUnicode` CMap. That's correct for `tesseract`'s `eng` language pack
-//! (the only language data this dev environment has installed — see
-//! `recognize_words`'s doc), which outputs plain ASCII for English text.
-//! A word containing non-ASCII characters is skipped, not mis-encoded —
-//! full Unicode support needs the CMap infrastructure and is future work.
+//! An ASCII word is written as a PDF literal string (`(text)`) in
+//! Helvetica, which is what this did originally and is the simplest
+//! thing that works for English.
+//!
+//! Anything else — Chinese, Japanese, Cyrillic, an accented Latin word —
+//! cannot be: a simple font addresses 256 codes and a literal string
+//! cannot name a character outside them. Those words go through a
+//! composite (`Type0`, `Identity-H`) font instead, as hex strings of
+//! two-byte codes, with a `ToUnicode` CMap mapping each code back to the
+//! character it stands for. Extraction and search read that CMap, which
+//! is why the text comes back out.
+//!
+//! The font has no embedded font file, and does not need one: the layer
+//! is drawn in text rendering mode 3, so no glyph is ever rasterised.
+//! What is being stored is the *text*, positioned over the picture of it
+//! that the scan already contains.
+//!
+//! Before this, a non-ASCII word was skipped rather than mis-encoded —
+//! defensible on its own, but combined with an English-only recogniser it
+//! meant OCR on a Chinese document ran to completion, reported success,
+//! and added nothing at all.
 
 #[cfg(not(target_arch = "wasm32"))]
 use std::process::Command;
+
+use std::collections::BTreeMap;
 
 use lopdf::content::{Content, Operation};
 use lopdf::{dictionary, Object, Stream};
@@ -340,20 +356,40 @@ pub fn add_text_layer(
     image_height_px: u32,
     words: &[OcrWord],
 ) -> Result<usize, OcrError> {
-    let ascii_words: Vec<&OcrWord> = words.iter().filter(|w| w.text.is_ascii()).collect();
-    if ascii_words.is_empty() {
+    let kept = merge_adjacent_cjk(words);
+    if kept.is_empty() {
         return Ok(0);
     }
 
     let scale_x = page_width_pt / image_width_px.max(1) as f32;
     let scale_y = page_height_pt / image_height_px.max(1) as f32;
 
+    // Codes for the composite font, assigned in first-seen order. CID 0
+    // is `notdef` by convention, so numbering starts at 1. Only the
+    // characters that actually need it get one — a page of English adds
+    // no font and no CMap.
+    let mut cid_of: BTreeMap<char, u16> = BTreeMap::new();
+    let mut next_cid: u16 = 1;
+    for word in &kept {
+        if word.text.is_ascii() {
+            continue;
+        }
+        for ch in word.text.chars() {
+            cid_of.entry(ch).or_insert_with(|| {
+                let cid = next_cid;
+                next_cid = next_cid.saturating_add(1);
+                cid
+            });
+        }
+    }
+    let uses_unicode_font = !cid_of.is_empty();
+
     let mut operations = vec![
         Operation::new("BT", vec![]),
         Operation::new("Tr", vec![3.into()]),
     ];
 
-    for word in &ascii_words {
+    for word in &kept {
         let font_size = (word.height * scale_y).max(1.0);
         // Image space is top-left origin, y-down; PDF page space is
         // bottom-left origin, y-up — flip, and anchor at the bottom of
@@ -362,18 +398,31 @@ pub fn add_text_layer(
         let x = word.left * scale_x;
         let y = page_height_pt - (word.top + word.height) * scale_y;
 
+        let ascii = word.text.is_ascii();
         operations.push(Operation::new(
             "Tf",
-            vec!["OcrHelv".into(), font_size.into()],
+            vec![
+                if ascii { "OcrHelv" } else { OCR_UNICODE_FONT }.into(),
+                font_size.into(),
+            ],
         ));
         operations.push(Operation::new(
             "Tm",
             vec![1.into(), 0.into(), 0.into(), 1.into(), x.into(), y.into()],
         ));
-        operations.push(Operation::new(
-            "Tj",
-            vec![Object::string_literal(word.text.clone())],
-        ));
+        let shown = if ascii {
+            Object::string_literal(word.text.clone())
+        } else {
+            // Two bytes per character, big-endian, matching Identity-H.
+            let mut bytes = Vec::with_capacity(word.text.chars().count() * 2);
+            for ch in word.text.chars() {
+                let cid = cid_of[&ch];
+                bytes.push((cid >> 8) as u8);
+                bytes.push((cid & 0xff) as u8);
+            }
+            Object::String(bytes, lopdf::StringFormat::Hexadecimal)
+        };
+        operations.push(Operation::new("Tj", vec![shown]));
     }
     operations.push(Operation::new("ET", vec![]));
 
@@ -382,16 +431,194 @@ pub fn add_text_layer(
         .encode()
         .map_err(|e| OcrError::ContentEncode(e.to_string()))?;
 
-    let font_id = doc.add_object(Object::Dictionary(dictionary! {
+    let helvetica_id = doc.add_object(Object::Dictionary(dictionary! {
         "Type" => "Font",
         "Subtype" => "Type1",
         "BaseFont" => "Helvetica",
         "Encoding" => "WinAnsiEncoding",
     }));
-    let stream_id = doc.add_object(Object::Stream(Stream::new(dictionary! {}, encoded)));
-    doc.append_content_stream(page_index, stream_id, "OcrHelv", font_id)?;
+    let mut page_fonts: Vec<(&str, lopdf::ObjectId)> = vec![("OcrHelv", helvetica_id)];
+    if uses_unicode_font {
+        page_fonts.push((OCR_UNICODE_FONT, add_unicode_font(doc, &cid_of)));
+    }
 
-    Ok(ascii_words.len())
+    let stream_id = doc.add_object(Object::Stream(Stream::new(dictionary! {}, encoded)));
+    doc.append_content_stream_with_fonts(page_index, stream_id, &page_fonts)?;
+
+    Ok(kept.len())
+}
+
+/// Is this a character from a script written without spaces between
+/// words? Chinese, Japanese and Korean, plus the fullwidth punctuation
+/// that goes with them.
+fn is_cjk(ch: char) -> bool {
+    matches!(ch as u32,
+        0x3000..=0x303F   // CJK punctuation
+        | 0x3040..=0x30FF // Hiragana, Katakana
+        | 0x3400..=0x4DBF // CJK ideographs, extension A
+        | 0x4E00..=0x9FFF // CJK ideographs
+        | 0xAC00..=0xD7AF // Hangul syllables
+        | 0xF900..=0xFAFF // compatibility ideographs
+        | 0xFF00..=0xFFEF // fullwidth forms
+    )
+}
+
+/// Joins recognised words that belong to one uninterrupted run of CJK
+/// text, and drops the empty ones.
+///
+/// Tesseract returns "words" for Chinese too, but Chinese is not written
+/// with spaces, so where it breaks one is arbitrary — 注意事项 comes back
+/// as 注意 and 事项. Each would become its own positioned text run, and a
+/// reader extracting the page sees them as separate pieces, so searching
+/// for the phrase finds nothing. Merging them back into one run is what
+/// makes a phrase search work, which for Chinese is very nearly every
+/// search.
+///
+/// Only where at least one side is CJK and the gap is small. Two Latin
+/// words also sit close together, and joining those would turn "Hello
+/// world" into "Helloworld".
+fn merge_adjacent_cjk(words: &[OcrWord]) -> Vec<OcrWord> {
+    let mut kept: Vec<OcrWord> = Vec::with_capacity(words.len());
+
+    for word in words.iter().filter(|w| !w.text.trim().is_empty()) {
+        let Some(previous) = kept.last_mut() else {
+            kept.push(word.clone());
+            continue;
+        };
+
+        // Vertical centres within a third of a line height. Scanned text
+        // is never exactly aligned, and a strict comparison would treat
+        // every slight skew as a new line.
+        let mid_previous = previous.top + previous.height / 2.0;
+        let mid_word = word.top + word.height / 2.0;
+        let same_line = (mid_previous - mid_word).abs() < previous.height.max(word.height) / 3.0;
+
+        let gap = word.left - (previous.left + previous.width);
+        let touching = gap < previous.height.max(word.height) * 0.4 && gap > -word.width;
+
+        let joins_cjk = previous.text.chars().next_back().is_some_and(is_cjk)
+            || word.text.chars().next().is_some_and(is_cjk);
+
+        if same_line && touching && joins_cjk {
+            let right = (word.left + word.width).max(previous.left + previous.width);
+            let bottom = (word.top + word.height).max(previous.top + previous.height);
+            previous.top = previous.top.min(word.top);
+            previous.height = bottom - previous.top;
+            previous.width = right - previous.left;
+            previous.text.push_str(&word.text);
+            previous.confidence = previous.confidence.min(word.confidence);
+        } else {
+            kept.push(word.clone());
+        }
+    }
+
+    kept
+}
+
+/// Resource name for the composite font. Chosen to not collide with
+/// anything a real document is likely to have named its own fonts.
+const OCR_UNICODE_FONT: &str = "OcrUni";
+
+/// Adds the `Type0` font the non-ASCII words are written in, and returns
+/// its object id.
+///
+/// No `FontFile2`. A CID font would normally embed one, but nothing here
+/// is ever drawn — the layer is text rendering mode 3, sitting under the
+/// scanned image it describes — and what a reader needs to get the text
+/// back out is the `ToUnicode` CMap, not glyph outlines. Embedding a CJK
+/// face to satisfy a rule about glyphs nobody will see would add
+/// megabytes to every OCR'd page.
+fn add_unicode_font(doc: &mut Document, cid_of: &BTreeMap<char, u16>) -> lopdf::ObjectId {
+    let descriptor_id = doc.add_object(Object::Dictionary(dictionary! {
+        "Type" => "FontDescriptor",
+        "FontName" => Object::Name(OCR_UNICODE_FONT.as_bytes().to_vec()),
+        // Symbolic: the font does not claim to follow a standard Latin
+        // encoding, which is the honest answer for one whose codes are
+        // assigned per page.
+        "Flags" => 4,
+        "FontBBox" => vec![0.into(), (-200).into(), 1000.into(), 900.into()],
+        "ItalicAngle" => 0,
+        "Ascent" => 900,
+        "Descent" => -200,
+        "CapHeight" => 700,
+        "StemV" => 80,
+    }));
+
+    let descendant_id = doc.add_object(Object::Dictionary(dictionary! {
+        "Type" => "Font",
+        "Subtype" => "CIDFontType2",
+        "BaseFont" => Object::Name(OCR_UNICODE_FONT.as_bytes().to_vec()),
+        "CIDSystemInfo" => dictionary! {
+            "Registry" => Object::string_literal("Adobe"),
+            "Ordering" => Object::string_literal("Identity"),
+            "Supplement" => 0,
+        },
+        "FontDescriptor" => Object::Reference(descriptor_id),
+        // One em per character. Nothing is drawn, and each word is
+        // positioned by its own `Tm`, so this only has to be sane.
+        "DW" => 1000,
+        "CIDToGIDMap" => Object::Name(b"Identity".to_vec()),
+    }));
+
+    let to_unicode_id = doc.add_object(Object::Stream(Stream::new(
+        dictionary! {},
+        to_unicode_cmap(cid_of),
+    )));
+
+    doc.add_object(Object::Dictionary(dictionary! {
+        "Type" => "Font",
+        "Subtype" => "Type0",
+        "BaseFont" => Object::Name(OCR_UNICODE_FONT.as_bytes().to_vec()),
+        "Encoding" => Object::Name(b"Identity-H".to_vec()),
+        "DescendantFonts" => vec![Object::Reference(descendant_id)],
+        "ToUnicode" => Object::Reference(to_unicode_id),
+    }))
+}
+
+/// Builds the `ToUnicode` CMap: for each code, the character it means.
+///
+/// This is the whole point of the composite path. Without it a reader
+/// sees two-byte codes into a font it cannot resolve and extracts
+/// nothing.
+fn to_unicode_cmap(cid_of: &BTreeMap<char, u16>) -> Vec<u8> {
+    let mut out = String::from(
+        "/CIDInit /ProcSet findresource begin\n\
+         12 dict begin\n\
+         begincmap\n\
+         /CIDSystemInfo << /Registry (Adobe) /Ordering (UCS) /Supplement 0 >> def\n\
+         /CMapName /Adobe-Identity-UCS def\n\
+         /CMapType 2 def\n\
+         1 begincodespacerange\n\
+         <0000> <FFFF>\n\
+         endcodespacerange\n",
+    );
+
+    // Sorted by code so the file reads in order, and chunked: the spec
+    // caps a `bfchar` block at 100 entries.
+    let mut entries: Vec<(u16, char)> = cid_of.iter().map(|(ch, cid)| (*cid, *ch)).collect();
+    entries.sort_unstable();
+
+    for chunk in entries.chunks(100) {
+        out.push_str(&format!("{} beginbfchar\n", chunk.len()));
+        for (cid, ch) in chunk {
+            // UTF-16BE, so anything above the BMP becomes a surrogate
+            // pair rather than being truncated into a different
+            // character.
+            let mut units = [0u16; 2];
+            let encoded = ch.encode_utf16(&mut units);
+            let hex: String = encoded.iter().map(|u| format!("{u:04X}")).collect();
+            out.push_str(&format!("<{cid:04X}> <{hex}>\n"));
+        }
+        out.push_str("endbfchar\n");
+    }
+
+    out.push_str(
+        "endcmap\n\
+         CMapName currentdict /CMap defineresource pop\n\
+         end\n\
+         end\n",
+    );
+    out.into_bytes()
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -548,7 +775,7 @@ mod tests {
     }
 
     #[test]
-    fn add_text_layer_skips_non_ascii_words_but_keeps_ascii_ones() {
+    fn add_text_layer_writes_non_ascii_words_through_a_composite_font() {
         let bytes = {
             let mut doc = lopdf::Document::with_version("1.5");
             let pages_id = doc.new_object_id();
@@ -587,7 +814,7 @@ mod tests {
                 confidence: 90.0,
             },
             OcrWord {
-                text: "café".into(), // non-ASCII — must be skipped, not miswritten
+                text: "café".into(), // non-ASCII: the case a simple font cannot carry
                 left: 70.0,
                 top: 10.0,
                 width: 50.0,
@@ -598,7 +825,54 @@ mod tests {
 
         let added = add_text_layer(&mut doc, 0, 612.0, 792.0, 612, 792, &words)
             .expect("add_text_layer should succeed");
-        assert_eq!(added, 1, "only the ASCII word should be added");
+        assert_eq!(added, 2, "both words belong in the layer");
+
+        // The ASCII word stays a literal string in a simple font; the
+        // other becomes two-byte codes into the composite one. Reading
+        // the content stream rather than trusting the count, because
+        // "added" would look identical if the second word were written
+        // as mojibake through Helvetica.
+        let content = doc.page_content_bytes(0).expect("page content");
+        let text = String::from_utf8_lossy(&content);
+        assert!(text.contains("(Hello)"), "the ASCII word: {text}");
+        assert!(
+            text.contains("/OcrUni"),
+            "the non-ASCII word needs the composite font: {text}"
+        );
+        // c=0063 a=0061 f=0066 é=00E9 — codes assigned in first-seen
+        // order, so 1..4 here.
+        assert!(
+            text.contains("<0001000200030004>"),
+            "expected four codes for cafe-with-an-accent: {text}"
+        );
+
+        // And the map that turns those codes back into characters. The
+        // accent is the one that matters: it is the character a
+        // single-byte font could not have carried.
+        let saved = doc.save_incremental().expect("save");
+        let reparsed = lopdf::Document::load_mem(&saved).expect("reparse");
+        let cmaps: Vec<String> = reparsed
+            .objects
+            .values()
+            .filter_map(|o| match o {
+                Object::Stream(stream) => Some(
+                    String::from_utf8_lossy(
+                        &stream
+                            .decompressed_content()
+                            .unwrap_or(stream.content.clone()),
+                    )
+                    .into_owned(),
+                ),
+                _ => None,
+            })
+            .filter(|s| s.contains("beginbfchar"))
+            .collect();
+        assert_eq!(cmaps.len(), 1, "exactly one ToUnicode CMap");
+        assert!(
+            cmaps[0].contains("<0004> <00E9>"),
+            "the accented character must map back to U+00E9: {}",
+            cmaps[0]
+        );
     }
 
     #[test]

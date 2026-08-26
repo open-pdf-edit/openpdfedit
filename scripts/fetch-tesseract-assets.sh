@@ -22,27 +22,37 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 DEST=".vendor/tesseract"
-LANG="${1:-eng}"
-URL="https://github.com/tesseract-ocr/tessdata_fast/raw/main/${LANG}.traineddata"
+
+# Every language the OCR dialog offers. Pass names to fetch a different
+# set. English alone is what shipped first, and it is why OCR on a
+# Chinese document appeared to run and produced nothing: tesseract reads
+# the script it has data for and does not complain about the rest.
+DEFAULT_LANGS=(eng chi_sim chi_tra jpn kor fra deu spa por ita rus ara)
+LANGS=("$@")
+[ ${#LANGS[@]} -gt 0 ] || LANGS=("${DEFAULT_LANGS[@]}")
 
 mkdir -p "$DEST"
 
-if [ -f "$DEST/${LANG}.traineddata" ]; then
-  echo "tesseract ${LANG}.traineddata already present at $DEST — skipping download"
-  exit 0
-fi
+for LANG_CODE in "${LANGS[@]}"; do
+  TARGET="$DEST/${LANG_CODE}.traineddata"
+  if [ -f "$TARGET" ]; then
+    echo "tesseract ${LANG_CODE}.traineddata already present — skipping"
+    continue
+  fi
 
-echo "fetching ${LANG}.traineddata…"
-curl -fsSL --max-time 300 -o "$DEST/${LANG}.traineddata.part" "$URL"
+  echo "fetching ${LANG_CODE}.traineddata…"
+  curl -fsSL --max-time 300 -o "$TARGET.part" \
+    "https://github.com/tesseract-ocr/tessdata_fast/raw/main/${LANG_CODE}.traineddata"
 
-# Trained data starts with a version/magic run; a captive-portal HTML
-# page or a 404 body would otherwise sit there looking like a download
-# that worked until OCR failed with something unrelated-sounding.
-if head -c 4 "$DEST/${LANG}.traineddata.part" | grep -qi "<"; then
-  rm -f "$DEST/${LANG}.traineddata.part"
-  echo "fetch-tesseract-assets.sh: that download is not trained data — check the URL or your network" >&2
-  exit 1
-fi
+  # Trained data starts with a version/magic run; a captive-portal HTML
+  # page or a 404 body would otherwise sit there looking like a download
+  # that worked until OCR failed with something unrelated-sounding.
+  if head -c 4 "$TARGET.part" | grep -qi "<"; then
+    rm -f "$TARGET.part"
+    echo "fetch-tesseract-assets.sh: ${LANG_CODE} did not download trained data — check the name" >&2
+    exit 1
+  fi
 
-mv "$DEST/${LANG}.traineddata.part" "$DEST/${LANG}.traineddata"
-echo "tesseract data ready: $DEST/${LANG}.traineddata ($(du -h "$DEST/${LANG}.traineddata" | cut -f1))"
+  mv "$TARGET.part" "$TARGET"
+  echo "ready: $TARGET ($(du -h "$TARGET" | cut -f1))"
+done
