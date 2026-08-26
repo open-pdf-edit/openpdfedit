@@ -242,7 +242,7 @@ use std::sync::{Mutex, OnceLock};
 
 use openpdfedit_engine::{DocHandle, Engine, PdfiumEngine};
 use openpdfedit_session::annotations::{
-    add_annotation_impl, delete_annotation_impl, list_page_annotations_impl,
+    add_annotation_impl, delete_annotation_impl, list_page_annotations_impl, select_text_impl,
     text_selection_quads_impl, AddAnnotationRequest, DeleteAnnotationRequest,
     TextSelectionQuadsRequest,
 };
@@ -810,6 +810,17 @@ impl WasmSession {
             serde_json::from_str(request_json).map_err(to_js_err)?;
         let quads = text_selection_quads_impl(&self.state.engine, request).map_err(to_js_err)?;
         serde_json::to_string(&quads).map_err(to_js_err)
+    }
+
+    /// The same selection, with the characters as well as their
+    /// geometry — what the Select tool needs, since a selection nobody
+    /// can copy is only a highlight that does not persist.
+    #[wasm_bindgen(js_name = selectText)]
+    pub fn select_text(&self, request_json: &str) -> Result<String, JsValue> {
+        let request: TextSelectionQuadsRequest =
+            serde_json::from_str(request_json).map_err(to_js_err)?;
+        let selection = select_text_impl(&self.state.engine, request).map_err(to_js_err)?;
+        serde_json::to_string(&selection).map_err(to_js_err)
     }
 
     /// Undoes the most recent edit for `handle`'s document (restores the

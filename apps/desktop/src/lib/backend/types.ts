@@ -256,6 +256,15 @@ export interface TextSelectionQuadsRequest {
   y1: number;
 }
 
+/** What a drag over the page selected. */
+export interface TextSelection {
+  /** One bounding quad per visual line the selection spans, in PDF
+   * page-space points. */
+  quads: [number, number, number, number][];
+  /** The selected characters, in reading order. */
+  text: string;
+}
+
 export interface EditTextRunRequest {
   handle: number;
   pageIndex: number;
@@ -473,6 +482,14 @@ export interface Backend {
   addAnnotation(request: AddAnnotationRequest): Promise<OpenedDocument>;
   deleteAnnotation(request: DeleteAnnotationRequest): Promise<OpenedDocument>;
   textSelectionQuads(request: TextSelectionQuadsRequest): Promise<[number, number, number, number][]>;
+
+  /** The Select tool's drag: where the selection is *and* what it says.
+   *
+   * Separate from `textSelectionQuads`, which the markup tools use to
+   * snap a highlight onto real words and has no use for the characters.
+   * Both come from one character range on the backend, so they cannot
+   * disagree about what was selected. */
+  selectText(request: TextSelectionQuadsRequest): Promise<TextSelection>;
 
   // --- text/image editing ---
   listTextRuns(handle: number, pageIndex: number): Promise<TextRunDto[]>;

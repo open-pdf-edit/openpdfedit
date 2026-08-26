@@ -463,6 +463,15 @@ pub trait Engine: Send {
         handle: DocHandle,
         page_index: u32,
     ) -> Result<Vec<CharBox>, EngineError>;
+    /// The page's characters, in the same index order as
+    /// [`page_char_boxes`](Self::page_char_boxes) — index `i` here and
+    /// `CharBox { char_index: i, .. }` are the same glyph.
+    ///
+    /// Separate from the boxes because the two are wanted separately:
+    /// selecting needs the geometry, copying needs the characters, and
+    /// a page of text is a lot of either to fetch when only one is
+    /// being used.
+    fn page_chars(&self, handle: DocHandle, page_index: u32) -> Result<Vec<char>, EngineError>;
     /// Sizes of every page in the document, in reading order. One call
     /// instead of one round trip per page — a viewer needs all of them
     /// up front to lay out a virtualized scroll container.
@@ -709,6 +718,32 @@ impl Engine for PdfiumEngine {
             .map_err(|e| EngineError::RenderFailed(e.to_string()))?;
 
         Ok(char_boxes_from_text(&text))
+    }
+
+    fn page_chars(&self, handle: DocHandle, page_index: u32) -> Result<Vec<char>, EngineError> {
+        let documents = self
+            .documents
+            .lock()
+            .expect("engine document map lock poisoned");
+        let document = documents
+            .get(&handle)
+            .ok_or(EngineError::UnknownHandle(handle))?;
+
+        let page_count = document.pages().len() as u32;
+        let page =
+            document
+                .pages()
+                .get(page_index as i32)
+                .map_err(|_| EngineError::PageOutOfRange {
+                    index: page_index,
+                    page_count,
+                })?;
+
+        let text = page
+            .text()
+            .map_err(|e| EngineError::RenderFailed(e.to_string()))?;
+
+        Ok(page_chars_from_text(&text))
     }
 
     fn page_sizes(&self, handle: DocHandle) -> Result<Vec<PageSize>, EngineError> {

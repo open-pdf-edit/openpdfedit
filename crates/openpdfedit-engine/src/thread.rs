@@ -60,6 +60,11 @@ enum Request {
         page_index: u32,
         reply: mpsc::Sender<Result<Vec<CharBox>, EngineError>>,
     },
+    PageChars {
+        handle: DocHandle,
+        page_index: u32,
+        reply: mpsc::Sender<Result<Vec<char>, EngineError>>,
+    },
     PageSizes {
         handle: DocHandle,
         reply: mpsc::Sender<Result<Vec<PageSize>, EngineError>>,
@@ -199,6 +204,14 @@ impl EngineHandle {
         page_index: u32,
     ) -> Result<Vec<CharBox>, EngineError> {
         self.request_reply(|reply| Request::CharBoxes {
+            handle,
+            page_index,
+            reply,
+        })
+    }
+
+    pub fn page_chars(&self, handle: DocHandle, page_index: u32) -> Result<Vec<char>, EngineError> {
+        self.request_reply(|reply| Request::PageChars {
             handle,
             page_index,
             reply,
@@ -353,6 +366,10 @@ impl Engine for EngineHandle {
         EngineHandle::page_char_boxes(self, handle, page_index)
     }
 
+    fn page_chars(&self, handle: DocHandle, page_index: u32) -> Result<Vec<char>, EngineError> {
+        EngineHandle::page_chars(self, handle, page_index)
+    }
+
     fn page_sizes(&self, handle: DocHandle) -> Result<Vec<PageSize>, EngineError> {
         EngineHandle::page_sizes(self, handle)
     }
@@ -442,6 +459,13 @@ fn run_render_loop(engine: PdfiumEngine, rx: mpsc::Receiver<Request>) {
                 reply,
             } => {
                 let _ = reply.send(engine.page_char_boxes(handle, page_index));
+            }
+            Request::PageChars {
+                handle,
+                page_index,
+                reply,
+            } => {
+                let _ = reply.send(engine.page_chars(handle, page_index));
             }
             Request::PageSizes { handle, reply } => {
                 let _ = reply.send(engine.page_sizes(handle));

@@ -294,26 +294,62 @@ pub fn text_selection_quads_impl<E: Engine>(
     engine: &E,
     request: TextSelectionQuadsRequest,
 ) -> Result<Vec<[f32; 4]>, SessionError> {
+    Ok(select_text_impl(engine, request)?.quads)
+}
+
+/// What a drag over the page selected: where to draw it, and what it
+/// says.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct TextSelection {
+    /// One bounding quad per visual line the selection spans.
+    pub quads: Vec<[f32; 4]>,
+    /// The selected characters, in reading order. Empty whenever `quads`
+    /// is — the two answers come from the same character range, so they
+    /// cannot disagree about whether anything was selected.
+    pub text: String,
+}
+
+/// The same selection, with the characters as well as their geometry.
+///
+/// Marking up a page only needs to know where the words are;
+/// *selecting* text also needs the words, or Copy has nothing to put on
+/// the clipboard. One call rather than two, because both answers are cut
+/// from the same character range and fetching the page's characters
+/// twice to derive them separately is how they drift apart.
+pub fn select_text_impl<E: Engine>(
+    engine: &E,
+    request: TextSelectionQuadsRequest,
+) -> Result<TextSelection, SessionError> {
     let chars = engine.page_char_boxes(request.handle, request.page_index)?;
     let (Some(start), Some(end)) = (
         openpdfedit_engine::nearest_char_index(&chars, request.x0, request.y0),
         openpdfedit_engine::nearest_char_index(&chars, request.x1, request.y1),
     ) else {
-        return Ok(Vec::new());
+        return Ok(TextSelection::default());
     };
     let start_box = chars.iter().find(|c| c.char_index == start);
     let end_box = chars.iter().find(|c| c.char_index == end);
     let (Some(start_box), Some(end_box)) = (start_box, end_box) else {
-        return Ok(Vec::new());
+        return Ok(TextSelection::default());
     };
     if !near_enough(start_box, request.x0, request.y0)
         || !near_enough(end_box, request.x1, request.y1)
     {
-        return Ok(Vec::new());
+        return Ok(TextSelection::default());
     }
-    Ok(openpdfedit_engine::char_range_to_line_quads(
-        &chars, start, end,
-    ))
+
+    let quads = openpdfedit_engine::char_range_to_line_quads(&chars, start, end);
+    // Dragging right to left is a selection like any other, so the range
+    // is taken in index order rather than in the order the two ends were
+    // touched.
+    let (first, last) = (start.min(end), start.max(end));
+    let text = engine
+        .page_chars(request.handle, request.page_index)?
+        .get(first as usize..=last as usize)
+        .map(|slice| slice.iter().collect::<String>())
+        .unwrap_or_default();
+
+    Ok(TextSelection { quads, text })
 }
 
 #[cfg(test)]
