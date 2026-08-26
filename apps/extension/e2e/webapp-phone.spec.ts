@@ -406,10 +406,24 @@ test("every tool is named, and the names are grouped", async ({ browser }) => {
     "Fill & sign",
   ]);
 
-  // The document tools are grouped in the topbar, but not named there —
-  // seventeen names do not fit a toolbar, and a desktop has hover.
-  expect(await page.locator(".tools__group").count()).toBe(4);
-  await expect(page.locator(".tools__label").first()).toBeHidden();
+  // The document tools are named too, in their own band under the
+  // topbar: seventeen icons crowded into the topbar's right-hand end had
+  // nowhere to put the names, and the difference between Flatten and
+  // Compress is not something an icon can carry.
+  await expect(page.locator(".tools__heading")).toHaveText([
+    "Panels",
+    "Document",
+    "Markup file",
+    "Save & protect",
+  ]);
+  for (const name of ["Comments", "OCR", "Watermark", "Flatten", "Compress"]) {
+    await expect(page.locator(".tools__label", { hasText: new RegExp(`^${name}$`) })).toBeVisible();
+  }
+
+  // And the band must not push the window sideways, whatever it holds.
+  expect(
+    await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1),
+  ).toBe(true);
 
   await ctx.close();
 });
