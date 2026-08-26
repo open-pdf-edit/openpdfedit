@@ -658,6 +658,109 @@
     }
   }
 
+  // --- Markdown ---
+  //
+  // A PDF's text as something editable. The conversion is local — see
+  // `openpdfedit_session::markdown` — and it converts the document as it
+  // stands, so a scan that has been OCR'd converts and one that has not
+  // produces nothing, which is worth saying out loud rather than
+  // handing over an empty file.
+
+  let markdownBusy = $state(false);
+
+  /** The Obsidian vault, if one has been chosen. A vault is a folder of
+   * `.md` files and nothing more, so "export to Obsidian" is "write the
+   * file in there" — the difference from an ordinary save is only that
+   * the folder is remembered. */
+  const VAULT_KEY = "openpdfedit.markdown.vault";
+
+  function rememberedVault(): { key: string; name: string } | null {
+    try {
+      const stored = localStorage.getItem(VAULT_KEY);
+      return stored ? (JSON.parse(stored) as { key: string; name: string }) : null;
+    } catch {
+      return null;
+    }
+  }
+
+  function rememberVault(vault: { key: string; name: string } | null): void {
+    try {
+      if (vault) localStorage.setItem(VAULT_KEY, JSON.stringify(vault));
+      else localStorage.removeItem(VAULT_KEY);
+    } catch {
+      /* choosing the folder again next time is the whole cost */
+    }
+  }
+
+  /** report.pdf -> report.md, and anything without an extension keeps
+   * its name. */
+  function markdownNameFor(path: string): string {
+    const base = path.split(/[\\/]/).pop() || "document.pdf";
+    return `${base.replace(/\.pdf$/i, "")}.md`;
+  }
+
+  async function handleExportMarkdown(): Promise<void> {
+    if (!doc || !filePath || markdownBusy) return;
+    const fileName = markdownNameFor(filePath);
+    const vault = rememberedVault();
+
+    const choices = [{ value: "file", label: "Save as a Markdown file" }];
+    if (backend.supportsVault()) {
+      if (vault) choices.push({ value: "vault", label: `Save to ${vault.name}` });
+      choices.push({
+        value: "pick",
+        label: vault ? "Choose a different folder…" : "Save to an Obsidian vault…",
+      });
+    }
+
+    // With nowhere else to put it, there is nothing to ask about.
+    const chosen =
+      choices.length === 1
+        ? "file"
+        : await showChoice("Where should the Markdown go?", {
+            title: "Export as Markdown",
+            choices,
+            defaultValue: vault ? "vault" : "file",
+            confirmLabel: "Export",
+          });
+    if (chosen === null) return;
+
+    let target: string | null = null;
+    if (chosen === "vault") target = vault?.key ?? null;
+    if (chosen === "pick") {
+      const picked = await backend.pickVault();
+      if (!picked) return;
+      rememberVault(picked);
+      target = picked.key;
+    }
+
+    markdownBusy = true;
+    error = null;
+    try {
+      const result = await backend.exportMarkdown({ handle: doc.handle, fileName, vault: target });
+      if (result.path === null && result.characters === 0) return; // cancelled
+      if (result.characters === 0) {
+        await showAlert(
+          "There was no text to convert. This looks like a scan — run OCR on it first, then export again.",
+          "Nothing to export",
+        );
+        return;
+      }
+      showToast(
+        result.path ? `Saved ${result.path}.` : `Downloaded ${fileName}.`,
+        { title: "Markdown" },
+      );
+    } catch (e) {
+      error = formatError(e);
+      // A folder that has been moved, renamed or had its permission
+      // revoked cannot be written to again — forget it rather than
+      // offering it every time from now on.
+      if (chosen === "vault") rememberVault(null);
+    } finally {
+      markdownBusy = false;
+    }
+  }
+
   /** The tools whose behaviour is not obvious from their name. */
   function toolHint(id: Tool): string | null {
     if (id === "select") return "Select — drag over text to select it, click a mark to delete it";
@@ -2143,6 +2246,16 @@
             >
               <Icon name="plus" size={15} />
             <span class="tools__label">Import</span>
+            </button>
+            <button
+              class="oa-icon-btn oa-icon-btn--sm"
+              onclick={handleExportMarkdown}
+              disabled={markdownBusy}
+              use:tooltip={"Convert the document's text to Markdown — save it as a file, or into an Obsidian vault"}
+              aria-label="Export as Markdown"
+            >
+              <Icon name="file-code" size={15} spin={markdownBusy} />
+              <span class="tools__label">Markdown</span>
             </button>
           </div>
         </div>

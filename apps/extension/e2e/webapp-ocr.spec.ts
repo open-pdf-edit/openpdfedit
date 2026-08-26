@@ -127,6 +127,7 @@ test("every mutating backend method migrates the open-document map", async () =>
     "searchDocument",
     "documentOutline",
     "workingCopyBytes",
+    "markdownFromText",
     "saveToBytes",
     "exportXfdf",
     "compareDocuments",

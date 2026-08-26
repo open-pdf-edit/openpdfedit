@@ -50,4 +50,15 @@ thiserror.workspace = true
 getrandom = { version = "0.4", features = ["wasm_js"] }
 
 [dev-dependencies]
+openpdfedit-ocr.workspace = true
 serde_json.workspace = true
+
+# Not for wasm32. anydoc is a document-conversion library with its own
+# PDF parser, and linking it into the browser bundle added eight
+# megabytes to a four-megabyte download that every visitor pays before
+# opening anything. The browser build loads Firecrawl's own wasm package
+# when someone asks for Markdown and not before — same conversion, same
+# crate, fetched at the moment it is wanted. See
+# `apps/desktop/src/lib/backend/wasm.ts`.
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+anydoc.workspace = true

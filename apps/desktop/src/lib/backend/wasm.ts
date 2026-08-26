@@ -306,6 +306,7 @@ interface WasmSessionHandle {
    * `TextSelectionQuadsRequest`; returns a `[number, number, number,
    * number][]` JSON array of quads. */
   textSelectionQuads(requestJson: string): string;
+  markdownFromText(handle: number): string;
   selectText(requestJson: string): string;
   /** Mutating/rotates, same as `addAnnotation` above. */
   undo(handle: number): string;
@@ -1092,6 +1093,137 @@ function readTextFileFromPicker(accept: string): Promise<string | null> {
   });
 }
 
+/**
+ * PDF to Markdown, in the browser.
+ *
+ * Firecrawl's `anydoc`, as WebAssembly — the same crate the desktop
+ * links directly. It is not linked into *this* build: it carries its own
+ * PDF parser and added eight megabytes to a four-megabyte download that
+ * every visitor pays whether or not they ever convert anything. So it is
+ * imported here, at the moment someone asks, exactly as the OCR engine
+ * is.
+ *
+ * The module and its wasm are served from this origin — Vite emits them
+ * as assets — so converting a document still involves no one else, which
+ * is the only arrangement this product can offer.
+ */
+let markdownEngine: Promise<typeof import("@firecrawl/anydoc-wasm")> | null = null;
+
+async function toMarkdown(session: WasmSessionHandle, handle: number): Promise<string> {
+  if (!markdownEngine) {
+    markdownEngine = (async () => {
+      const engine = await import("@firecrawl/anydoc-wasm");
+      await engine.default();
+      return engine;
+    })().catch((error) => {
+      // A failed load must not disable the feature for the session.
+      markdownEngine = null;
+      throw error;
+    });
+  }
+
+  try {
+    const converted = (await markdownEngine).toMarkdownBytes(
+      session.workingCopyBytes(handle),
+      "pdf",
+    );
+    if (converted.trim()) return converted;
+  } catch {
+    // "No extractable text" is what a scan this app has OCR'd looks
+    // like from the outside: the layer is invisible text, and a
+    // structural converter skips it on purpose. PDFium does not, which
+    // is why the page is searchable, so its text is used instead.
+  }
+  return session.markdownFromText(handle);
+}
+
+/** `showDirectoryPicker` is Chromium-only and not in lib.dom's types.
+ * Declared narrowly, and only the parts used. */
+/** The permission half of the File System Access API, also absent from
+ * lib.dom's types. */
+type PermissionedDirectory = FileSystemDirectoryHandle & {
+  requestPermission?: (options: { mode: "read" | "readwrite" }) => Promise<PermissionState>;
+};
+
+interface WindowWithDirectoryPicker extends Window {
+  showDirectoryPicker?: (options?: {
+    mode?: "read" | "readwrite";
+  }) => Promise<FileSystemDirectoryHandle>;
+}
+
+/**
+ * Where a chosen folder is kept between visits.
+ *
+ * A `FileSystemDirectoryHandle` is not a path and cannot be turned into
+ * one — a browser will not tell a page where a folder is. It *can* be
+ * stored, though, in IndexedDB and nowhere else: it survives
+ * `structuredClone`, which `localStorage` does not use. So the handle
+ * lives there under a key, and the key is what the rest of the app
+ * passes around as "the vault".
+ *
+ * Permission does not survive with it. Reopening the app and writing
+ * into the same folder asks again, once, on the click that writes — see
+ * `exportMarkdown`.
+ */
+const VAULT_DB = "openpdfedit-vaults";
+const VAULT_STORE = "handles";
+
+/** The same handles, for this page's lifetime. IndexedDB is for coming
+ * back tomorrow; within one visit the handle is already here, and going
+ * through storage to find it would fail for the whole session wherever
+ * storage is refused — a private window, an embedded webview — over
+ * something that was never needed. */
+const openVaults = new Map<string, FileSystemDirectoryHandle>();
+
+function openVaultDb(): Promise<IDBDatabase> {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(VAULT_DB, 1);
+    request.onupgradeneeded = () => request.result.createObjectStore(VAULT_STORE);
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+}
+
+async function rememberVault(directory: FileSystemDirectoryHandle): Promise<string> {
+  // The name, not a random id: it is what the user will see, and
+  // choosing the same folder twice should not accumulate entries.
+  const key = directory.name;
+  openVaults.set(key, directory);
+  try {
+    const db = await openVaultDb();
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction(VAULT_STORE, "readwrite");
+      tx.objectStore(VAULT_STORE).put(directory, key);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+    db.close();
+  } catch {
+    // Storage refused. The folder still works until the tab closes,
+    // which is more than throwing here would leave.
+  }
+  return key;
+}
+
+async function recallVault(key: string): Promise<FileSystemDirectoryHandle | null> {
+  const open = openVaults.get(key);
+  if (open) return open;
+  try {
+    const db = await openVaultDb();
+    const handle = await new Promise<FileSystemDirectoryHandle | null>((resolve, reject) => {
+      const tx = db.transaction(VAULT_STORE, "readonly");
+      const request = tx.objectStore(VAULT_STORE).get(key);
+      request.onsuccess = () => resolve((request.result as FileSystemDirectoryHandle) ?? null);
+      request.onerror = () => reject(request.error);
+    });
+    db.close();
+    if (handle) openVaults.set(key, handle);
+    return handle;
+  } catch {
+    return null;
+  }
+}
+
 export const wasmBackend: Backend = {
   // --- document lifecycle (real) ---
 
@@ -1561,6 +1693,53 @@ export const wasmBackend: Backend = {
     };
     downloadTextFile(dto.suggestedName, dto.xml, "application/vnd.adobe.xfdf");
     return { exported: dto.exported };
+  },
+
+  supportsVault() {
+    return typeof (window as WindowWithDirectoryPicker).showDirectoryPicker === "function";
+  },
+
+  async pickVault() {
+    const picker = (window as WindowWithDirectoryPicker).showDirectoryPicker;
+    if (!picker) return null;
+    let directory: FileSystemDirectoryHandle;
+    try {
+      directory = await picker({ mode: "readwrite" });
+    } catch (e) {
+      // Cancelling a picker is not a failure.
+      if ((e as { name?: string })?.name === "AbortError") return null;
+      throw e;
+    }
+    const key = await rememberVault(directory);
+    return { key, name: directory.name };
+  },
+
+  async exportMarkdown({ handle, fileName, vault }) {
+    const session = await ensureSession();
+    const markdown = await toMarkdown(session, handle);
+
+    if (vault) {
+      const directory = await recallVault(vault);
+      if (!directory) {
+        throw new Error("that folder is no longer available — choose it again");
+      }
+      // Permission does not survive a reload, and asking for it needs a
+      // click — which is why this is reached from one.
+      const permission = await (directory as PermissionedDirectory).requestPermission?.({
+        mode: "readwrite",
+      });
+      if (permission && permission !== "granted") {
+        throw new Error(`no permission to write into ${directory.name}`);
+      }
+      const file = await directory.getFileHandle(fileName, { create: true });
+      const writable = await file.createWritable();
+      await writable.write(markdown);
+      await writable.close();
+      return { path: `${directory.name}/${fileName}`, characters: markdown.length };
+    }
+
+    downloadTextFile(fileName, markdown, "text/markdown");
+    return { path: null, characters: markdown.length };
   },
 
   async importXfdf(handle) {
