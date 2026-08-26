@@ -8,11 +8,12 @@
 //! bindings (and this crate's own JSON shape) don't change.
 
 use openpdfedit_session::annotations::{
-    add_annotation_impl, delete_annotation_impl, list_page_annotations_impl,
+    add_annotation_impl, delete_annotation_impl, list_page_annotations_impl, select_text_impl,
     text_selection_quads_impl,
 };
 pub use openpdfedit_session::annotations::{
-    AddAnnotationRequest, AnnotationSummaryDto, DeleteAnnotationRequest, TextSelectionQuadsRequest,
+    AddAnnotationRequest, AnnotationSummaryDto, DeleteAnnotationRequest, TextSelection,
+    TextSelectionQuadsRequest,
 };
 use tauri::State;
 
@@ -66,6 +67,16 @@ pub fn text_selection_quads_cmd(
     request: TextSelectionQuadsRequest,
 ) -> Result<Vec<[f32; 4]>, CommandError> {
     text_selection_quads_impl(&state.engine, request).map_err(Into::into)
+}
+
+/// The Select tool's drag: the same geometry, plus the characters, so
+/// there is something to copy.
+#[tauri::command]
+pub fn select_text_cmd(
+    state: State<'_, AppState>,
+    request: TextSelectionQuadsRequest,
+) -> Result<TextSelection, CommandError> {
+    select_text_impl(&state.engine, request).map_err(Into::into)
 }
 
 // Every `_impl` function this module used to define directly

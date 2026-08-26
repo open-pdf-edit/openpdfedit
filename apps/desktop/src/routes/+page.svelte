@@ -658,6 +658,23 @@
     }
   }
 
+  /** The tools whose behaviour is not obvious from their name. */
+  function toolHint(id: Tool): string | null {
+    if (id === "select") return "Select — drag over text to select it, click a mark to delete it";
+    if (id === "moveText" || id === "moveImage") {
+      return `${id === "moveText" ? "Move text" : "Move image"} — hold Shift to constrain to one axis`;
+    }
+    return null;
+  }
+
+  // A selection belongs to one document, one page and one tool. Any of
+  // those changing leaves quads drawn over text they no longer describe.
+  $effect(() => {
+    void doc;
+    void activeTool;
+    selection = null;
+  });
+
   const handleWatermarkClick = () => requireSupporter("watermark");
 
   async function handleUnlock(): Promise<void> {
@@ -1161,6 +1178,49 @@
   // stale client-side cache to get out of sync with the document) and
   // finding the one whose bounding box contains the click point. The
   // move tools use a drag gesture instead — see handleMoveObject.
+  /** What the Select tool has selected, if anything.
+   *
+   * One page at a time: a selection that spans pages would need the
+   * character ranges of both ends and everything between, and every
+   * reason to want one — copy a quote, check a number — is satisfied
+   * within a page. */
+  let selection = $state<{
+    pageIndex: number;
+    quads: [number, number, number, number][];
+    text: string;
+  } | null>(null);
+
+  async function handleSelectText(
+    pageIndex: number,
+    rect: [number, number, number, number],
+  ): Promise<void> {
+    if (!doc) return;
+    const [x0, y0, x1, y1] = rect;
+    try {
+      // The drag's own corners, not the rectangle's: dragging up the
+      // page or right to left still reads in document order, and the
+      // backend decides which end came first.
+      const found = await backend.selectText({ handle: doc.handle, pageIndex, x0, y0: y1, x1, y1: y0 });
+      selection = found.quads.length > 0 ? { pageIndex, ...found } : null;
+    } catch (e) {
+      error = formatError(e);
+    }
+  }
+
+  /** Put the selection on the clipboard. Reported rather than silent:
+   * copying is invisible by nature, and the only way to find out it did
+   * not happen is to paste somewhere and find the old thing. */
+  async function copySelection(): Promise<void> {
+    const text = selection?.text;
+    if (!text) return;
+    try {
+      await navigator.clipboard.writeText(text);
+      showToast(`Copied ${text.length} character${text.length === 1 ? "" : "s"}.`);
+    } catch {
+      error = "Couldn't copy — this browser refused clipboard access.";
+    }
+  }
+
   async function handleToolClick(pageIndex: number, x: number, y: number) {
     if (!doc || mutationBusy) return;
     error = null;
@@ -1784,6 +1844,19 @@
       closeSearch();
       return;
     }
+    // ⌘C only when this app owns a selection and the keystroke did not
+    // come from somewhere with its own text — a form field, the find
+    // box. Copying what you just typed must keep working.
+    const typing =
+      e.target instanceof HTMLElement &&
+      (e.target.tagName === "INPUT" ||
+        e.target.tagName === "TEXTAREA" ||
+        e.target.isContentEditable);
+    if (meta && e.key.toLowerCase() === "c" && selection && !typing) {
+      e.preventDefault();
+      void copySelection();
+      return;
+    }
     if (meta && e.key.toLowerCase() === "s") {
       e.preventDefault();
       if (e.shiftKey) handleSaveAs();
@@ -2310,7 +2383,7 @@
                 class="oa-rail-btn rail__tool"
                 class:oa-rail-btn--selected={activeTool === tool.id}
                 onclick={() => (activeTool = tool.id)}
-                use:tooltip={tool.id === "moveText" || tool.id === "moveImage" ? `${tool.label} — hold Shift to constrain to one axis` : tool.label}
+                use:tooltip={toolHint(tool.id) ?? tool.label}
                 aria-label={tool.label}
               >
                 <Icon name={tool.icon} size={18} />
@@ -2348,6 +2421,8 @@
         onPlaceSignature={handlePlaceSignature}
         onMoveObject={handleMoveObject}
         onZoom={(next) => (zoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, next)))}
+        {selection}
+        onSelectText={handleSelectText}
         {formFields}
         onFillField={handleFillFieldInline}
         {focusField}

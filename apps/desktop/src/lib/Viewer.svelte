@@ -33,6 +33,9 @@
     searchHits?: SearchHitDto[];
     /** Index into `searchHits` of the hit the user stepped to, or -1. */
     activeHitIndex?: number;
+    /** The current text selection, if it is on one of these pages. */
+    selection?: { pageIndex: number; quads: [number, number, number, number][] } | null;
+    onSelectText?: (pageIndex: number, rect: [number, number, number, number]) => void;
     /** A request to scroll to a page. The `nonce` is what makes clicking
      * the same bookmark twice scroll again — a bare page number wouldn't
      * change, so the effect wouldn't re-run. */
@@ -66,6 +69,8 @@
     onMoveObject,
     searchHits = [],
     activeHitIndex = -1,
+    selection = null,
+    onSelectText,
     scrollToPage = null,
     onCurrentPageChange,
     formFields = [],
@@ -317,6 +322,8 @@
       {onPlaceSignature}
       {onMoveObject}
       searchMatches={hitsByPage.get(i) ?? []}
+      selectionQuads={selection?.pageIndex === i ? selection.quads : []}
+      {onSelectText}
       formFields={fieldsByPage.get(i) ?? []}
       {onFillField}
       {focusField}

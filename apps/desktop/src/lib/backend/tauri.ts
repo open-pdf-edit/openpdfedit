@@ -40,6 +40,7 @@ import type {
   SearchResultsDto,
   SignatureInfoDto,
   TextRunDto,
+  TextSelection,
   TextSelectionQuadsRequest,
 } from "./types";
 
@@ -148,6 +149,10 @@ export const tauriBackend: Backend = {
 
   async textSelectionQuads(request: TextSelectionQuadsRequest) {
     return invoke<[number, number, number, number][]>("text_selection_quads_cmd", { request });
+  },
+
+  async selectText(request: TextSelectionQuadsRequest) {
+    return invoke<TextSelection>("select_text_cmd", { request });
   },
 
   // --- text/image editing ---

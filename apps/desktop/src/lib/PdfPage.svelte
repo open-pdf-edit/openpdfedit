@@ -72,6 +72,12 @@
      * overlay. Purely presentational — a search never touches the
      * document, so these are not annotations and vanish with the search. */
     searchMatches?: SearchMatchOverlay[];
+    /** Where this page's current text selection is, as quads in
+     * page-space points. Drawn, not interactive. */
+    selectionQuads?: [number, number, number, number][];
+    /** A drag with the Select tool: the rectangle dragged over, for the
+     * parent to resolve into real characters. */
+    onSelectText?: (pageIndex: number, rect: [number, number, number, number]) => void;
     /** Text fields on this page, rendered as real inputs positioned over
      * the page so they can be filled where they are. */
     formFields?: PageFormField[];
@@ -131,6 +137,8 @@
     onPlaceSignature,
     onMoveObject,
     searchMatches = [],
+    selectionQuads = [],
+    onSelectText,
     formFields = [],
     onFillField,
     focusField = null,
@@ -253,6 +261,13 @@
    * `pendingTap`. */
   const TAP_TOOLS: Tool[] = ["select", "erase", "note", "editText"];
 
+  /** Tools whose drag selects text rather than drawing anything. Select
+   * is both: a tap on an annotation still picks it, a drag over words
+   * selects the words. Which one it was is only known on release, which
+   * is why the tap is deferred for every pointer type here and not just
+   * for touch. */
+  const SELECTS_TEXT: Tool[] = ["select"];
+
   /** How far a finger may travel and still count as a tap rather than a
    * scroll, in CSS pixels. Roughly the wobble of a deliberate tap on a
    * phone; a scroll clears it within the first few pixels. */
@@ -296,6 +311,15 @@
     const [x, y] = cssToPdfPoint(e.clientX, e.clientY);
 
     if (TAP_TOOLS.includes(activeTool)) {
+      if (SELECTS_TEXT.includes(activeTool)) {
+        // Both possibilities at once: the start of a text drag, and a
+        // tap that has not been ruled out yet.
+        e.currentTarget && (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+        pendingTap = { x, y, clientX: e.clientX, clientY: e.clientY };
+        dragStart = { x, y };
+        dragCurrent = { x, y };
+        return;
+      }
       if (e.pointerType === "touch") {
         // Deliberately no pointer capture: capturing here would take the
         // gesture away from the scroller, which is the thing the finger
@@ -372,7 +396,15 @@
     if (tap) {
       pendingTap = null;
       const travelled = Math.hypot(e.clientX - tap.clientX, e.clientY - tap.clientY);
-      if (travelled <= TAP_SLOP_PX) void tapAt(tap.x, tap.y);
+      const from = dragStart;
+      const to = dragCurrent;
+      dragStart = null;
+      dragCurrent = null;
+      if (travelled <= TAP_SLOP_PX) {
+        void tapAt(tap.x, tap.y);
+      } else if (SELECTS_TEXT.includes(activeTool) && from && to) {
+        onSelectText?.(pageIndex, normalizedRect(from, to));
+      }
       return;
     }
 
@@ -560,6 +592,13 @@
         }}
       />
     {/each}
+    {#each selectionQuads as quad, q (q)}
+      <div
+        class="text-selection"
+        style="left: {quad[0] * pxPerPt}px; top: {(heightPt - quad[3]) * pxPerPt}px; width: {(quad[2] - quad[0]) *
+          pxPerPt}px; height: {(quad[3] - quad[1]) * pxPerPt}px;"
+      ></div>
+    {/each}
     {#each searchMatches as match, m (m)}
       {#each match.quads as quad, q (q)}
         <div
@@ -577,6 +616,7 @@
       class="interaction-layer"
       class:active={activeTool !== "select"}
       class:interaction-layer--tap={TAP_TOOLS.includes(activeTool)}
+      class:interaction-layer--selects-text={SELECTS_TEXT.includes(activeTool)}
       class:busy
       onpointerdown={onPointerDown}
       onpointermove={onPointerMove}
@@ -593,6 +633,7 @@
       {:else}
         <div
           class="drag-preview"
+          class:select-preview={activeTool === "select"}
           class:redact-preview={activeTool === "redact"}
           class:shape-preview={activeTool === "rectangle" || activeTool === "ellipse"}
           class:ellipse-preview={activeTool === "ellipse"}
@@ -677,6 +718,14 @@
     color: var(--black, #000);
   }
 
+  /* The selection itself, in the colour every other application uses
+     for one. Under the interaction layer, so it never eats a click. */
+  .text-selection {
+    position: absolute;
+    background: color-mix(in oklab, var(--info-fg, #3b82f6) 30%, transparent);
+    pointer-events: none;
+  }
+
   .search-hit {
     position: absolute;
     background: color-mix(in oklab, var(--yellow, #f2e863) 55%, transparent);
@@ -708,6 +757,12 @@
     cursor: crosshair;
   }
 
+  /* Text can be dragged over here, and an I-beam is how every other
+     application says so. */
+  .interaction-layer--selects-text {
+    cursor: text;
+  }
+
   /* A mutating backend call is in flight — see `busy` prop's doc above.
      `pointer-events: none` makes the browser skip this element entirely
      during hit-testing, so pointerdown/move/up never fire here at all
@@ -721,6 +776,15 @@
     background: color-mix(in oklab, var(--yellow) 35%, transparent);
     border: var(--border-width) solid color-mix(in oklab, var(--yellow) 80%, var(--gray-800));
     pointer-events: none;
+  }
+
+  /* A marquee, not a highlight. While a Select drag is under way there
+     is nothing to show yet — the real selection only exists once the
+     characters under the rectangle have been resolved — so this is a
+     thin outline rather than the yellow block the markup tools draw. */
+  .drag-preview.select-preview {
+    background: color-mix(in oklab, var(--info-fg, #3b82f6) 12%, transparent);
+    border-color: color-mix(in oklab, var(--info-fg, #3b82f6) 60%, transparent);
   }
 
   .move-arrow {

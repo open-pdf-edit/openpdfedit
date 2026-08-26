@@ -417,6 +417,7 @@ pub fn run() {
             annotations::list_page_annotations,
             annotations::delete_annotation_cmd,
             annotations::text_selection_quads_cmd,
+            annotations::select_text_cmd,
             pages::rotate_page_cmd,
             pages::delete_page_cmd,
             pages::set_crop_box_cmd,

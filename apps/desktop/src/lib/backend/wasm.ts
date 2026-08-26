@@ -55,6 +55,7 @@ import type {
   SearchResultsDto,
   SignatureInfoDto,
   TextRunDto,
+  TextSelection,
   TextSelectionQuadsRequest,
 } from "./types";
 
@@ -305,6 +306,7 @@ interface WasmSessionHandle {
    * `TextSelectionQuadsRequest`; returns a `[number, number, number,
    * number][]` JSON array of quads. */
   textSelectionQuads(requestJson: string): string;
+  selectText(requestJson: string): string;
   /** Mutating/rotates, same as `addAnnotation` above. */
   undo(handle: number): string;
   /** Mutating/rotates, same as `addAnnotation` above. */
@@ -1351,6 +1353,11 @@ export const wasmBackend: Backend = {
     const session = await ensureSession();
     const json = session.textSelectionQuads(JSON.stringify(request));
     return JSON.parse(json) as [number, number, number, number][];
+  },
+
+  async selectText(request: TextSelectionQuadsRequest) {
+    const session = await ensureSession();
+    return JSON.parse(session.selectText(JSON.stringify(request))) as TextSelection;
   },
 
   // --- forms (real, Phase 3 Task 3) ---
