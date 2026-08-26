@@ -695,11 +695,29 @@ type FileTarget =
  * in Firefox and Safari today. */
 /** What width to render a page at before reading it.
  *
- * Tesseract wants roughly 300 DPI; a Letter page is 8.5in wide, so ~2550
- * px. Screen-size renders (what the viewer asks for) give it about a
- * third of that and the recognition gets noticeably worse — this is the
- * single number that most affects whether OCR output is usable. */
-const OCR_TARGET_WIDTH_PX = 2550;
+ * Tesseract wants roughly 300 DPI, and this is the single number that
+ * most affects whether OCR output is usable. Screen-size renders (what
+ * the viewer asks for) give it about a third of that and recognition
+ * gets noticeably worse.
+ *
+ * It used to be the flat 2550 px that 300 DPI works out to for a Letter
+ * page, which silently made the resolution depend on how big the page
+ * claimed to be. A scan placed into the PDF at 1:1 — a page 2263 pt
+ * wide, three times Letter — was then rendered at about 80 DPI, and
+ * Chinese recognition on it dropped whole words: 事项 and 考试时间 came
+ * back as nothing at all until the same page was rendered larger.
+ *
+ * The ceiling is memory: the bitmap is RGBA, so 4200 px across a page of
+ * this shape is already ~55 MB before Tesseract makes its own copies,
+ * and a browser tab is not generous. The floor keeps small pages from
+ * being read at a resolution no amount of upscaling fixes. */
+const OCR_MIN_WIDTH_PX = 2550;
+const OCR_MAX_WIDTH_PX = 4000;
+
+function ocrRenderWidth(pageWidthPt: number): number {
+  const atThreeHundredDpi = Math.round((pageWidthPt / 72) * 300);
+  return Math.min(OCR_MAX_WIDTH_PX, Math.max(OCR_MIN_WIDTH_PX, atThreeHundredDpi));
+}
 
 export function supportsFileSystemAccess(): boolean {
   return (
@@ -1755,7 +1773,7 @@ export const wasmBackend: Backend = {
    * written back in a single call, so the whole document's OCR is one
    * undo step rather than one per page.
    *
-   * Rendered at `OCR_TARGET_WIDTH_PX` rather than at screen size:
+   * Rendered at `ocrRenderWidth` rather than at screen size:
    * recognition accuracy tracks the resolution it reads, and a page
    * rendered for a 900px-wide viewport gives Tesseract about half the
    * pixels per character it wants.
@@ -1774,11 +1792,18 @@ export const wasmBackend: Backend = {
 
     const pages = [];
     for (let pageIndex = 0; pageIndex < sizes.length; pageIndex++) {
-      const page = session.renderPage(request.handle, pageIndex, OCR_TARGET_WIDTH_PX);
+      const page = session.renderPage(
+        request.handle,
+        pageIndex,
+        ocrRenderWidth(sizes[pageIndex].width),
+      );
       let words;
       try {
         const rgba = page.rgba;
-        words = await recognisePage({ width: page.width, height: page.height, data: rgba });
+        words = await recognisePage(
+          { width: page.width, height: page.height, data: rgba },
+          request.lang,
+        );
         pages.push({
           page_index: pageIndex,
           page_width_pt: sizes[pageIndex].width,

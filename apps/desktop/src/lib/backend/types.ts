@@ -369,6 +369,16 @@ export interface CompareDocumentsRequest {
 
 export interface OcrDocumentRequest {
   handle: number;
+  /** Tesseract language codes, `+`-joined for a page that mixes scripts
+   * (`"chi_sim+eng"`). Omitted means English.
+   *
+   * Not cosmetic: Tesseract reads the script it has trained data for and
+   * responds to anything else with silence or nonsense rather than an
+   * error, so the wrong value here looks exactly like a feature that
+   * does not work. The desktop passes this to a local `tesseract`, which
+   * needs the matching language pack installed; the browser fetches it
+   * from this origin. */
+  lang?: string;
 }
 
 // --- The Backend interface ---------------------------------------------

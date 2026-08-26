@@ -29,7 +29,7 @@
   import NumberingPanel from "$lib/NumberingPanel.svelte";
   import EncryptPanel from "$lib/EncryptPanel.svelte";
   import type { EncryptChoices, NumberPagesChoices, WatermarkChoices } from "$lib/backend/types";
-  import { showAlert, showConfirm, showPrompt } from "$lib/dialog.svelte";
+  import { showAlert, showChoice, showConfirm, showPrompt } from "$lib/dialog.svelte";
   import ToastHost from "$lib/ToastHost.svelte";
   import { showToast } from "$lib/toast.svelte";
   import { TOOLS, type Tool } from "$lib/tools";
@@ -1563,14 +1563,72 @@
    * watermark. `runOcr` below is what actually runs once it's allowed. */
   const handleOcrDocument = () => requireSupporter("ocr");
 
+  /** What OCR can be asked to read.
+   *
+   * Tesseract recognises the script it has trained data for and nothing
+   * else — handed the wrong one it returns nothing, or nonsense, without
+   * failing. OCR shipped hard-wired to English, so running it on a
+   * Chinese document looked exactly like a broken feature: it worked,
+   * took its time, and added an empty text layer.
+   *
+   * The CJK entries include `eng` because those documents almost always
+   * carry Latin digits, headings and units, and Tesseract will read both
+   * from one page when given both. The Latin languages do not: adding
+   * English to them costs accuracy by giving the recogniser two
+   * plausible readings of the same letters. */
+  const OCR_LANGUAGES = [
+    { value: "eng", label: "English" },
+    { value: "chi_sim+eng", label: "中文 (简体) — Chinese, Simplified" },
+    { value: "chi_tra+eng", label: "中文 (繁體) — Chinese, Traditional" },
+    { value: "jpn+eng", label: "日本語 — Japanese" },
+    { value: "kor+eng", label: "한국어 — Korean" },
+    { value: "fra", label: "Français — French" },
+    { value: "deu", label: "Deutsch — German" },
+    { value: "spa", label: "Español — Spanish" },
+    { value: "por", label: "Português — Portuguese" },
+    { value: "ita", label: "Italiano — Italian" },
+    { value: "rus", label: "Русский — Russian" },
+    { value: "ara", label: "العربية — Arabic" },
+  ];
+
+  const OCR_LANG_KEY = "openpdfedit.ocr.lang";
+
+  /** Last language used, so someone working through a stack of documents
+   * in one language answers once. Storage can throw outright in a
+   * private window, so neither read nor write is allowed to take OCR
+   * down with it. */
+  function rememberedOcrLang(): string {
+    try {
+      const stored = localStorage.getItem(OCR_LANG_KEY);
+      if (stored && OCR_LANGUAGES.some((l) => l.value === stored)) return stored;
+    } catch {
+      /* no storage: the default is fine */
+    }
+    return "eng";
+  }
+
   async function runOcr() {
     if (!doc || mutationBusy) return;
     const handle = doc.handle;
+
+    const lang = await showChoice("Which language is the text in?", {
+      title: "Recognise text",
+      choices: OCR_LANGUAGES,
+      defaultValue: rememberedOcrLang(),
+      confirmLabel: "Run OCR",
+    });
+    if (lang === null) return;
+    try {
+      localStorage.setItem(OCR_LANG_KEY, lang);
+    } catch {
+      /* answering again next time is a smaller problem than failing here */
+    }
+
     error = null;
     ocrBusy = true;
     mutationBusy = true;
     try {
-      doc = await backend.ocrDocument({ handle });
+      doc = await backend.ocrDocument({ handle, lang });
       await Promise.all([refreshAnnotations(), refreshFormFields()]);
     } catch (e) {
       const message = formatError(e);

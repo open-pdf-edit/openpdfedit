@@ -17,7 +17,7 @@
 // Everything here is a plain promise, so call sites read the same as the
 // native calls they replace: `const name = await showPrompt(...)`.
 
-type DialogKind = "alert" | "confirm" | "prompt";
+type DialogKind = "alert" | "confirm" | "prompt" | "choice";
 
 interface DialogRequest {
   kind: DialogKind;
@@ -30,6 +30,8 @@ interface DialogRequest {
   /** Mask the input. A password typed into a plain field is visible to
    * anyone near the screen and can be captured by a screenshot. */
   masked: boolean;
+  /** For `choice`: what the list offers. Empty for every other kind. */
+  options: { value: string; label: string }[];
 }
 
 // `null` when nothing is open. A single active dialog at a time is
@@ -69,6 +71,7 @@ export function showAlert(message: string, title = "OpenPdfEdit"): Promise<void>
     confirmLabel: "OK",
     masked: false,
     destructive: false,
+    options: [],
   }).then(() => undefined);
 }
 
@@ -85,6 +88,7 @@ export async function showConfirm(
     confirmLabel: options.confirmLabel ?? "OK",
     masked: false,
     destructive: options.destructive ?? false,
+    options: [],
   });
   return result !== null;
 }
@@ -109,5 +113,36 @@ export async function showPrompt(
     confirmLabel: options.confirmLabel ?? "OK",
     masked: options.password ?? false,
     destructive: false,
+    options: [],
+  });
+}
+
+/**
+ * Pick one of a fixed set. Resolves to the chosen value, or null if
+ * cancelled.
+ *
+ * A list rather than free text because every legal answer is known in
+ * advance — typing one is an opportunity to get it wrong, and the caller
+ * would have to reject it afterwards.
+ */
+export async function showChoice(
+  message: string,
+  options: {
+    choices: { value: string; label: string }[];
+    title?: string;
+    defaultValue?: string;
+    confirmLabel?: string;
+  },
+): Promise<string | null> {
+  return open({
+    kind: "choice",
+    title: options.title ?? "OpenPdfEdit",
+    message,
+    defaultValue: options.defaultValue ?? options.choices[0]?.value ?? "",
+    placeholder: "",
+    confirmLabel: options.confirmLabel ?? "OK",
+    masked: false,
+    destructive: false,
+    options: options.choices,
   });
 }

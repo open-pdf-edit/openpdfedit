@@ -18,7 +18,15 @@
 //
 // The import is dynamic on purpose: the engine and the trained data are
 // ~3 MB gzipped between them, which nobody should pay for on page load
-// to edit a PDF that isn't a scan.
+// to edit a PDF that isn't a scan. The same is true of the language
+// data: several languages are served, and a run fetches only the ones it
+// was asked for.
+//
+// **Language is not a detail here.** Tesseract recognises the script it
+// was given data for and nothing else, and it does not fail when handed
+// something else — it returns confident nonsense, or nothing at all.
+// This shipped English-only, silently, which meant OCR on a Chinese
+// document appeared to run and produced an empty text layer.
 
 /** Where the build puts the engine, the worker and the trained data. */
 const OCR_ASSET_DIR = "/ocr";
@@ -28,6 +36,21 @@ interface RecognisedWord {
   text: string;
   confidence: number;
   bbox: { x0: number; y0: number; x1: number; y1: number };
+}
+
+/** Where the words actually are.
+ *
+ * tesseract.js used to put them on the result as `data.words`. It does
+ * not any more: they live three levels down, under blocks → paragraphs →
+ * lines, and the whole tree is `null` unless `blocks` is asked for.
+ *
+ * Reading `data.words` therefore found `undefined`, and this code turned
+ * that into an empty list — so OCR ran, took its time, reported success
+ * and added nothing, in every language. That is the failure this shape
+ * exists to prevent: it is why `recognisePage` throws when the tree is
+ * missing rather than treating it as "no text found". */
+interface RecognisedPage {
+  blocks: { paragraphs: { lines: { words: RecognisedWord[] }[] }[] }[] | null;
 }
 
 /** One word, in the shape `AddOcrTextLayerRequest` expects: pixel space,
@@ -56,17 +79,40 @@ export interface OcrProgress {
  * which is most of the cost of OCR'ing a short document. */
 let workerPromise: Promise<TesseractWorker> | null = null;
 
+/** Which language the cached worker was built for. A worker is bound to
+ * its trained data at creation, so asking it for a different language
+ * would quietly keep recognising in the old one. */
+let workerLang: string | null = null;
+
+/** Tesseract's own default, and the only language whose data was
+ * shipped before this was configurable. */
+export const DEFAULT_OCR_LANG = "eng";
+
 interface TesseractWorker {
-  recognize(image: unknown): Promise<{ data: { words?: RecognisedWord[] } }>;
+  recognize(
+    image: unknown,
+    options?: Record<string, unknown>,
+    output?: Record<string, boolean>,
+  ): Promise<{ data: RecognisedPage }>;
   terminate(): Promise<unknown>;
 }
 
-async function getWorker(onLoading?: () => void): Promise<TesseractWorker> {
+async function getWorker(lang: string, onLoading?: () => void): Promise<TesseractWorker> {
+  if (workerPromise && workerLang !== lang) {
+    // Language changed. The old worker holds the wrong trained data and
+    // several megabytes of heap, so it goes rather than lingering.
+    void releaseOcr();
+  }
   if (!workerPromise) {
     onLoading?.();
+    workerLang = lang;
     workerPromise = (async () => {
       const { createWorker } = await import("tesseract.js");
-      return (await createWorker("eng", 1, {
+      // `chi_sim+eng` and friends: tesseract loads several sets of
+      // trained data and recognises a page that mixes them, which is
+      // what a Chinese document with Latin numerals and headings needs.
+      const langs = lang.split("+").filter(Boolean);
+      return (await createWorker(langs, 1, {
         // Pinned to this origin — see the module doc. A missing file
         // here fails loudly rather than silently reaching a CDN.
         workerPath: `${OCR_ASSET_DIR}/worker.min.js`,
@@ -79,6 +125,7 @@ async function getWorker(onLoading?: () => void): Promise<TesseractWorker> {
       // Don't cache a failed start: a network blip on first use would
       // otherwise disable OCR for the rest of the session.
       workerPromise = null;
+      workerLang = null;
       throw error;
     });
   }
@@ -95,9 +142,10 @@ async function getWorker(onLoading?: () => void): Promise<TesseractWorker> {
  */
 export async function recognisePage(
   bitmap: { width: number; height: number; data: Uint8Array | Uint8ClampedArray },
+  lang: string = DEFAULT_OCR_LANG,
   onLoading?: () => void,
 ): Promise<OcrWordDto[]> {
-  const worker = await getWorker(onLoading);
+  const worker = await getWorker(lang, onLoading);
 
   const canvas = document.createElement("canvas");
   canvas.width = bitmap.width;
@@ -110,15 +158,39 @@ export async function recognisePage(
     0,
   );
 
-  const { data } = await worker.recognize(canvas);
-  return (data.words ?? []).map((word) => ({
-    text: word.text,
-    left: word.bbox.x0,
-    top: word.bbox.y0,
-    width: word.bbox.x1 - word.bbox.x0,
-    height: word.bbox.y1 - word.bbox.y0,
-    confidence: word.confidence,
-  }));
+  // `blocks: true` is what makes the word tree exist at all — the
+  // default output is the plain text of the page and nothing else, which
+  // has no positions and so cannot be turned into a text layer.
+  const { data } = await worker.recognize(canvas, {}, { blocks: true });
+
+  if (!data.blocks) {
+    throw new Error(
+      "the recogniser returned no layout for this page — OCR cannot place text without it",
+    );
+  }
+
+  const words: OcrWordDto[] = [];
+  for (const block of data.blocks) {
+    for (const paragraph of block.paragraphs ?? []) {
+      for (const line of paragraph.lines ?? []) {
+        for (const word of line.words ?? []) {
+          // Empty and whitespace-only "words" are common on noisy scans
+          // and would each become a text-showing operator positioning
+          // nothing.
+          if (!word.text.trim()) continue;
+          words.push({
+            text: word.text,
+            left: word.bbox.x0,
+            top: word.bbox.y0,
+            width: word.bbox.x1 - word.bbox.x0,
+            height: word.bbox.y1 - word.bbox.y0,
+            confidence: word.confidence,
+          });
+        }
+      }
+    }
+  }
+  return words;
 }
 
 /** Release the engine. Worth doing when a document closes: the worker
@@ -126,6 +198,7 @@ export async function recognisePage(
 export async function releaseOcr(): Promise<void> {
   const pending = workerPromise;
   workerPromise = null;
+  workerLang = null;
   if (!pending) return;
   try {
     await (await pending).terminate();

@@ -98,7 +98,21 @@ cp "$TESS_CORE"/tesseract-core*.wasm "$TESS_CORE"/tesseract-core*.wasm.js "$OCR_
 }
 [ -f "$TESS_JS/worker.min.js" ] || { echo "build.sh: missing $TESS_JS/worker.min.js" >&2; exit 1; }
 cp "$TESS_JS/worker.min.js" "$OCR_DIR/worker.min.js"
-cp "$WORKSPACE_DIR/.vendor/tesseract/eng.traineddata" "$OCR_DIR/eng.traineddata"
+# Every language that was fetched, not a named one. Tesseract reads the
+# script it has data for and returns silence or nonsense for anything
+# else without failing, so a missing language is not an error the user
+# ever sees — it is OCR appearing not to work. Shipping only English is
+# how that happened. Each file is 1-4 MB on the server; a run fetches
+# only the languages it was asked for.
+shopt -s nullglob
+TRAINED=("$WORKSPACE_DIR/.vendor/tesseract"/*.traineddata)
+shopt -u nullglob
+[ ${#TRAINED[@]} -gt 0 ] || {
+  echo "build.sh: no trained data in .vendor/tesseract — run scripts/fetch-tesseract-assets.sh" >&2
+  exit 1
+}
+cp "${TRAINED[@]}" "$OCR_DIR/"
+log "OCR languages: $(printf '%s ' "${TRAINED[@]##*/}" | sed 's/\.traineddata//g')"
 
 # A service worker, so the app keeps working with no network at all —
 # which is the whole claim, and only demonstrable if it's true offline.
