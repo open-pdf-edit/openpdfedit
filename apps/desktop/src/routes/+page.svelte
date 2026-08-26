@@ -24,8 +24,8 @@
   import AccountPanel from "$lib/AccountPanel.svelte";
   import WatermarkPanel from "$lib/WatermarkPanel.svelte";
   import SupporterGate, { type GateState } from "$lib/SupporterGate.svelte";
-  import { SUPPORTER_TOOLS_ARE_PREMIUM, isSupporterUnlocked, unlockSupporter } from "$lib/openapps";
-  import { getClient } from "@openapps/ui";
+  import { SUPPORTER_TOOLS_ARE_PREMIUM, supporterState, unlockSupporter } from "$lib/openapps";
+  import { getClient, onChange } from "@openapps/ui";
   import NumberingPanel from "$lib/NumberingPanel.svelte";
   import EncryptPanel from "$lib/EncryptPanel.svelte";
   import type { EncryptChoices, NumberPagesChoices, WatermarkChoices } from "$lib/backend/types";
@@ -629,6 +629,66 @@
     else void runOcr();
   }
 
+  /**
+   * Make the stored session usable again, if it can be.
+   *
+   * An access token is short-lived; a refresh token is not. After a
+   * reload the app has a session that looks fine — `isLoggedIn` is true,
+   * there is a token — and whose access token the server will refuse.
+   * The SDK handles that automatically, but only for requests it makes
+   * itself: it refreshes on a 401 and retries. The entitlement check and
+   * the unlock are plain `fetch` calls with a bearer header, so they got
+   * the 401 and reported it as "not unlocked" and "couldn't unlock".
+   *
+   * That is the whole of the reported bug: after a hard refresh the app
+   * looked signed out, unlocking a feature already paid for failed, and
+   * opening the account panel fixed it — because the panel asks for a
+   * balance, which goes through the SDK, which refreshes.
+   *
+   * So this asks for the balance first. Any request through the client
+   * would do; the balance is the cheapest, and the panel wants it
+   * anyway. Returns false only when the refresh token is dead too, which
+   * is the one case that really is "signed out".
+   */
+  /** Whether there is a session, for the one place that says so without
+   * being opened.
+   *
+   * "It appears that my openpdfedit is not logged in" was half the
+   * reported problem, and it was true of the interface even when it was
+   * false of the session: nothing on screen said either way until the
+   * account panel was opened. A dot on the account button does. */
+  let signedIn = $state(false);
+
+  $effect(() => {
+    const update = () => {
+      signedIn = getClient()?.isLoggedIn ?? false;
+    };
+    update();
+    // A sign-in in the account panel, or in another tab.
+    const stop = onChange(update);
+    return stop;
+  });
+
+  $effect(() => {
+    // Get the token refreshed before anything needs it, rather than at
+    // the moment someone clicks a paid tool and is told they are not
+    // signed in. Fire and forget: nothing on screen waits for it, and a
+    // failure here is indistinguishable from being offline.
+    if (!getClient()?.isLoggedIn) return;
+    void ensureUsableSession();
+  });
+
+  async function ensureUsableSession(): Promise<boolean> {
+    const client = getClient();
+    if (!client?.isLoggedIn) return false;
+    try {
+      await client.credits.balance();
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   /** A paid tool's click. Runs it when it's available and shows the gate
    * only when it isn't, so the gate never stands in front of someone who
    * has already paid. */
@@ -646,13 +706,23 @@
         gateState = { kind: "signed-out" };
         return;
       }
-      if (await isSupporterUnlocked(accessToken())) {
+
+      let state = await supporterState(accessToken());
+      if (state === "unauthorized") {
+        // Stale token. Refresh it and ask once more — and only call it
+        // signed out if that fails, rather than on the first refusal.
+        state = (await ensureUsableSession())
+          ? await supporterState(accessToken())
+          : "unauthorized";
+      }
+
+      if (state === "unlocked") {
         supporterUnlocked = true;
         gateState = { kind: "hidden" };
         runGatedTool();
         return;
       }
-      gateState = { kind: "locked" };
+      gateState = state === "unauthorized" ? { kind: "signed-out" } : { kind: "locked" };
     } finally {
       gateCheckInFlight = false;
     }
@@ -782,7 +852,12 @@
 
   async function handleUnlock(): Promise<void> {
     gateState = { kind: "unlocking" };
-    const result = await unlockSupporter(accessToken());
+    let result = await unlockSupporter(accessToken());
+    if (!result.ok && result.kind === "unauthorized" && (await ensureUsableSession())) {
+      // The token aged out between opening the gate and pressing the
+      // button. The charge is idempotent, so asking again is free.
+      result = await unlockSupporter(accessToken());
+    }
     if (result.ok) {
       supporterUnlocked = true;
       gateState = { kind: "hidden" };
@@ -794,6 +869,13 @@
     }
     if (result.kind === "insufficient") {
       gateState = { kind: "insufficient", have: result.have, need: result.need };
+      return;
+    }
+    if (result.kind === "unauthorized") {
+      // Not "try again": trying again does nothing for a session that
+      // has actually expired, and this is the one failure with a real
+      // next step.
+      gateState = { kind: "signed-out" };
       return;
     }
     gateState = { kind: "error", message: "Couldn't unlock — please try again." };
@@ -2088,10 +2170,11 @@
 
 
     <button
-      class="oa-icon-btn oa-icon-btn--sm"
+      class="oa-icon-btn oa-icon-btn--sm account-btn"
+      class:account-btn--in={signedIn}
       onclick={() => (showAccount = true)}
-      use:tooltip={"Account — sign in, credits"}
-      aria-label="Account"
+      use:tooltip={signedIn ? "Account — signed in" : "Account — sign in, credits"}
+      aria-label={signedIn ? "Account — signed in" : "Account"}
     >
       <Icon name="circle-user" size={15} />
     </button>
@@ -2850,6 +2933,25 @@
 
   .topbar__meta {
     white-space: nowrap;
+  }
+
+  /* A dot, in the corner of the account button, when there is a session.
+     Small on purpose: it answers "am I signed in" for anyone who looks,
+     without becoming something to look at. */
+  .account-btn {
+    position: relative;
+  }
+
+  .account-btn--in::after {
+    content: "";
+    position: absolute;
+    right: 3px;
+    bottom: 3px;
+    width: 7px;
+    height: 7px;
+    border-radius: var(--radius-full);
+    background: var(--brand, #10b981);
+    box-shadow: 0 0 0 2px var(--surface-card);
   }
 
   .topbar__pill-btn {
