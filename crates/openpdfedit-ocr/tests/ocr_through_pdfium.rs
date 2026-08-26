@@ -282,3 +282,79 @@ fn a_non_latin_word_is_searchable_through_real_pdfium() {
     engine.close(handle);
     let _ = std::fs::remove_file(&tmp_path);
 }
+
+/// Where the highlight lands.
+///
+/// Finding the right characters is only half of it: the search result is
+/// drawn from the positions this crate wrote, so if those are wrong the
+/// reader is shown the wrong words. That is what happened — searching a
+/// Chinese title for 四年级 found it and highlighted 暑期思, three
+/// characters further along, because the run had been drawn with the
+/// font's own one-em advance while the title was set with loose
+/// letter-spacing. The characters drifted a whole character within four
+/// or five of them.
+///
+/// So this checks the geometry, not just the hit: same tracked-out
+/// spacing, and the quad has to sit on the pair that was searched for.
+#[test]
+fn a_search_hit_is_drawn_where_the_characters_actually_are() {
+    let Some(engine) = shared_engine() else {
+        eprintln!("skipping: PDFium not available (run scripts/fetch-pdfium.sh)");
+        return;
+    };
+
+    let tmp_path = std::env::temp_dir().join(format!(
+        "openpdfedit-ocr-placement-{}.pdf",
+        std::process::id()
+    ));
+    std::fs::write(&tmp_path, text_page_pdf_bytes(".", 8.0)).expect("should write temp file");
+
+    // Three two-character words, 35 wide each, with 25 of air between
+    // the words — the spacing a heading is set with, and enough of it
+    // that a one-em advance drifts a whole character by the third word.
+    // Image space is the page's own size, so a coordinate here is a
+    // point there and the arithmetic below is readable.
+    let mut doc = Document::open(&tmp_path).expect("doc crate should open the temp file");
+    let words: Vec<openpdfedit_ocr::OcrWord> =
+        [("甲乙", 100.0_f32), ("丙丁", 195.0), ("戊己", 290.0)]
+            .into_iter()
+            .map(|(text, left)| openpdfedit_ocr::OcrWord {
+                text: text.to_string(),
+                left,
+                top: 100.0,
+                width: 70.0,
+                height: 56.0,
+                confidence: 95.0,
+            })
+            .collect();
+    openpdfedit_ocr::add_text_layer(&mut doc, 0, 612.0, 792.0, 612, 792, &words)
+        .expect("add_text_layer should succeed");
+    let saved = doc.save_incremental().expect("incremental save");
+    std::fs::write(&tmp_path, &saved).expect("overwrite with the OCR'd bytes");
+
+    let handle = engine
+        .open(&tmp_path)
+        .expect("PDFium should reopen the file");
+
+    // The last pair, where drift is worst. 戊 begins at 290 and 己 ends
+    // at 325 + 35.
+    let hits = engine
+        .search_document(handle, "戊己", Default::default(), 5)
+        .expect("search should succeed");
+    assert_eq!(hits.len(), 1, "the phrase must be findable at all");
+    let quad = hits[0].quads.first().copied().expect("a hit has geometry");
+
+    let (left, right) = (quad[0], quad[2]);
+    assert!(
+        (left - 290.0).abs() < 8.0,
+        "the highlight starts at {left}, but 戊 is at 290 — it is being drawn \
+         where a one-em advance would have put it, not where it was found"
+    );
+    assert!(
+        (right - 360.0).abs() < 14.0,
+        "the highlight ends at {right}, but 己 ends at 360"
+    );
+
+    engine.close(handle);
+    let _ = std::fs::remove_file(&tmp_path);
+}
