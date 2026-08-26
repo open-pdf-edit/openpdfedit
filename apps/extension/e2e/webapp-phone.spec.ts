@@ -58,6 +58,13 @@ for (const [label, device] of [
         railDirection: getComputedStyle(rail).flexDirection,
         railBottom: Math.round(rail.getBoundingClientRect().bottom),
         moreShown: getComputedStyle(more).display !== "none",
+        topbarH: Math.round(document.querySelector("header.topbar")!.getBoundingClientRect().height),
+        // Every control in the two top strips that is actually on screen,
+        // measured on its shorter side.
+        tapTargets: [...document.querySelectorAll("header.topbar button, .path-bar button")]
+          .map((b) => b.getBoundingClientRect())
+          .filter((r) => r.width > 0 && r.height > 0)
+          .map((r) => Math.round(Math.min(r.width, r.height))),
       };
     });
 
@@ -69,6 +76,21 @@ for (const [label, device] of [
     expect(m.railDirection).toBe("row");
     expect(m.railBottom).toBe(m.winH);
     expect(m.moreShown, "the document tools need somewhere to live").toBe(true);
+
+    // Zoom and the page number don't fit a 390px topbar, so they live in
+    // the file strip beside the name of the document they describe.
+    // Neither was shown at all before, which left no way to read the
+    // zoom a pinch had just changed.
+    await expect(page.locator(".path-bar__meta")).toBeVisible();
+    await expect(page.locator(".path-bar__pages")).toHaveText(/^\d+ \/ \d+$/);
+    await expect(page.locator(".path-bar__meta .zoom-level")).toHaveText(/%$/);
+
+    // One row, and targets a thumb can hit. The topbar used to pack its
+    // controls 2px apart at 28px each.
+    expect(m.topbarH, "the topbar must not wrap onto a second row").toBeLessThanOrEqual(60);
+    expect(Math.min(...m.tapTargets), "every visible control in the chrome").toBeGreaterThanOrEqual(
+      34,
+    );
 
     // And the sheet actually opens, above the tool bar rather than over it.
     await page.locator(".topbar__more").click();
@@ -97,6 +119,8 @@ test("a desktop window is untouched by any of it", async ({ browser }) => {
       railWidth: Math.round(rail.getBoundingClientRect().width),
       canvasW: Math.round(canvas.getBoundingClientRect().width),
       moreShown: getComputedStyle(more).display !== "none",
+      zoomInTopbar: getComputedStyle(document.querySelector(".topbar__group--zoom")!).display,
+      stripMeta: getComputedStyle(document.querySelector(".path-bar__meta")!).display,
     };
   });
 
@@ -106,6 +130,11 @@ test("a desktop window is untouched by any of it", async ({ browser }) => {
   // scale is worth more than filling the window.
   expect(m.canvasW, "a Letter page at 100% is 816px").toBe(816);
   expect(m.moreShown, "a desktop must not get a button for a sheet it never renders").toBe(false);
+  // Zoom and the page number are rendered twice — topbar and file strip
+  // — with CSS choosing which. A desktop takes the topbar copy, and must
+  // not show both.
+  expect(m.zoomInTopbar, "the desktop keeps zoom in the topbar").not.toBe("none");
+  expect(m.stripMeta, "the phone's copy must stay hidden here").toBe("none");
 
   await ctx.close();
 });
@@ -199,7 +228,9 @@ test("pinching zooms the document, sharply", async ({ browser }) => {
   );
   expect(reserved, "the browser must not keep pinch for itself").toBe("pan-y");
 
-  const zoomLabel = page.locator(".zoom-level");
+  // The file strip's copy — the topbar's is hidden on a phone, and both
+  // exist in the DOM.
+  const zoomLabel = page.locator(".path-bar__meta .zoom-level");
   const before = await zoomLabel.innerText();
   const canvasBefore = (await page.locator("canvas").first().boundingBox())!.width;
 

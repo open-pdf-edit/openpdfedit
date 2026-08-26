@@ -132,7 +132,12 @@
            actually help here. -->
       <span class="install__why">
         <Icon name="plus" size={14} />
-        Add to your home screen: tap Share, then <strong>Add to Home Screen</strong>.
+        <!-- One flex item, not three. The icon and the sentence are the
+             children here; leaving the words loose made every run of
+             text between the tags its own item, so the phrase and the
+             full stop were laid out with gaps between them and wrapped
+             onto separate lines on a narrow screen. -->
+        <span>Add to your home screen: tap Share, then <strong>Add to Home Screen</strong>.</span>
       </span>
     {/if}
     <button class="install__dismiss" onclick={() => (dismissed = true)} aria-label="Dismiss">
@@ -143,13 +148,18 @@
 
 <style>
   .install {
+    position: relative;
     display: flex;
     align-items: center;
     justify-content: center;
     flex-wrap: wrap;
     gap: var(--space-2);
     margin-top: var(--space-5);
-    padding: var(--space-3) var(--space-4);
+    /* Room on the right for the dismiss, which is pinned to the corner
+       rather than laid out in the flow: as a flex item it wrapped onto a
+       line of its own under the iOS sentence, centred, looking like the
+       bar's main action. */
+    padding: var(--space-3) calc(var(--space-4) + 20px) var(--space-3) var(--space-4);
     border: var(--border-width) solid var(--border-hairline);
     border-radius: var(--radius-lg);
     background: var(--bg-subtle);
@@ -158,14 +168,24 @@
 
   .install__why {
     display: inline-flex;
-    align-items: center;
+    align-items: flex-start;
     gap: 6px;
     font-size: 13px;
+    line-height: 1.45;
     color: var(--text-muted);
     text-align: left;
   }
 
+  .install__why :global(.oa-icon) {
+    flex: 0 0 auto;
+    /* Optically on the first line of the sentence beside it. */
+    margin-top: 3px;
+  }
+
   .install__dismiss {
+    position: absolute;
+    top: 6px;
+    right: 6px;
     display: inline-flex;
     align-items: center;
     padding: 4px;
