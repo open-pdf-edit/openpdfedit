@@ -172,12 +172,16 @@
   --control-h-sm: 28px;
   --control-h-md: 34px;
   --control-h-lg: 42px;
-  --rail-w: 56px;
+  /* The tool rail. Wide enough for an icon and the tool's name beside
+     it — it was 56px of unlabelled glyphs. */
+  --rail-w: 150px;
   /* The tool bar's height on a phone, where the rail lies along the
      bottom instead of down the side. 52px keeps a 44px target with room
      to breathe, and matches the topbar so the page is centred between
      two equal bands. */
-  --mobile-toolbar-h: 52px;
+  /* Tall enough for an icon with its name under it — the tools are
+     named on a phone too, for the same reason they are on a desktop. */
+  --mobile-toolbar-h: 62px;
   --topbar-h: 52px;
 
   /* ---- Radius ---- */

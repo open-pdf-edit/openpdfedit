@@ -125,7 +125,9 @@ test("a desktop window is untouched by any of it", async ({ browser }) => {
   });
 
   expect(m.railDirection, "the rail stays down the side").toBe("column");
-  expect(m.railWidth).toBe(56);
+  // Wider than the 56px it was: the tools carry their names now, which
+  // is the whole point of the change and needs the room.
+  expect(m.railWidth).toBe(150);
   // 100%, not fitted: on a desktop a page fits anyway, and a predictable
   // scale is worth more than filling the window.
   expect(m.canvasW, "a Letter page at 100% is 816px").toBe(816);
@@ -372,6 +374,66 @@ test("a phone without the file system API can still open and save", async ({ bro
   await save.click();
   const download = await downloadPromise;
   expect(download.suggestedFilename()).toContain(".pdf");
+
+  await ctx.close();
+});
+
+/**
+ * The tools say what they are.
+ *
+ * Sixteen glyphs in a rail and seventeen more in the document tools,
+ * distinguishable only by hovering each one in turn, is a memory test —
+ * and on a phone there is no hover at all, so an unlabelled icon there
+ * is a guess. Both sets are named and grouped now, and the groups are a
+ * claim about what the tools do, so a wrong one is worth catching.
+ */
+test("every tool is named, and the names are grouped", async ({ browser }) => {
+  const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+  const page = await ctx.newPage();
+  await openDocument(page);
+
+  // The rail: a name beside every icon, under a heading.
+  const railLabels = page.locator(".rail__label");
+  expect(await railLabels.count(), "one label per tool").toBe(16);
+  for (const name of ["Select", "Erase", "Highlight", "Redact", "Signature"]) {
+    await expect(page.locator(".rail__label", { hasText: new RegExp(`^${name}$`) })).toBeVisible();
+  }
+  await expect(page.locator(".rail__heading")).toHaveText([
+    "Select",
+    "Mark up",
+    "Draw",
+    "Edit content",
+    "Fill & sign",
+  ]);
+
+  // The document tools are grouped in the topbar, but not named there —
+  // seventeen names do not fit a toolbar, and a desktop has hover.
+  expect(await page.locator(".tools__group").count()).toBe(4);
+  await expect(page.locator(".tools__label").first()).toBeHidden();
+
+  await ctx.close();
+});
+
+test("a phone names the document tools too, since it has no hover", async ({ browser }) => {
+  const ctx = await browser.newContext({ ...devices["iPhone 13"] });
+  const page = await ctx.newPage();
+  await openDocument(page);
+
+  await page.locator(".topbar__more").click();
+  const sheet = page.locator(".topbar__group--overflow.is-open");
+  await expect(sheet).toBeVisible();
+
+  await expect(sheet.locator(".tools__heading").first()).toBeVisible();
+  await expect(sheet.locator(".tools__label", { hasText: /^OCR$/ })).toBeVisible();
+  await expect(sheet.locator(".tools__label", { hasText: /^Watermark$/ })).toBeVisible();
+
+  // The sheet is taller than the room it has, so it must scroll rather
+  // than wrap into a second column running off the right edge — which is
+  // what it did the first time the headings went in.
+  expect(
+    await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1),
+    "the sheet must not push the page sideways",
+  ).toBe(true);
 
   await ctx.close();
 });

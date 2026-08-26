@@ -32,7 +32,7 @@
   import { showAlert, showChoice, showConfirm, showPrompt } from "$lib/dialog.svelte";
   import ToastHost from "$lib/ToastHost.svelte";
   import { showToast } from "$lib/toast.svelte";
-  import { TOOLS, type Tool } from "$lib/tools";
+  import { TOOL_GROUPS, type Tool } from "$lib/tools";
   import { untrack } from "svelte";
   import type { AnnotationPayload } from "$lib/PdfPage.svelte";
   import BrandMark from "$lib/BrandMark.svelte";
@@ -1912,154 +1912,183 @@
 
     {#if doc}
       <div class="topbar__group topbar__group--overflow" class:is-open={moreOpen}>
-        <button class="oa-icon-btn oa-icon-btn--sm" onclick={handleSaveAs} disabled={saveBusy || mutationBusy} use:tooltip={"Save a copy (⌘⇧S)"} aria-label="Save as">
-          <Icon name="copy" size={15} />
-        </button>
-        {#if canPrint}
-          <button class="oa-icon-btn oa-icon-btn--sm" onclick={handlePrint} disabled={printBusy || mutationBusy} use:tooltip={"Print (⌘P)"} aria-label="Print">
-            <Icon name="printer" size={15} spin={printBusy} />
-          </button>
-        {/if}
-        <button
-          class="oa-icon-btn oa-icon-btn--sm"
-          class:oa-icon-btn--selected={showComments}
-          onclick={() => (showComments = !showComments)}
-          use:tooltip={"Comments"}
-          aria-label="Toggle comments panel"
-        >
-          <Icon name="message-square" size={15} />
-        </button>
-        <button
-          class="oa-icon-btn oa-icon-btn--sm"
-          class:oa-icon-btn--selected={showSearch}
-          onclick={() => (showSearch ? closeSearch() : openSearch())}
-          use:tooltip={"Find in document (⌘F)"}
-          aria-label="Find in document"
-        >
-          <Icon name="search" size={15} />
-        </button>
-        <button
-          class="oa-icon-btn oa-icon-btn--sm"
-          class:oa-icon-btn--selected={showOutline}
-          onclick={() => (showOutline = !showOutline)}
-          use:tooltip={outline.length > 0 ? "Contents" : "Contents — this document has no bookmarks"}
-          aria-label="Toggle contents panel"
-        >
-          <Icon name="list-tree" size={15} />
-        </button>
-        <button
-          class="oa-icon-btn oa-icon-btn--sm"
-          class:oa-icon-btn--selected={showPages}
-          onclick={() => (showPages = !showPages)}
-          use:tooltip={"Pages"}
-          aria-label="Toggle pages panel"
-        >
-          <Icon name="layout-panel-left" size={15} />
-        </button>
-        {#if formFields.length > 0}
+        <p class="tools__heading">Panels</p>
+        <div class="tools__group">
           <button
             class="oa-icon-btn oa-icon-btn--sm"
-            class:oa-icon-btn--selected={showForms}
-            onclick={() => (showForms = !showForms)}
-            use:tooltip={"Form fields"}
-            aria-label="Toggle form fields panel"
+            class:oa-icon-btn--selected={showComments}
+            onclick={() => (showComments = !showComments)}
+            use:tooltip={"Comments"}
+            aria-label="Toggle comments panel"
           >
-            <Icon name="list-checks" size={15} />
+            <Icon name="message-square" size={15} />
+          <span class="tools__label">Comments</span>
           </button>
-        {/if}
-        <button
-          class="oa-icon-btn oa-icon-btn--sm"
-          class:oa-icon-btn--selected={showSignatures}
-          onclick={() => (showSignatures = !showSignatures)}
-          use:tooltip={"Saved signatures — draw one, then drag it onto the page"}
-          aria-label="Toggle signatures panel"
-        >
-          <Icon name="signature" size={15} />
-        </button>
-        <button
-          class="oa-icon-btn oa-icon-btn--sm"
-          class:oa-icon-btn--selected={showEncrypt}
-          onclick={() => (showEncrypt = !showEncrypt)}
-          use:tooltip={"Save a password-protected copy"}
-          aria-label="Protect with a password"
-        >
-          <Icon name="key" size={15} />
-        </button>
-        <button
-          class="oa-icon-btn oa-icon-btn--sm"
-          class:oa-icon-btn--selected={showNumbering}
-          onclick={() => (showNumbering = !showNumbering)}
-          use:tooltip={"Add page numbers or Bates numbering"}
-          aria-label="Number pages"
-        >
-          <Icon name="hash" size={15} />
-        </button>
-        <button
-          class="oa-icon-btn oa-icon-btn--sm"
-          onclick={handleExportXfdf}
-          disabled={xfdfBusy}
-          use:tooltip={"Export markup as an XFDF file — comments without the document"}
-          aria-label="Export markup"
-        >
-          <Icon name="file-output" size={15} spin={xfdfBusy} />
-        </button>
-        <button
-          class="oa-icon-btn oa-icon-btn--sm"
-          onclick={handleImportXfdf}
-          disabled={xfdfBusy || mutationBusy}
-          use:tooltip={"Import markup from an XFDF file"}
-          aria-label="Import markup"
-        >
-          <Icon name="plus" size={15} />
-        </button>
-        <button
-          class="oa-icon-btn oa-icon-btn--sm"
-          onclick={handleFlatten}
-          disabled={flattenBusy || mutationBusy}
-          use:tooltip={"Flatten — bake markup into the page so it can't be edited or removed"}
-          aria-label="Flatten"
-        >
-          <Icon name="layers" size={15} spin={flattenBusy} />
-        </button>
-        <button
-          class="oa-icon-btn oa-icon-btn--sm"
-          onclick={handleOcrDocument}
-          disabled={ocrBusy}
-          use:tooltip={backendKind === "wasm"
-            ? "Make a scanned document searchable — the first run downloads the recogniser (about 3 MB), then works offline"
-            : "Make a scanned document searchable (requires tesseract installed locally)"}
-          aria-label="OCR document"
-        >
-          <Icon name="scan-text" size={15} spin={ocrBusy} />
-        </button>
-        <button
-          class="oa-icon-btn oa-icon-btn--sm"
-          onclick={handleCompareDocument}
-          disabled={compareBusy}
-          use:tooltip={"Compare the open document against another PDF (text and rendered-pixel differences)"}
-          aria-label="Compare documents"
-        >
-          <Icon name="git-compare" size={15} spin={compareBusy} />
-        </button>
-        <button
-          class="oa-icon-btn oa-icon-btn--sm"
-          class:oa-icon-btn--selected={showWatermark}
-          onclick={handleWatermarkClick}
-          disabled={mutationBusy}
-          use:tooltip={"Watermark — tile text or a logo across every page"}
-          aria-label="Watermark document"
-        >
-          <Icon name="stamp" size={15} />
-        </button>
-        <button
-          class="oa-icon-btn oa-icon-btn--sm"
-          onclick={handleCompressDocument}
-          disabled={compressBusy}
-          use:tooltip={"Save a compressed copy — full rewrite, sheds edit history and unused data"}
-          aria-label="Save a compressed copy"
-        >
-          <Icon name="file-archive" size={15} spin={compressBusy} />
-        </button>
+          <button
+            class="oa-icon-btn oa-icon-btn--sm"
+            class:oa-icon-btn--selected={showSearch}
+            onclick={() => (showSearch ? closeSearch() : openSearch())}
+            use:tooltip={"Find in document (⌘F)"}
+            aria-label="Find in document"
+          >
+            <Icon name="search" size={15} />
+          <span class="tools__label">Find</span>
+          </button>
+          <button
+            class="oa-icon-btn oa-icon-btn--sm"
+            class:oa-icon-btn--selected={showOutline}
+            onclick={() => (showOutline = !showOutline)}
+            use:tooltip={outline.length > 0 ? "Contents" : "Contents — this document has no bookmarks"}
+            aria-label="Toggle contents panel"
+          >
+            <Icon name="list-tree" size={15} />
+          <span class="tools__label">Contents</span>
+          </button>
+          <button
+            class="oa-icon-btn oa-icon-btn--sm"
+            class:oa-icon-btn--selected={showPages}
+            onclick={() => (showPages = !showPages)}
+            use:tooltip={"Pages"}
+            aria-label="Toggle pages panel"
+          >
+            <Icon name="layout-panel-left" size={15} />
+          <span class="tools__label">Pages</span>
+          </button>
+          {#if formFields.length > 0}
+            <button
+              class="oa-icon-btn oa-icon-btn--sm"
+              class:oa-icon-btn--selected={showForms}
+              onclick={() => (showForms = !showForms)}
+              use:tooltip={"Form fields"}
+              aria-label="Toggle form fields panel"
+            >
+              <Icon name="list-checks" size={15} />
+            <span class="tools__label">Form fields</span>
+            </button>
+          {/if}
+          <button
+            class="oa-icon-btn oa-icon-btn--sm"
+            class:oa-icon-btn--selected={showSignatures}
+            onclick={() => (showSignatures = !showSignatures)}
+            use:tooltip={"Saved signatures — draw one, then drag it onto the page"}
+            aria-label="Toggle signatures panel"
+          >
+            <Icon name="signature" size={15} />
+          <span class="tools__label">Signatures</span>
+          </button>
+        </div>
+        <p class="tools__heading">Document</p>
+        <div class="tools__group">
+          <button
+            class="oa-icon-btn oa-icon-btn--sm"
+            class:oa-icon-btn--selected={showNumbering}
+            onclick={() => (showNumbering = !showNumbering)}
+            use:tooltip={"Add page numbers or Bates numbering"}
+            aria-label="Number pages"
+          >
+            <Icon name="hash" size={15} />
+          <span class="tools__label">Page numbers</span>
+          </button>
+          <button
+            class="oa-icon-btn oa-icon-btn--sm"
+            onclick={handleOcrDocument}
+            disabled={ocrBusy}
+            use:tooltip={backendKind === "wasm"
+              ? "Make a scanned document searchable — the first run downloads the recogniser (about 3 MB), then works offline"
+              : "Make a scanned document searchable (requires tesseract installed locally)"}
+            aria-label="OCR document"
+          >
+            <Icon name="scan-text" size={15} spin={ocrBusy} />
+          <span class="tools__label">OCR</span>
+          </button>
+          <button
+            class="oa-icon-btn oa-icon-btn--sm"
+            class:oa-icon-btn--selected={showWatermark}
+            onclick={handleWatermarkClick}
+            disabled={mutationBusy}
+            use:tooltip={"Watermark — tile text or a logo across every page"}
+            aria-label="Watermark document"
+          >
+            <Icon name="stamp" size={15} />
+          <span class="tools__label">Watermark</span>
+          </button>
+          <button
+            class="oa-icon-btn oa-icon-btn--sm"
+            onclick={handleFlatten}
+            disabled={flattenBusy || mutationBusy}
+            use:tooltip={"Flatten — bake markup into the page so it can't be edited or removed"}
+            aria-label="Flatten"
+          >
+            <Icon name="layers" size={15} spin={flattenBusy} />
+          <span class="tools__label">Flatten</span>
+          </button>
+          <button
+            class="oa-icon-btn oa-icon-btn--sm"
+            onclick={handleCompareDocument}
+            disabled={compareBusy}
+            use:tooltip={"Compare the open document against another PDF (text and rendered-pixel differences)"}
+            aria-label="Compare documents"
+          >
+            <Icon name="git-compare" size={15} spin={compareBusy} />
+          <span class="tools__label">Compare</span>
+          </button>
+        </div>
+        <p class="tools__heading">Markup file</p>
+        <div class="tools__group">
+          <button
+            class="oa-icon-btn oa-icon-btn--sm"
+            onclick={handleExportXfdf}
+            disabled={xfdfBusy}
+            use:tooltip={"Export markup as an XFDF file — comments without the document"}
+            aria-label="Export markup"
+          >
+            <Icon name="file-output" size={15} spin={xfdfBusy} />
+          <span class="tools__label">Export</span>
+          </button>
+          <button
+            class="oa-icon-btn oa-icon-btn--sm"
+            onclick={handleImportXfdf}
+            disabled={xfdfBusy || mutationBusy}
+            use:tooltip={"Import markup from an XFDF file"}
+            aria-label="Import markup"
+          >
+            <Icon name="plus" size={15} />
+          <span class="tools__label">Import</span>
+          </button>
+        </div>
+        <p class="tools__heading">Save & protect</p>
+        <div class="tools__group">
+          <button class="oa-icon-btn oa-icon-btn--sm" onclick={handleSaveAs} disabled={saveBusy || mutationBusy} use:tooltip={"Save a copy (⌘⇧S)"} aria-label="Save as">
+            <Icon name="copy" size={15} />
+          <span class="tools__label">Save a copy</span>
+          </button>
+          {#if canPrint}
+            <button class="oa-icon-btn oa-icon-btn--sm" onclick={handlePrint} disabled={printBusy || mutationBusy} use:tooltip={"Print (⌘P)"} aria-label="Print">
+              <Icon name="printer" size={15} spin={printBusy} />
+            <span class="tools__label">Print</span>
+            </button>
+          {/if}
+          <button
+            class="oa-icon-btn oa-icon-btn--sm"
+            onclick={handleCompressDocument}
+            disabled={compressBusy}
+            use:tooltip={"Save a compressed copy — full rewrite, sheds edit history and unused data"}
+            aria-label="Save a compressed copy"
+          >
+            <Icon name="file-archive" size={15} spin={compressBusy} />
+          <span class="tools__label">Compress</span>
+          </button>
+          <button
+            class="oa-icon-btn oa-icon-btn--sm"
+            class:oa-icon-btn--selected={showEncrypt}
+            onclick={() => (showEncrypt = !showEncrypt)}
+            use:tooltip={"Save a password-protected copy"}
+            aria-label="Protect with a password"
+          >
+            <Icon name="key" size={15} />
+          <span class="tools__label">Password</span>
+          </button>
+        </div>
         {#if signatures.length > 0}
           <button class="oa-badge oa-badge--warning topbar__pill-btn" onclick={showSignatureDetails} use:tooltip={"Signature info is structural only — not cryptographically verified"}>
             <Icon name="shield-alert" size={13} />
@@ -2262,17 +2291,24 @@
   <div class="body">
     {#if doc}
       <aside class="rail">
-        {#each TOOLS as tool, i (tool.id)}
-          <button
-            class="oa-rail-btn"
-            class:oa-rail-btn--selected={activeTool === tool.id}
-            class:rail__gap={tool.startsGroup && i > 0}
-            onclick={() => (activeTool = tool.id)}
-            use:tooltip={tool.id === "moveText" || tool.id === "moveImage" ? `${tool.label} — hold Shift to constrain to one axis` : tool.label}
-            aria-label={tool.label}
-          >
-            <Icon name={tool.icon} size={18} />
-          </button>
+        {#each TOOL_GROUPS as group, g (group.name)}
+          <!-- The heading is decorative on a phone, where the rail is a
+               horizontal strip and a left border stands in for it. -->
+          <p class="rail__heading">{group.name}</p>
+          <div class="rail__group" class:rail__group--later={g > 0}>
+            {#each group.tools as tool (tool.id)}
+              <button
+                class="oa-rail-btn rail__tool"
+                class:oa-rail-btn--selected={activeTool === tool.id}
+                onclick={() => (activeTool = tool.id)}
+                use:tooltip={tool.id === "moveText" || tool.id === "moveImage" ? `${tool.label} — hold Shift to constrain to one axis` : tool.label}
+                aria-label={tool.label}
+              >
+                <Icon name={tool.icon} size={18} />
+                <span class="rail__label">{tool.label}</span>
+              </button>
+            {/each}
+          </div>
         {/each}
         <div class="rail__spacer"></div>
         <div class="rail__colors">
@@ -2536,6 +2572,33 @@
     gap: 2px;
   }
 
+  /* The document tools are grouped — sixteen icons in one run is a wall.
+     On a desktop the topbar has no room for the group names, so a hair
+     rule between groups carries the grouping and the names appear only
+     in the phone sheet, where there is room for them. */
+  .tools__heading {
+    display: none;
+  }
+
+  .tools__group {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+  }
+
+  /* Hidden on a desktop, where seventeen names would not fit a topbar
+     and the tooltip is a keystroke away. Shown in the phone sheet, which
+     has the room and no hover to fall back on. */
+  .tools__label {
+    display: none;
+  }
+
+  .tools__group + .tools__heading + .tools__group {
+    margin-left: 6px;
+    padding-left: 6px;
+    border-left: var(--border-width) solid var(--border-hairline);
+  }
+
   /* Phone only — the media query at the end of this file turns it on.
      Hidden here rather than only shown there, or a desktop gets a button
      that toggles a sheet it never renders. */
@@ -2614,22 +2677,59 @@
     overflow: hidden;
   }
 
-  /* ---- Tool rail — 56px, matches --rail-w ---- */
+  /* ---- Tool rail ----
+     Named tools in named groups. It was a 56px column of sixteen glyphs,
+     which is only usable by people who already know which picture means
+     Redact — and Redact is the one that destroys content. */
   .rail {
     flex: 0 0 auto;
     width: var(--rail-w);
     display: flex;
     flex-direction: column;
-    align-items: center;
-    gap: 4px;
-    padding: var(--space-2) 0;
+    align-items: stretch;
+    gap: 2px;
+    padding: var(--space-2) var(--space-2) var(--space-2) var(--space-2);
     background: var(--bg-subtle);
     border-right: var(--border-width) solid var(--border-hairline);
     overflow-y: auto;
   }
 
-  .rail__gap {
-    margin-top: var(--space-2);
+  .rail__heading {
+    margin: var(--space-3) 0 2px;
+    padding: 0 6px;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--text-faint);
+  }
+
+  .rail__heading:first-child {
+    margin-top: 0;
+  }
+
+  .rail__group {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  /* Icon then name, left-aligned so the names form a column the eye can
+     run down rather than a ragged set of centred labels. */
+  .rail__tool {
+    width: 100%;
+    height: 32px;
+    justify-content: flex-start;
+    gap: var(--space-2);
+    padding: 0 6px;
+  }
+
+  .rail__label {
+    font: var(--type-body-sm, 12px/1.2 inherit);
+    font-size: 12px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   .rail__spacer {
@@ -2639,10 +2739,12 @@
 
   .rail__colors {
     display: flex;
-    flex-direction: column;
+    flex-direction: row;
+    flex-wrap: wrap;
     align-items: center;
     gap: 6px;
-    padding-bottom: 4px;
+    padding: var(--space-2) 6px 4px;
+    border-top: var(--border-width) solid var(--border-hairline);
   }
 
   .swatch {
@@ -2752,6 +2854,59 @@
       height: 44px;
     }
 
+    /* The sheet has the room the topbar does not, so the groups are
+       named here rather than merely separated. */
+    .topbar__group--overflow {
+      flex-direction: column;
+      align-items: stretch;
+      gap: 0;
+      /* Not wrap. A column that is allowed to wrap turns "taller than
+         max-height" into a second column running off the right edge —
+         which is where SAVE & PROTECT went. It scrolls instead. */
+      flex-wrap: nowrap;
+    }
+
+    .tools__heading {
+      display: block;
+      margin: var(--space-3) 0 var(--space-1, 4px);
+      font-family: var(--font-mono);
+      font-size: 10px;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--text-faint);
+    }
+
+    .tools__heading:first-child {
+      margin-top: 0;
+    }
+
+    .tools__group {
+      flex-wrap: wrap;
+      gap: var(--space-2);
+    }
+
+    /* Named, because a phone has no hover: a tooltip cannot be reached
+       with a finger, so an unlabelled icon here is a guess. */
+    .topbar__group--overflow :global(.oa-icon-btn) {
+      width: auto;
+      min-width: 44px;
+      justify-content: flex-start;
+      gap: var(--space-2);
+      padding: 0 10px;
+    }
+
+    .tools__label {
+      display: inline;
+      font-size: 12px;
+      white-space: nowrap;
+    }
+
+    .tools__group + .tools__heading + .tools__group {
+      margin-left: 0;
+      padding-left: 0;
+      border-left: none;
+    }
+
     /* Tools along the bottom, where a thumb reaches. Horizontal because
        there are seventeen of them and a phone has width to scroll, not
        height to spare. */
@@ -2779,10 +2934,40 @@
       display: none;
     }
 
-    .rail :global(.oa-rail-btn) {
+    /* Icon over name, in a strip that scrolls. Wide enough for the
+       longest name that fits at this size; the rest ellipsise, and the
+       tooltip is still there. */
+    .rail__tool {
       flex: 0 0 auto;
-      width: 44px;
-      height: 44px;
+      width: 62px;
+      height: 52px;
+      flex-direction: column;
+      justify-content: center;
+      gap: 1px;
+      padding: 0 2px;
+    }
+
+    .rail__label {
+      font-size: 9px;
+      line-height: 1.1;
+      max-width: 100%;
+    }
+
+    /* No room for headings across a phone. A rule between groups says
+       the same thing in the space available. */
+    .rail__heading {
+      display: none;
+    }
+
+    .rail__group {
+      flex-direction: row;
+      align-items: center;
+    }
+
+    .rail__group--later {
+      margin-left: var(--space-2);
+      padding-left: var(--space-2);
+      border-left: var(--border-width) solid var(--border-hairline);
     }
 
     .rail__spacer {
@@ -2797,10 +2982,6 @@
       border-left: var(--border-width) solid var(--border-hairline);
     }
 
-    .rail__gap {
-      margin-top: 0;
-      margin-left: var(--space-2);
-    }
 
     /* A side panel beside a 390px page is not a panel, it is a column an
        inch wide. Full screen, above the sheet. */
