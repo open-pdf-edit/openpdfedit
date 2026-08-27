@@ -47,7 +47,6 @@ mod compress;
 mod encrypt;
 mod field_create;
 mod flatten;
-mod unmark;
 mod forms;
 mod license;
 mod numbering;
@@ -58,6 +57,7 @@ mod redact;
 mod search;
 mod signatures;
 mod textedit;
+mod unmark;
 mod watermark;
 mod xfdf;
 

@@ -177,7 +177,10 @@ fn xobject_kinds(doc: &Document, resources: &Dictionary) -> BTreeMap<Vec<u8>, En
 fn form_placement(doc: &Document, dict: &Dictionary) -> Option<(Rect, Matrix)> {
     let bbox = match doc.resolve(dict.get(b"BBox").ok()?) {
         Object::Array(items) if items.len() == 4 => {
-            let v: Vec<f64> = items.iter().map(|o| crate::number(doc.resolve(o))).collect();
+            let v: Vec<f64> = items
+                .iter()
+                .map(|o| crate::number(doc.resolve(o)))
+                .collect();
             // `/BBox` corners come in either order; normalise.
             Rect {
                 x0: v[0].min(v[2]),
@@ -208,7 +211,10 @@ fn form_placement(doc: &Document, dict: &Dictionary) -> Option<(Rect, Matrix)> {
 fn group_by_name(partials: &[crate::PartialXObject]) -> Vec<(Vec<u8>, Vec<Rect>)> {
     let mut grouped: BTreeMap<Vec<u8>, Vec<Rect>> = BTreeMap::new();
     for partial in partials {
-        grouped.entry(partial.name.clone()).or_default().push(partial.rect);
+        grouped
+            .entry(partial.name.clone())
+            .or_default()
+            .push(partial.rect);
     }
     grouped.into_iter().collect()
 }
@@ -350,7 +356,12 @@ fn redact_image(doc: &mut Document, id: ObjectId, regions: &[Rect]) -> Option<Ob
     // drawn over. If the mask cannot be edited, leaving it alone is
     // safe: the colour data is already gone, and an opaque white patch
     // hides more, not less.
-    if let Some(mask_id) = stream.dict.get(b"SMask").ok().and_then(|o| o.as_reference().ok()) {
+    if let Some(mask_id) = stream
+        .dict
+        .get(b"SMask")
+        .ok()
+        .and_then(|o| o.as_reference().ok())
+    {
         if let Some(new_mask) = redact_soft_mask(doc, mask_id, regions) {
             stream.dict.set("SMask", Object::Reference(new_mask));
         }

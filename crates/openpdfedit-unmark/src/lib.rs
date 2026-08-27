@@ -153,8 +153,8 @@ fn is_markup_annotation(doc: &Document, id: ObjectId) -> bool {
 /// Drops any full-page transparent overlay image from a page's content.
 fn remove_layers(doc: &mut Document, page_index: u32) -> Result<usize, UnmarkError> {
     let media_box = doc.page_media_box(page_index)?;
-    let page_area = f64::from(media_box[2] - media_box[0]).abs()
-        * f64::from(media_box[3] - media_box[1]).abs();
+    let page_area =
+        f64::from(media_box[2] - media_box[0]).abs() * f64::from(media_box[3] - media_box[1]).abs();
     if page_area <= 0.0 {
         return Ok(0);
     }
@@ -198,7 +198,8 @@ fn masked_images(doc: &Document, resources: &Dictionary) -> Vec<Vec<u8>> {
             let Ok(dict) = doc.dictionary_or_stream_dict(id) else {
                 return false;
             };
-            let is_image = dict.get(b"Subtype").ok().and_then(|o| o.as_name().ok()) == Some(b"Image");
+            let is_image =
+                dict.get(b"Subtype").ok().and_then(|o| o.as_name().ok()) == Some(b"Image");
             // `/Mask` is the older stencil form of the same idea; both
             // say the same thing about intent.
             is_image && (dict.get(b"SMask").is_ok() || dict.get(b"Mask").is_ok())

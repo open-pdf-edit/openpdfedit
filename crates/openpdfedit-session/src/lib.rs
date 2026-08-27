@@ -242,7 +242,6 @@ pub mod annotations;
 pub mod compare;
 pub mod encrypt;
 pub mod flatten;
-pub mod unmark;
 pub mod forms;
 pub mod markdown;
 pub mod numbering;
@@ -253,6 +252,7 @@ pub mod redact;
 pub mod search;
 pub mod signatures;
 pub mod textedit;
+pub mod unmark;
 pub mod watermark;
 pub mod xfdf;
 
