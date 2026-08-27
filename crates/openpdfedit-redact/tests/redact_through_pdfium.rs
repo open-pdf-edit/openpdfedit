@@ -248,10 +248,7 @@ fn text_inside_a_scaled_form() -> Vec<u8> {
             Operation::new("Q", vec![]),
         ],
     };
-    let content_id = doc.add_object(Stream::new(
-        dictionary! {},
-        page_content.encode().unwrap(),
-    ));
+    let content_id = doc.add_object(Stream::new(dictionary! {}, page_content.encode().unwrap()));
     let page_id = doc.add_object(dictionary! {
         "Type" => "Page", "Parent" => pages_id,
         "MediaBox" => vec![0.into(), 0.into(), 612.into(), 792.into()],
@@ -261,7 +258,7 @@ fn text_inside_a_scaled_form() -> Vec<u8> {
     doc.objects.insert(
         pages_id,
         Object::Dictionary(dictionary! {
-            "Type" => "Pages", "Kids" => vec![page_id.into()], "Count" => 1 }),
+        "Type" => "Pages", "Kids" => vec![page_id.into()], "Count" => 1 }),
     );
     let catalog = doc.add_object(dictionary! { "Type" => "Catalog", "Pages" => pages_id });
     doc.trailer.set("Root", catalog);
@@ -292,7 +289,9 @@ fn text_inside_a_form_xobject_is_removed_not_covered() {
     ));
     std::fs::write(&tmp_path, text_inside_a_scaled_form()).expect("should write temp file");
 
-    let handle = engine.open(&tmp_path).expect("PDFium should open the fixture");
+    let handle = engine
+        .open(&tmp_path)
+        .expect("PDFium should open the fixture");
     let before: String = engine
         .page_chars(handle, 0)
         .expect("chars should succeed")
@@ -312,11 +311,19 @@ fn text_inside_a_form_xobject_is_removed_not_covered() {
     let removed = openpdfedit_redact::redact_page(
         &mut doc,
         0,
-        Rect { x0: 40.0, y0: 40.0, x1: 300.0, y1: 90.0 },
+        Rect {
+            x0: 40.0,
+            y0: 40.0,
+            x1: 300.0,
+            y1: 90.0,
+        },
         [1.0, 1.0, 1.0],
     )
     .expect("redact_page should succeed");
-    assert!(removed > 0, "a redaction that removes nothing is a black box, not a redaction");
+    assert!(
+        removed > 0,
+        "a redaction that removes nothing is a black box, not a redaction"
+    );
 
     let saved = doc.save_incremental().expect("save should succeed");
     std::fs::write(&tmp_path, &saved).expect("should overwrite with the redacted bytes");
@@ -371,7 +378,14 @@ fn scanned_page_pdf_bytes() -> Vec<u8> {
             Operation::new("q", vec![]),
             Operation::new(
                 "cm",
-                vec![612.into(), 0.into(), 0.into(), 792.into(), 0.into(), 0.into()],
+                vec![
+                    612.into(),
+                    0.into(),
+                    0.into(),
+                    792.into(),
+                    0.into(),
+                    0.into(),
+                ],
             ),
             Operation::new("Do", vec!["Im1".into()]),
             Operation::new("Q", vec![]),
@@ -387,7 +401,7 @@ fn scanned_page_pdf_bytes() -> Vec<u8> {
     doc.objects.insert(
         pages_id,
         Object::Dictionary(dictionary! {
-            "Type" => "Pages", "Kids" => vec![page_id.into()], "Count" => 1 }),
+        "Type" => "Pages", "Kids" => vec![page_id.into()], "Count" => 1 }),
     );
     let catalog = doc.add_object(dictionary! { "Type" => "Catalog", "Pages" => pages_id });
     doc.trailer.set("Root", catalog);
@@ -447,7 +461,12 @@ fn redacting_part_of_a_scan_clears_those_pixels_and_keeps_the_rest() {
     openpdfedit_redact::redact_page(
         &mut doc,
         0,
-        Rect { x0: 100.0, y0: 600.0, x1: 300.0, y1: 700.0 },
+        Rect {
+            x0: 100.0,
+            y0: 600.0,
+            x1: 300.0,
+            y1: 700.0,
+        },
         [1.0, 1.0, 1.0],
     )
     .expect("redact_page should succeed");
@@ -534,7 +553,14 @@ fn text_inside_a_nested_form() -> Vec<u8> {
             Operation::new("q", vec![]),
             Operation::new(
                 "cm",
-                vec![0.5.into(), 0.into(), 0.into(), 0.5.into(), 0.into(), 0.into()],
+                vec![
+                    0.5.into(),
+                    0.into(),
+                    0.into(),
+                    0.5.into(),
+                    0.into(),
+                    0.into(),
+                ],
             ),
             Operation::new("Do", vec!["Inner".into()]),
             Operation::new("Q", vec![]),
@@ -560,10 +586,7 @@ fn text_inside_a_nested_form() -> Vec<u8> {
             Operation::new("Q", vec![]),
         ],
     };
-    let content_id = doc.add_object(Stream::new(
-        dictionary! {},
-        page_content.encode().unwrap(),
-    ));
+    let content_id = doc.add_object(Stream::new(dictionary! {}, page_content.encode().unwrap()));
     let page_id = doc.add_object(dictionary! {
         "Type" => "Page", "Parent" => pages_id,
         "MediaBox" => vec![0.into(), 0.into(), 612.into(), 792.into()],
@@ -573,7 +596,7 @@ fn text_inside_a_nested_form() -> Vec<u8> {
     doc.objects.insert(
         pages_id,
         Object::Dictionary(dictionary! {
-            "Type" => "Pages", "Kids" => vec![page_id.into()], "Count" => 1 }),
+        "Type" => "Pages", "Kids" => vec![page_id.into()], "Count" => 1 }),
     );
     let catalog = doc.add_object(dictionary! { "Type" => "Catalog", "Pages" => pages_id });
     doc.trailer.set("Root", catalog);
@@ -595,7 +618,9 @@ fn redaction_follows_a_form_inside_a_form() {
     ));
     std::fs::write(&tmp_path, text_inside_a_nested_form()).expect("should write temp file");
 
-    let handle = engine.open(&tmp_path).expect("PDFium should open the fixture");
+    let handle = engine
+        .open(&tmp_path)
+        .expect("PDFium should open the fixture");
     let before: String = engine
         .page_chars(handle, 0)
         .expect("chars should succeed")
@@ -611,7 +636,12 @@ fn redaction_follows_a_form_inside_a_form() {
     openpdfedit_redact::redact_page(
         &mut doc,
         0,
-        Rect { x0: 90.0, y0: 90.0, x1: 350.0, y1: 140.0 },
+        Rect {
+            x0: 90.0,
+            y0: 90.0,
+            x1: 350.0,
+            y1: 140.0,
+        },
         [1.0, 1.0, 1.0],
     )
     .expect("redact_page should succeed");

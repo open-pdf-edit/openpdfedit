@@ -249,7 +249,6 @@ use openpdfedit_session::annotations::{
 use openpdfedit_session::compare::compare_bytes;
 use openpdfedit_session::encrypt::{encrypt_document_bytes, EncryptChoices};
 use openpdfedit_session::flatten::{flatten_document_impl, FlattenDocumentRequest};
-use openpdfedit_session::unmark::{remove_markup_impl, RemoveMarkupRequest};
 use openpdfedit_session::forms::{
     create_form_field_impl, fill_form_fields_impl, list_form_fields_impl, CreateFormFieldRequest,
     FillFormRequest,
@@ -268,6 +267,7 @@ use openpdfedit_session::textedit::{
     edit_text_run_impl, list_image_placements_impl, list_text_runs_impl, move_image_impl,
     move_text_run_impl, EditTextRunRequest, MoveImageRequest, MoveTextRunRequest,
 };
+use openpdfedit_session::unmark::{remove_markup_impl, RemoveMarkupRequest};
 use openpdfedit_session::watermark::{apply_watermark_impl, ApplyWatermarkRequest};
 use openpdfedit_session::xfdf::{export_xfdf_impl, import_xfdf_impl};
 use openpdfedit_session::{

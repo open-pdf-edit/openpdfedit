@@ -59,7 +59,11 @@ fn page_pdf(
 
     let content_id = doc.add_object(Stream::new(
         dictionary! {},
-        Content { operations: build() }.encode().unwrap(),
+        Content {
+            operations: build(),
+        }
+        .encode()
+        .unwrap(),
     ));
     let mut page = dictionary! {
         "Type" => "Page", "Parent" => pages_id,
@@ -77,7 +81,7 @@ fn page_pdf(
     doc.objects.insert(
         pages_id,
         Object::Dictionary(dictionary! {
-            "Type" => "Pages", "Kids" => vec![page_id.into()], "Count" => 1 }),
+        "Type" => "Pages", "Kids" => vec![page_id.into()], "Count" => 1 }),
     );
     let catalog = doc.add_object(dictionary! { "Type" => "Catalog", "Pages" => pages_id });
     doc.trailer.set("Root", catalog);
@@ -105,7 +109,14 @@ fn draw_full_page(name: &str) -> Vec<Operation> {
         Operation::new("q", vec![]),
         Operation::new(
             "cm",
-            vec![612.into(), 0.into(), 0.into(), 792.into(), 0.into(), 0.into()],
+            vec![
+                612.into(),
+                0.into(),
+                0.into(),
+                792.into(),
+                0.into(),
+                0.into(),
+            ],
         ),
         Operation::new("Do", vec![name.into()]),
         Operation::new("Q", vec![]),
@@ -141,8 +152,14 @@ fn a_flattened_markup_layer_comes_off_and_the_document_stays() {
 
     let saved = doc.save_incremental().expect("should save");
     let ops = operators(&saved);
-    assert!(!ops.contains(&"Do".to_string()), "the overlay must be gone: {ops:?}");
-    assert!(ops.contains(&"Tj".to_string()), "the document under it must not be: {ops:?}");
+    assert!(
+        !ops.contains(&"Do".to_string()),
+        "the overlay must be gone: {ops:?}"
+    );
+    assert!(
+        ops.contains(&"Tj".to_string()),
+        "the document under it must not be: {ops:?}"
+    );
 }
 
 /// Guard 3. A scan saved as a transparent PNG looks exactly like a
@@ -172,7 +189,10 @@ fn a_full_page_image_without_a_soft_mask_is_kept() {
 
     let mut doc = Document::from_bytes(&bytes).expect("should parse");
     let removed = remove_markup(&mut doc).expect("should succeed");
-    assert_eq!(removed.layers, 0, "no alpha channel, no reason to call it an overlay");
+    assert_eq!(
+        removed.layers, 0,
+        "no alpha channel, no reason to call it an overlay"
+    );
 }
 
 /// Guard 2. A logo, a signature image, a photo with a cut-out
@@ -185,7 +205,14 @@ fn a_small_transparent_image_is_kept() {
             Operation::new("q", vec![]),
             Operation::new(
                 "cm",
-                vec![80.into(), 0.into(), 0.into(), 40.into(), 60.into(), 60.into()],
+                vec![
+                    80.into(),
+                    0.into(),
+                    0.into(),
+                    40.into(),
+                    60.into(),
+                    60.into(),
+                ],
             ),
             Operation::new("Do", vec!["Ov1".into()]),
             Operation::new("Q", vec![]),
@@ -207,20 +234,24 @@ fn markup_annotations_go_but_links_and_form_fields_stay() {
     let pages_id = doc.new_object_id();
     let content_id = doc.add_object(Stream::new(
         dictionary! {},
-        Content { operations: say_hello() }.encode().unwrap(),
+        Content {
+            operations: say_hello(),
+        }
+        .encode()
+        .unwrap(),
     ));
 
     let rect = || vec![10.into(), 10.into(), 100.into(), 40.into()];
     let highlight = doc.add_object(dictionary! {
-        "Type" => "Annot", "Subtype" => "Highlight", "Rect" => rect() });
+    "Type" => "Annot", "Subtype" => "Highlight", "Rect" => rect() });
     let ink = doc.add_object(dictionary! {
-        "Type" => "Annot", "Subtype" => "Ink", "Rect" => rect() });
+    "Type" => "Annot", "Subtype" => "Ink", "Rect" => rect() });
     let note = doc.add_object(dictionary! {
-        "Type" => "Annot", "Subtype" => "Text", "Rect" => rect() });
+    "Type" => "Annot", "Subtype" => "Text", "Rect" => rect() });
     let link = doc.add_object(dictionary! {
-        "Type" => "Annot", "Subtype" => "Link", "Rect" => rect() });
+    "Type" => "Annot", "Subtype" => "Link", "Rect" => rect() });
     let widget = doc.add_object(dictionary! {
-        "Type" => "Annot", "Subtype" => "Widget", "Rect" => rect(), "FT" => "Tx" });
+    "Type" => "Annot", "Subtype" => "Widget", "Rect" => rect(), "FT" => "Tx" });
 
     let page_id = doc.add_object(dictionary! {
         "Type" => "Page", "Parent" => pages_id,
@@ -234,7 +265,7 @@ fn markup_annotations_go_but_links_and_form_fields_stay() {
     doc.objects.insert(
         pages_id,
         Object::Dictionary(dictionary! {
-            "Type" => "Pages", "Kids" => vec![page_id.into()], "Count" => 1 }),
+        "Type" => "Pages", "Kids" => vec![page_id.into()], "Count" => 1 }),
     );
     let catalog = doc.add_object(dictionary! { "Type" => "Catalog", "Pages" => pages_id });
     doc.trailer.set("Root", catalog);

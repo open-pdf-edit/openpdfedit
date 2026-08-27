@@ -93,7 +93,10 @@ pub(crate) fn components_for(space: &Object, resolve: &dyn Fn(&Object) -> Object
             _ => None,
         },
         Object::Array(items) => {
-            let head = items.first().and_then(|o| o.as_name().ok()).map(<[u8]>::to_vec)?;
+            let head = items
+                .first()
+                .and_then(|o| o.as_name().ok())
+                .map(<[u8]>::to_vec)?;
             match head.as_slice() {
                 // `/N` is the component count, and is required.
                 b"ICCBased" => {
@@ -196,7 +199,9 @@ fn decode(dict: &Dictionary, data: &[u8], components: Option<usize>) -> Option<B
                 return None;
             }
             let components = components?;
-            let expected = (width as usize).checked_mul(height as usize)?.checked_mul(components)?;
+            let expected = (width as usize)
+                .checked_mul(height as usize)?
+                .checked_mul(components)?;
             // Short is corrupt; long usually means row padding this
             // code does not model. Either way, not ours to edit.
             if data.len() != expected {
@@ -321,15 +326,41 @@ mod tests {
     #[test]
     fn clears_the_named_corner_and_nothing_else() {
         let (dict, data) = grey_rgb();
-        let region = Rect { x0: 0.0, y0: 0.5, x1: 0.5, y1: 1.0 };
-        let stream = clear_regions(&dict, &data, &[region], Some(3), Fill::White).expect("should clear");
+        let region = Rect {
+            x0: 0.0,
+            y0: 0.5,
+            x1: 0.5,
+            y1: 1.0,
+        };
+        let stream =
+            clear_regions(&dict, &data, &[region], Some(3), Fill::White).expect("should clear");
         let out = stream.decompressed_content().unwrap_or(stream.content);
 
-        assert_eq!(pixel(&out, 4, 0, 0), [255, 255, 255], "top-left must be cleared");
-        assert_eq!(pixel(&out, 4, 1, 1), [255, 255, 255], "top-left must be cleared");
-        assert_eq!(pixel(&out, 4, 3, 0), [128, 128, 128], "top-right must survive");
-        assert_eq!(pixel(&out, 4, 0, 3), [128, 128, 128], "bottom-left must survive");
-        assert_eq!(pixel(&out, 4, 3, 3), [128, 128, 128], "bottom-right must survive");
+        assert_eq!(
+            pixel(&out, 4, 0, 0),
+            [255, 255, 255],
+            "top-left must be cleared"
+        );
+        assert_eq!(
+            pixel(&out, 4, 1, 1),
+            [255, 255, 255],
+            "top-left must be cleared"
+        );
+        assert_eq!(
+            pixel(&out, 4, 3, 0),
+            [128, 128, 128],
+            "top-right must survive"
+        );
+        assert_eq!(
+            pixel(&out, 4, 0, 3),
+            [128, 128, 128],
+            "bottom-left must survive"
+        );
+        assert_eq!(
+            pixel(&out, 4, 3, 3),
+            [128, 128, 128],
+            "bottom-right must survive"
+        );
     }
 
     #[test]
@@ -339,8 +370,14 @@ mod tests {
             "Width" => 2, "Height" => 1,
             "BitsPerComponent" => 8, "ColorSpace" => "DeviceCMYK",
         };
-        let region = Rect { x0: 0.0, y0: 0.0, x1: 1.0, y1: 1.0 };
-        let stream = clear_regions(&dict, &[200u8; 8], &[region], Some(4), Fill::White).expect("should clear");
+        let region = Rect {
+            x0: 0.0,
+            y0: 0.0,
+            x1: 1.0,
+            y1: 1.0,
+        };
+        let stream = clear_regions(&dict, &[200u8; 8], &[region], Some(4), Fill::White)
+            .expect("should clear");
         let out = stream.decompressed_content().unwrap_or(stream.content);
         assert_eq!(out, vec![0u8; 8], "255 in CMYK is solid ink, not white");
     }
@@ -353,7 +390,12 @@ mod tests {
     /// instead of writing bytes it has misread.
     #[test]
     fn refuses_images_it_would_have_to_guess_at() {
-        let region = Rect { x0: 0.0, y0: 0.0, x1: 1.0, y1: 1.0 };
+        let region = Rect {
+            x0: 0.0,
+            y0: 0.0,
+            x1: 1.0,
+            y1: 1.0,
+        };
         let base = dictionary! {
             "Type" => "XObject", "Subtype" => "Image",
             "Width" => 2, "Height" => 1,
@@ -387,7 +429,12 @@ mod tests {
     #[test]
     fn refuses_samples_that_are_not_the_size_they_claim() {
         let (dict, _) = grey_rgb();
-        let region = Rect { x0: 0.0, y0: 0.0, x1: 1.0, y1: 1.0 };
+        let region = Rect {
+            x0: 0.0,
+            y0: 0.0,
+            x1: 1.0,
+            y1: 1.0,
+        };
         assert!(clear_regions(&dict, &[128u8; 10], &[region], Some(3), Fill::White).is_none());
     }
 
@@ -404,8 +451,14 @@ mod tests {
             "BitsPerComponent" => 8, "ColorSpace" => "DeviceRGB",
             "Filter" => "DCTDecode",
         };
-        let region = Rect { x0: 0.0, y0: 0.0, x1: 0.5, y1: 1.0 };
-        let stream = clear_regions(&dict, &source, &[region], Some(3), Fill::White).expect("should clear");
+        let region = Rect {
+            x0: 0.0,
+            y0: 0.0,
+            x1: 0.5,
+            y1: 1.0,
+        };
+        let stream =
+            clear_regions(&dict, &source, &[region], Some(3), Fill::White).expect("should clear");
 
         assert_eq!(
             stream.dict.get(b"Filter").unwrap(),
@@ -413,10 +466,17 @@ mod tests {
             "a scan must not come back as eight megabytes of raw samples"
         );
 
-        let decoder = JpegDecoder::new(std::io::Cursor::new(&stream.content)).expect("should reopen");
+        let decoder =
+            JpegDecoder::new(std::io::Cursor::new(&stream.content)).expect("should reopen");
         let mut out = vec![0u8; decoder.total_bytes() as usize];
         decoder.read_image(&mut out).expect("should decode");
-        assert!(pixel(&out, 16, 2, 8)[0] > 200, "the cleared half must be white");
-        assert!(pixel(&out, 16, 13, 8)[0] < 120, "the other half must survive");
+        assert!(
+            pixel(&out, 16, 2, 8)[0] > 200,
+            "the cleared half must be white"
+        );
+        assert!(
+            pixel(&out, 16, 13, 8)[0] < 120,
+            "the other half must survive"
+        );
     }
 }
