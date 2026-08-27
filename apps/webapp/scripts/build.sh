@@ -118,6 +118,41 @@ log "OCR languages: $(printf '%s ' "${TRAINED[@]##*/}" | sed 's/\.traineddata//g
 # which is the whole claim, and only demonstrable if it's true offline.
 log "Adding the offline service worker"
 cp "$WEBAPP_DIR/manifest.webmanifest" "$DIST_DIR/manifest.webmanifest"
+
+# The app host needs its own crawler files. Without a robots.txt, a
+# request for /robots.txt falls through to the SPA fallback and answers
+# with the app's HTML and a 200 — which is not a robots.txt, but is also
+# not the 404 that would make a crawler assume "no rules". A sitemap
+# listing the one real URL is the other half: this host has exactly one
+# page, however many addresses reach it.
+log "Writing robots.txt and sitemap.xml for the app host"
+cat > "$DIST_DIR/robots.txt" <<'ROBOTS'
+# app.openpdfedit.com is the editor itself. It is one page — every path
+# here serves it — so there is one URL worth indexing and a canonical on
+# the page pointing at it.
+User-agent: *
+Allow: /$
+Allow: /index.html
+# Build output: hashed bundles, the wasm, and the OCR language data.
+# Nothing here reads as a page, and a crawler spending its budget on a
+# 4 MB wasm binary is spending it on nothing.
+Disallow: /app/
+Disallow: /wasm-gen/
+Disallow: /tesseract/
+
+Sitemap: https://app.openpdfedit.com/sitemap.xml
+ROBOTS
+cat > "$DIST_DIR/sitemap.xml" <<SITEMAP
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url>
+    <loc>https://app.openpdfedit.com/</loc>
+    <lastmod>$(date -u +%Y-%m-%d)</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+</urlset>
+SITEMAP
 # The install icons. Separate from static/favicon.png, which is 256px and
 # is what the manifest used to point at while claiming 512 — a size no
 # browser could verify without downloading it, and one that stops Chrome
@@ -164,6 +199,19 @@ const html = readFileSync(file, "utf8");
 if (html.includes("service-worker.js")) process.exit(0);
 const inject = [
   '<link rel="manifest" href="./manifest.webmanifest">',
+  // Every path on this host answers with this same file and a 200 —
+  // that is what makes a single-page app work, and it also means a
+  // crawler that guesses a URL is told the page exists. Left alone, one
+  // thin page gets indexed under unlimited addresses, all competing
+  // with each other and with the marketing site. A self-canonical
+  // collapses them back into one.
+  '<link rel="canonical" href="https://app.openpdfedit.com/">',
+  // The app is the tool; openpdfedit.com is what should rank for
+  // someone still deciding. Indexed so the app can be found and cited
+  // directly, with a description of its own rather than whatever a
+  // crawler scrapes off an empty editor shell.
+  '<meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1">',
+  '<meta name="description" content="Edit PDFs in your browser — annotate, edit text, fill forms, redact, sign and reorganise pages. Nothing is uploaded: every page renders and every edit saves on your own machine. Free, no account, works offline.">',
   // iOS reads none of the manifest's icons: it wants this tag, and puts
   // a white card behind anything transparent, which is why the file is
   // full-bleed rather than the artwork as drawn.
