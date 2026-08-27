@@ -1,0 +1,15 @@
+[package]
+name = "openpdfedit-unmark"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Removes markup from a document: annotations a person added, and pen-and-highlighter layers that were flattened into the page as a full-page transparent overlay image."
+
+[dependencies]
+openpdfedit-doc.workspace = true
+lopdf.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+openpdfedit-engine.workspace = true

@@ -50,6 +50,7 @@ import type {
   EncryptStats,
   ExportXfdfResult,
   FlattenResultDto,
+  RemoveMarkupResultDto,
   ImportXfdfResult,
   OutlineEntryDto,
   SearchResultsDto,
@@ -372,6 +373,7 @@ interface WasmSessionHandle {
   /** Mutating/rotates. `requestJson` is a `FlattenDocumentRequest`;
    * returns a `FlattenResultDto` JSON string. */
   flattenDocument(requestJson: string): string;
+  removeMarkup(requestJson: string): string;
   /** Export — returns the encrypted bytes for the extension to download.
    * `choicesJson` is an `EncryptChoices`. */
   encryptDocumentBytes(handle: number, choicesJson: string): Uint8Array;
@@ -1652,6 +1654,17 @@ export const wasmBackend: Backend = {
     return {
       ...result,
       document: migrateOpenDoc("flattenDocument", request.handle, JSON.stringify(result.document)),
+    };
+  },
+
+  async removeMarkup(request) {
+    const session = await ensureSession();
+    // Same shape as flattenDocument: the rotated document is one field
+    // of the result, so the migration reaches inside it.
+    const result = JSON.parse(session.removeMarkup(JSON.stringify(request))) as RemoveMarkupResultDto;
+    return {
+      ...result,
+      document: migrateOpenDoc("removeMarkup", request.handle, JSON.stringify(result.document)),
     };
   },
 

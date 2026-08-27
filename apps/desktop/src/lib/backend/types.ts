@@ -102,6 +102,19 @@ export interface FlattenResultDto {
   popupsRemoved: number;
 }
 
+export interface RemoveMarkupRequest {
+  handle: number;
+}
+
+export interface RemoveMarkupResultDto {
+  document: OpenedDocument;
+  /** Annotations deleted — highlights, notes, ink, stamps. */
+  annotations: number;
+  /** Pen-and-highlighter layers already flattened into the page,
+   * dropped from its content. Usually one per marked-up page. */
+  layers: number;
+}
+
 /** One row of the document's outline. Mirrors `OutlineEntryDto` in
  * `crates/openpdfedit-session/src/outline.rs`. */
 export interface OutlineEntryDto {
@@ -559,6 +572,11 @@ export interface Backend {
   /** Bakes markup (and optionally filled form values) into the page.
    * Mutating — rotates the handle, and is undoable. */
   flattenDocument(request: FlattenDocumentRequest): Promise<FlattenResultDto>;
+
+  /** Takes markup off the document: annotations, and pen layers already
+   * flattened into the page. Mutating — rotates the handle, and is
+   * undoable. */
+  removeMarkup(request: RemoveMarkupRequest): Promise<RemoveMarkupResultDto>;
 
   /** Writes a password-protected copy, picking a destination the way
    * this backend does. Resolves to `null` if the user cancelled.

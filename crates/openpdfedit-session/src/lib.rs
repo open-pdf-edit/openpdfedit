@@ -242,6 +242,7 @@ pub mod annotations;
 pub mod compare;
 pub mod encrypt;
 pub mod flatten;
+pub mod unmark;
 pub mod forms;
 pub mod markdown;
 pub mod numbering;
@@ -1022,6 +1023,48 @@ pub fn commit_mutation<E: Engine, Err>(
 where
     Err: From<DocError> + From<SessionError>,
 {
+    commit_mutation_saving(
+        engine,
+        docs,
+        history,
+        store,
+        handle,
+        SaveMode::Incremental,
+        mutate,
+    )
+}
+
+/// How an edit is written to the working copy.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SaveMode {
+    /// Append the change and keep every earlier byte. Right for an
+    /// ordinary edit, and the only way to add to a signed document
+    /// without breaking the signature.
+    Incremental,
+    /// Prune and rewrite the whole file, so nothing removed survives
+    /// one revision back. See [`Document::save_full`].
+    Full,
+}
+
+/// [`commit_mutation`], choosing how the result is written.
+///
+/// Redaction is the reason this exists. Every other edit here is happy
+/// to be appended, but an incremental save keeps the bytes the edit was
+/// meant to destroy — the pre-redaction content stream stays in the
+/// file one revision back, and `strings` finds it. The removal was
+/// real, and the file still carried a copy of what was removed.
+pub fn commit_mutation_saving<E: Engine, Err>(
+    engine: &E,
+    docs: &Mutex<HashMap<DocHandle, OpenDoc>>,
+    history: &Mutex<HashMap<PathBuf, DocHistory>>,
+    store: &dyn WorkingStore,
+    handle: DocHandle,
+    save_mode: SaveMode,
+    mutate: impl FnOnce(&mut Document) -> Result<(), Err>,
+) -> Result<OpenedDocumentInfo, Err>
+where
+    Err: From<DocError> + From<SessionError>,
+{
     let path = {
         let mut docs_guard = docs.lock().expect("docs lock poisoned");
         let open_doc = docs_guard
@@ -1034,7 +1077,10 @@ where
         // already a fixed type parameter here.
         let pre_edit_snapshot = capture_pre_edit_snapshot::<Err>(store, &open_doc.path)?;
         mutate(&mut open_doc.doc)?;
-        let saved = open_doc.doc.save_incremental()?;
+        let saved = match save_mode {
+            SaveMode::Incremental => open_doc.doc.save_incremental()?,
+            SaveMode::Full => open_doc.doc.save_full()?,
+        };
         store.write(&open_doc.path, &saved)?;
         commit_undo_snapshot(history, &open_doc.path, pre_edit_snapshot);
         open_doc.path.clone()

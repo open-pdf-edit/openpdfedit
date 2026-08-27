@@ -817,9 +817,13 @@
     border-radius: 50%;
   }
 
+  /* White, because that is what the redaction leaves behind. A dark
+     preview over a light result told people the wrong thing about what
+     they were about to do; the dashed edge is what makes an area of
+     white legible as a selection while it is being dragged. */
   .drag-preview.redact-preview {
-    background: var(--black-60);
-    border: var(--border-width) solid var(--black-90);
+    background: var(--white-90);
+    border: var(--border-width) dashed var(--black-70);
   }
 
   .drag-preview.signature-preview {

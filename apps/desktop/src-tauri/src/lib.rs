@@ -47,6 +47,7 @@ mod compress;
 mod encrypt;
 mod field_create;
 mod flatten;
+mod unmark;
 mod forms;
 mod license;
 mod numbering;
@@ -426,6 +427,7 @@ pub fn run() {
             pages::extract_pages_cmd,
             encrypt::encrypt_document_cmd,
             flatten::flatten_document_cmd,
+            unmark::remove_markup_cmd,
             forms::list_form_fields_cmd,
             forms::fill_form_fields_cmd,
             ocr::ocr_document_cmd,
