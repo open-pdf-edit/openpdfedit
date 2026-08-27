@@ -12,6 +12,7 @@ members = [
     "crates/openpdfedit-ocr",
     "crates/openpdfedit-sign",
     "crates/openpdfedit-redact",
+    "crates/openpdfedit-unmark",
     "crates/openpdfedit-watermark",
     "crates/openpdfedit-textedit",
     "crates/openpdfedit-xfdf",
@@ -21,6 +22,7 @@ members = [
     "crates/openpdfedit-license",
     "crates/openpdfedit-wasm",
     "apps/cli",
+    "apps/mcp",
     "apps/desktop/src-tauri",
 ]
 
@@ -43,6 +45,7 @@ openpdfedit-numbering = { path = "crates/openpdfedit-numbering" }
 openpdfedit-ocr = { path = "crates/openpdfedit-ocr" }
 openpdfedit-sign = { path = "crates/openpdfedit-sign" }
 openpdfedit-redact = { path = "crates/openpdfedit-redact" }
+openpdfedit-unmark = { path = "crates/openpdfedit-unmark" }
 openpdfedit-watermark = { path = "crates/openpdfedit-watermark" }
 openpdfedit-textedit = { path = "crates/openpdfedit-textedit" }
 openpdfedit-xfdf = { path = "crates/openpdfedit-xfdf" }
@@ -63,7 +66,10 @@ lru = "0.18"
 rand = "0.10"
 # Already a transitive dependency via pdfium-render; pinned here directly
 # for openpdfedit-ocr's PNG encoding (feeding rendered pages to tesseract).
-image = { version = "0.25", default-features = false, features = ["png"] }
+# `jpeg` alongside `png` because redaction has to be able to open a
+# scan: DCTDecode is what almost every scanner and phone camera writes,
+# and an image redaction can only clear the pixels it can decode.
+image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
 # Already a transitive dependency (via tauri); pinned here directly for
 # openpdfedit-batch's PII pattern matching.
 regex = "1"
