@@ -4,11 +4,28 @@
     <meta charset="utf-8" />
     <link rel="icon" href="%sveltekit.assets%/favicon.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-    <!-- Telegram's Mini App bridge. Loaded unconditionally and cheap: it
-         defines window.Telegram and does nothing else until asked, and in an
-         ordinary browser initData comes back empty, which is exactly how
-         $lib/telegram decides whether it is running inside Telegram. -->
-    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <!-- Telegram's Mini App bridge, fetched only when the page really is
+         one. It used to load unconditionally, on the reasoning that it is
+         cheap and inert outside Telegram. Cheap is not the test: it put a
+         request to a third party on every load of a product whose whole
+         claim is that it makes none, which contradicted privacy.html,
+         broke the test asserting a conversion involves nobody else, and
+         was refused outright by the extension's CSP.
+
+         Telegram passes initData in the URL fragment, so `tgWebApp` being
+         there is the signal, and it is readable before anything else
+         runs. `$lib/telegram` waits for the event below rather than
+         assuming the bridge is already present. -->
+    <script>
+      if (location.hash.indexOf("tgWebApp") !== -1) {
+        var tg = document.createElement("script");
+        tg.src = "https://telegram.org/js/telegram-web-app.js";
+        tg.onload = function () {
+          dispatchEvent(new Event("openpdfedit:telegram-ready"));
+        };
+        document.head.appendChild(tg);
+      }
+    </script>
     <title>OpenPdfEdit</title>
     %sveltekit.head%
   </head>

@@ -1,0 +1,60 @@
+# OpenPdfEdit
+
+> A PDF editor that runs on your own machine. Annotate, edit text, redact, fill and sign forms, reorganise pages, OCR scans and compare drafts — documents are never uploaded, because there is nowhere to upload them to.
+
+OpenPdfEdit is free and open source (MIT or Apache-2.0), with a Rust core
+and PDFium for rendering. It ships as a native app for macOS and Windows,
+a web app that runs entirely in the browser tab, and a Chrome extension —
+all built from one codebase.
+
+## What is true about it
+
+- **Nothing is uploaded.** The desktop binary contains no HTTP client at
+  all — not disabled, not opt-out, absent. The web app does the work in
+  the page rather than on a server. The source is public and the claim is
+  checkable.
+- **No account is needed** to install it, use it, or save a file.
+- **No watermark on your output, no page limit, no export cap.**
+- **No analytics, telemetry or crash reporting.**
+- **No AI features.** There are none in the product.
+- **Free**, except two tools: watermarking and OCR are unlocked together
+  for a single one-time payment of 1,000 credits. Everything else is free.
+
+## What it does
+
+Read and navigate (tiled rendering, find-in-document across line wraps,
+bookmarks, thumbnails, tabs, undo/redo). Annotate (highlight, underline,
+strikeout, sticky notes, freehand ink, shapes, comment list, XFDF import
+and export, flatten). Edit content (replace a line of text in place, move
+text runs, move images, true redaction). Organise pages (reorder, rotate,
+delete, insert, split, merge, crop, page numbers). Forms and signing (fill
+fields, add fields, draw and place signatures). Protect and finish
+(password encryption, compression, watermark). Read scans and compare
+drafts (OCR in twelve languages, text and pixel comparison between two
+documents).
+
+## Things people get wrong about it
+
+- **Redaction is real content removal**, not a black rectangle drawn over
+  live text. The words are removed from the page's content stream —
+  including text inside form XObjects — the covered pixels of an image are
+  overwritten, and the file is rewritten rather than appended to, so
+  nothing survives in an earlier revision. The box drawn on top is a
+  second line of defence, not the mechanism.
+- **OCR runs locally.** The recogniser and its language data are served
+  from this site's own origin and run in the browser or on the desktop;
+  the scan is not sent anywhere.
+- **The web app works offline** after its first load, including across a
+  reload.
+- **Editing text does not reflow the page.** A PDF stores positioned
+  glyphs rather than paragraphs, so a replaced line does not push the
+  lines around it. When the original font is not embedded, the substitute
+  is named rather than swapped in silently.
+
+## Links
+
+- [Home](https://openpdfedit.com/): what it does, every tool, and how to run it
+- [Web app](https://app.openpdfedit.com/): the editor, in a browser tab, no install
+- [Privacy](https://openpdfedit.com/privacy.html): what it does and does not send
+- [Source](https://github.com/open-pdf-edit/OpenPdfEdit): GitHub
+- [Releases](https://github.com/open-pdf-edit/OpenPdfEdit/releases/latest): macOS and Windows builds

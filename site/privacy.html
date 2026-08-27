@@ -7,6 +7,16 @@
 <meta name="description" content="OpenPdfEdit does not upload your documents. There is no analytics, no telemetry, and the only network request it makes is an optional sign-in.">
 <meta name="theme-color" content="#111111">
 <link rel="canonical" href="https://openpdfedit.com/privacy.html">
+<meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="OpenPdfEdit">
+<meta property="og:locale" content="en">
+<meta property="og:url" content="https://openpdfedit.com/privacy.html">
+<meta property="og:title" content="Privacy — OpenPdfEdit">
+<meta property="og:description" content="OpenPdfEdit does not upload your documents. There is no analytics, no telemetry, and the only network request it makes is an optional sign-in.">
+<meta property="og:image" content="https://openpdfedit.com/og.png">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="https://openpdfedit.com/og.png">
 <style>
 /* ---------- Fonts ---------- */
 @font-face{font-family:"Geist";src:url("fonts/Geist-Light.woff2") format("woff2");font-weight:300;font-display:swap}
@@ -421,6 +431,15 @@ footer{border-top:1px solid var(--white-10);background:var(--color-background-al
     <p class="tool-desc" style="font-size:16px;margin-top:14px">
       Signing in is the only network request the app makes on your behalf. Never signing in means
       it makes none at all.
+    </p>
+    <p class="tool-desc" style="font-size:16px;margin-top:14px">
+      One exception, and only where it cannot be otherwise: opened inside Telegram as a Mini App,
+      the page loads Telegram's own bridge script from <span class="mono">telegram.org</span> —
+      that is what makes it a Mini App rather than a web page in a webview. It is fetched only
+      when the app is actually running inside Telegram, never in an ordinary browser, and it
+      carries no document either. Documents stay on the device there too: the app takes files
+      through the webview's own file picker rather than through the bot, which is the route that
+      would put them on Telegram's servers.
     </p>
   </div>
 </section>

@@ -64,7 +64,12 @@ rsync -az --delete --human-readable --stats ${RSYNC_EXTRA[@]+"${RSYNC_EXTRA[@]}"
 
 if [ -n "$WITH_SITE" ]; then
   log "Publishing the marketing site to $HOST:$SITE_ROOT"
-  rsync -az --delete --human-readable ${RSYNC_EXTRA[@]+"${RSYNC_EXTRA[@]}"} site/ "$HOST:$SITE_ROOT/"
+  # site/scripts/ generates og.png and the page's JSON-LD; the generators
+  # are source, not something to serve out of the public web root.
+  # site/README.md is for whoever edits the site, not for a visitor.
+  rsync -az --delete --human-readable \
+    --exclude 'scripts/' --exclude 'README.md' \
+    ${RSYNC_EXTRA[@]+"${RSYNC_EXTRA[@]}"} site/ "$HOST:$SITE_ROOT/"
 fi
 
 if [ -n "${DRY_RUN:-}" ]; then

@@ -164,6 +164,16 @@ export function tap(): void {
  * the detection.
  */
 export function initTelegram(): boolean {
+  if (setUp()) return true;
+  // The bridge is now fetched rather than already present — see
+  // `app.html` for why — so inside Telegram it can land after the app has
+  // mounted. Outside Telegram the event never fires and this costs a
+  // listener that is never called.
+  addEventListener("openpdfedit:telegram-ready", () => void setUp(), { once: true });
+  return false;
+}
+
+function setUp(): boolean {
   const app = webApp();
   if (!app) return false;
 
