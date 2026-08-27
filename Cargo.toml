@@ -22,7 +22,6 @@ members = [
     "crates/openpdfedit-license",
     "crates/openpdfedit-wasm",
     "apps/cli",
-    "apps/mcp",
     "apps/desktop/src-tauri",
 ]
 
