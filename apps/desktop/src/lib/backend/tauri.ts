@@ -35,6 +35,7 @@ import type {
   EncryptStats,
   ExportXfdfResult,
   FlattenResultDto,
+  RemoveMarkupResultDto,
   ImportXfdfResult,
   OutlineEntryDto,
   SearchResultsDto,
@@ -208,6 +209,10 @@ export const tauriBackend: Backend = {
 
   async flattenDocument(request) {
     return invoke<FlattenResultDto>("flatten_document_cmd", { request });
+  },
+
+  async removeMarkup(request) {
+    return invoke<RemoveMarkupResultDto>("remove_markup_cmd", { request });
   },
 
   async encryptDocument(handle, choices) {

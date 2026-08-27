@@ -267,6 +267,52 @@
     }
   }
 
+  // ---- Remove markup ----
+  let unmarkBusy = $state(false);
+
+  async function handleRemoveMarkup() {
+    if (!doc || mutationBusy) return;
+    const handle = doc.handle;
+
+    const confirmed = await showConfirm(
+      "Highlights, notes, ink and stamps are deleted from every page — including pen and " +
+        "highlighter that was already flattened into the page by whatever app exported it, " +
+        "which nothing else here can reach.\n\n" +
+        "The document underneath is left alone, and ⌘Z undoes it. This tidies a document " +
+        "rather than sanitising it: use Redact if the markup itself must not be recoverable.",
+      { title: "Remove markup", confirmLabel: "Remove markup" },
+    );
+    if (!confirmed) return;
+
+    error = null;
+    unmarkBusy = true;
+    mutationBusy = true;
+    try {
+      const result = await backend.removeMarkup({ handle });
+      doc = result.document;
+      await Promise.all([refreshAnnotations(), refreshFormFields(), refreshSignatures()]);
+
+      const parts: string[] = [];
+      if (result.annotations > 0) {
+        parts.push(`${result.annotations} annotation${result.annotations === 1 ? "" : "s"}`);
+      }
+      if (result.layers > 0) {
+        parts.push(`${result.layers} flattened layer${result.layers === 1 ? "" : "s"}`);
+      }
+      showToast(
+        parts.length === 0
+          ? "Nothing to remove — no annotations, and no flattened pen layer this can identify."
+          : `Removed ${parts.join(" and ")}. ⌘Z undoes it.`,
+        { title: "Remove markup" },
+      );
+    } catch (e) {
+      error = formatError(e);
+    } finally {
+      unmarkBusy = false;
+      mutationBusy = false;
+    }
+  }
+
   // ---- Contents (bookmarks) ----
   let showOutline = $state(false);
   let outline = $state<OutlineEntryDto[]>([]);
@@ -2294,6 +2340,16 @@
             >
               <Icon name="layers" size={15} spin={flattenBusy} />
             <span class="tools__label">Flatten</span>
+            </button>
+            <button
+              class="oa-icon-btn oa-icon-btn--sm"
+              onclick={handleRemoveMarkup}
+              disabled={unmarkBusy || mutationBusy}
+              use:tooltip={"Remove markup — delete annotations, and pen layers already flattened into the page"}
+              aria-label="Remove markup"
+            >
+              <Icon name="eraser" size={15} spin={unmarkBusy} />
+            <span class="tools__label">Remove markup</span>
             </button>
             <button
               class="oa-icon-btn oa-icon-btn--sm"

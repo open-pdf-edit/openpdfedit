@@ -9,6 +9,8 @@ description = "True content-removal redaction: rewrites a page's content stream,
 [dependencies]
 openpdfedit-doc.workspace = true
 lopdf.workspace = true
+# Redacting part of an image means editing its pixels — see `pixels.rs`.
+image.workspace = true
 thiserror.workspace = true
 
 [dev-dependencies]

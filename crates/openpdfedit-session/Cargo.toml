@@ -30,6 +30,9 @@ openpdfedit-pages.workspace = true
 # and `signatures` needs `openpdfedit-sign` for its byte-level scan.
 openpdfedit-textedit.workspace = true
 openpdfedit-redact.workspace = true
+# `unmark`'s remove-markup command: the inverse of flatten, and the only
+# thing that can reach pen strokes already baked into a page.
+openpdfedit-unmark.workspace = true
 # `watermark`'s tiled page stamps; the logo crosses the boundary as
 # base64-encoded raw RGBA, hence the `base64` dep alongside it.
 openpdfedit-watermark.workspace = true

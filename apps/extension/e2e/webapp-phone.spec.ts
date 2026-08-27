@@ -440,6 +440,7 @@ test("a phone names the document tools too, since it has no hover", async ({ bro
   await expect(sheet.locator(".tools__heading").first()).toBeVisible();
   await expect(sheet.locator(".tools__label", { hasText: /^OCR$/ })).toBeVisible();
   await expect(sheet.locator(".tools__label", { hasText: /^Watermark$/ })).toBeVisible();
+  await expect(sheet.locator(".tools__label", { hasText: /^Remove markup$/ })).toBeVisible();
 
   // The sheet is taller than the room it has, so it must scroll rather
   // than wrap into a second column running off the right edge — which is

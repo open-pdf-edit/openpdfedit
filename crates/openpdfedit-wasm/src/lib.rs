@@ -249,6 +249,7 @@ use openpdfedit_session::annotations::{
 use openpdfedit_session::compare::compare_bytes;
 use openpdfedit_session::encrypt::{encrypt_document_bytes, EncryptChoices};
 use openpdfedit_session::flatten::{flatten_document_impl, FlattenDocumentRequest};
+use openpdfedit_session::unmark::{remove_markup_impl, RemoveMarkupRequest};
 use openpdfedit_session::forms::{
     create_form_field_impl, fill_form_fields_impl, list_form_fields_impl, CreateFormFieldRequest,
     FillFormRequest,
@@ -1152,6 +1153,24 @@ impl WasmSession {
         let request: FlattenDocumentRequest =
             serde_json::from_str(request_json).map_err(to_js_err)?;
         let result = flatten_document_impl(
+            &self.state.engine,
+            &self.state.docs,
+            &self.state.history,
+            &*self.state.store,
+            request,
+        )
+        .map_err(to_js_err)?;
+        serde_json::to_string(&result).map_err(to_js_err)
+    }
+
+    /// Takes markup off the document — annotations, and pen layers
+    /// already flattened into the page — returning a
+    /// `RemoveMarkupResultDto` JSON string. Mutating: rotates the
+    /// handle like every other mutating method here, and is undoable.
+    #[wasm_bindgen(js_name = removeMarkup)]
+    pub fn remove_markup(&self, request_json: &str) -> Result<String, JsValue> {
+        let request: RemoveMarkupRequest = serde_json::from_str(request_json).map_err(to_js_err)?;
+        let result = remove_markup_impl(
             &self.state.engine,
             &self.state.docs,
             &self.state.history,
