@@ -22,6 +22,8 @@ import { OpenAppsError } from "@openapps/sdk";
 /// `accounts.openapps.network` on the OAuth callback hop, and a wallet
 /// signature prompt still names that host. Neither is a security
 /// property — the server never checks either string against the request.
+import { getClient } from "@openapps/ui";
+
 export const OPENAPPS_BASE_URL = "https://auth.openpdfedit.com";
 
 /// Holds the app key that turns a user's token into an actual charge.
@@ -144,4 +146,49 @@ export async function unlockSupporter(accessToken: string | undefined): Promise<
       message: e instanceof OpenAppsError ? e.message : "network error",
     };
   }
+}
+
+
+/**
+ * Sign in with the Telegram session this Mini App already has.
+ *
+ * The one login flow that needs no popup, no redirect and no injected
+ * signer: `initData` is already in the page. That matters more here than
+ * elsewhere — a Mini App webview hosts no wallet extension, and a full-page
+ * OAuth redirect out of it is a poor experience even when it works.
+ *
+ * Resolves true if a session was established. Callers should fall back to
+ * the ordinary sign-in flow on false rather than treating it as fatal:
+ * `initData` expires, and a stale one is a normal thing to encounter.
+ */
+export async function signInWithTelegram(initData: string): Promise<boolean> {
+  const challenge = await fetch(`${OPENAPPS_BASE_URL}/v1/auth/challenge`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ namespace: "telegram" }),
+  });
+  if (!challenge.ok) return false;
+  const { challenge_id } = (await challenge.json()) as { challenge_id: string };
+
+  const verified = await fetch(`${OPENAPPS_BASE_URL}/v1/auth/verify`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      challenge_id,
+      proof: { type: "telegram_init_data", init_data: initData },
+    }),
+  });
+  if (!verified.ok) return false;
+
+  const session = (await verified.json()) as {
+    access_token?: string;
+    refresh_token?: string;
+  };
+  if (!session.access_token || !session.refresh_token) return false;
+
+  // Hand the tokens to the shared client rather than writing storage
+  // directly — adoptSession is what notifies every <openapps-*> element on
+  // the page that there is a session now.
+  getClient()?.adoptSession(session.access_token, session.refresh_token);
+  return true;
 }

@@ -25,7 +25,8 @@
   import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
   import { listen, type UnlistenFn } from "@tauri-apps/api/event";
   import { getClient, onChange, notify } from "@openapps/ui";
-  import { SESSION_STORAGE_KEY, SIGNIN_DONE_MESSAGE } from "$lib/openapps";
+  import { SESSION_STORAGE_KEY, SIGNIN_DONE_MESSAGE, signInWithTelegram } from "$lib/openapps";
+  import { initData as telegramInitData, isTelegram } from "$lib/telegram";
   import Icon from "./Icon.svelte";
   import { showToast } from "./toast.svelte";
 
@@ -108,6 +109,25 @@
   }
 
   function signIn(): void {
+    // Inside Telegram the session is already on the page — no popup, no
+    // redirect, no injected signer, none of which a Mini App webview
+    // handles well anyway. Falls through to the ordinary flow if the
+    // initData has expired, which is a normal thing to happen rather than
+    // an error worth showing.
+    const tg = isTelegram() ? telegramInitData() : null;
+    if (tg) {
+      void signInWithTelegram(tg).then((ok) => {
+        if (ok) {
+          sessionChangedElsewhere();
+        } else {
+          showToast("Telegram sign-in expired. Reopen the app and try again.", {
+            tone: "warning",
+            title: "Sign-in failed",
+          });
+        }
+      });
+      return;
+    }
     if (!tauriAvailable) {
       // The browser builds (web app, extension page) get a real popup
       // rather than the short-circuit that used to live here. Same

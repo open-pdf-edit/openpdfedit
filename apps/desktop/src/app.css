@@ -4,3 +4,25 @@
 @import "./lib/styles/tokens.css";
 @import "./lib/styles/base.css";
 @import "./lib/styles/components.css";
+
+/* --- Telegram Mini App ---------------------------------------------------
+   Only applies when $lib/telegram found a real Telegram session, so an
+   ordinary browser is untouched.
+
+   Telegram's own chrome overlaps the webview, which makes 100vh wrong by
+   exactly that much — a full-height editor puts its toolbar under the drag
+   handle. --tg-viewport-height is set from viewportStableHeight and kept
+   current through the viewportChanged event. */
+html.in-telegram,
+html.in-telegram body {
+  height: var(--tg-viewport-height, 100vh);
+  overflow: hidden;
+  /* The webview can sit under a rounded corner or a home indicator. */
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* Telegram supplies its own back button in the header, so ours would be a
+   second one doing the same thing. */
+html.in-telegram .app-back-button {
+  display: none;
+}

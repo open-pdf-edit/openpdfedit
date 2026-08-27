@@ -3,7 +3,12 @@
   <head>
     <meta charset="utf-8" />
     <link rel="icon" href="%sveltekit.assets%/favicon.png" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <!-- Telegram's Mini App bridge. Loaded unconditionally and cheap: it
+         defines window.Telegram and does nothing else until asked, and in an
+         ordinary browser initData comes back empty, which is exactly how
+         $lib/telegram decides whether it is running inside Telegram. -->
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <title>OpenPdfEdit</title>
     %sveltekit.head%
   </head>
