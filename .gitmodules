@@ -1,0 +1,3 @@
+[submodule "apps/mcp"]
+	path = apps/mcp
+	url = https://github.com/Open-Capture/openpdfedit-mcp.git
