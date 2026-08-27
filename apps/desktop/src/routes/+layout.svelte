@@ -16,6 +16,10 @@
   // `backend` is already the right implementation the moment it runs)
   // never observes the pre-resolution default.
   import { initBackend } from "$lib/backend";
+  // Running inside Telegram changes theme, viewport and the back button, and
+  // all three want to be right before the first paint rather than corrected
+  // after it. A no-op in an ordinary browser — see $lib/telegram.
+  import { initTelegram } from "$lib/telegram";
 
   // One definition, imported — never a second literal here. See
   // $lib/openapps for what this host is and why it isn't the backend's
@@ -24,6 +28,7 @@
 
   let { children } = $props();
   const backendReady = initBackend();
+  if (typeof window !== "undefined") initTelegram();
 </script>
 
 {#await backendReady then}
