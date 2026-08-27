@@ -378,7 +378,15 @@ footer{border-top:1px solid var(--white-10);background:var(--color-background-al
    are grid items and so all the same height, but their descriptions are
    not the same length — without this the buttons sit at three different
    heights across one row. */
-.way-cta{margin-top:auto;padding-top:4px}
+/* No padding-top here. It read as "4px of space above the button", but
+   .btn is inline-flex and its own padding is what 4px replaced — so the
+   label sat 6px below the pill's top edge and 14px above its bottom,
+   off-centre, and these three buttons were 10px shorter than the
+   identical ones in the hero. The gap from the paragraph is the .way
+   column's own `gap`, and `flex:1` on the description is what pushes
+   the button down; margin-top:auto is belt and braces for a card whose
+   description happens to be short. */
+.way-cta{margin-top:auto}
 .way-note{
   font-family:var(--font-mono);font-size:11px;line-height:1.5;color:var(--white-40);
 }
