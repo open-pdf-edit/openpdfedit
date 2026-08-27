@@ -104,9 +104,11 @@ fn run_redact_pii(args: &[String]) -> Result<(), String> {
     let mut doc = Document::open(input).map_err(|e| format!("failed to open {input:?}: {e}"))?;
     let report = openpdfedit_batch::redact_pii(&mut doc, &patterns)
         .map_err(|e| format!("redaction failed: {e}"))?;
-    let saved = doc
-        .save_incremental()
-        .map_err(|e| format!("save failed: {e}"))?;
+    // Full rewrite, not an incremental save. An incremental save appends
+    // the redaction while keeping every original byte, so the text this
+    // command just removed stayed in the output file one revision back —
+    // recoverable with `strings`. See Document::save_full.
+    let saved = doc.save_full().map_err(|e| format!("save failed: {e}"))?;
     std::fs::write(output, saved).map_err(|e| format!("failed to write {output:?}: {e}"))?;
 
     println!(

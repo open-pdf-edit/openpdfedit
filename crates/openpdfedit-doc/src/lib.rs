@@ -1217,6 +1217,73 @@ impl Document {
         Ok(name)
     }
 
+    /// The page's effective `/Resources` — its own, or the nearest
+    /// ancestor's, since resources are an inheritable page attribute
+    /// (ISO 32000 §7.7.3.4). Returns an empty dictionary when the chain
+    /// declares none.
+    pub fn page_resources(&self, page_index: u32) -> Result<Dictionary, DocError> {
+        let mut dict_id = self.page_object_id(page_index)?;
+        // Shallow in practice; bounded so a cyclic /Parent in a hostile
+        // file cannot spin forever.
+        for _ in 0..64 {
+            let dict = self.dict_at(dict_id)?;
+            match dict.get(b"Resources") {
+                Ok(Object::Reference(id)) => return Ok(self.dict_at(*id)?.clone()),
+                Ok(Object::Dictionary(d)) => return Ok(d.clone()),
+                _ => {}
+            }
+            match dict.get(b"Parent") {
+                Ok(Object::Reference(parent)) => dict_id = *parent,
+                _ => break,
+            }
+        }
+        Ok(Dictionary::new())
+    }
+
+    /// Points `category`/`name` in a page's resources at `id`,
+    /// replacing whatever was there.
+    ///
+    /// [`merge_page_resource`](Self::merge_page_resource) is the additive
+    /// sibling: it finds a free name and never disturbs an existing
+    /// entry. This one exists for edits that rewrite a resource in
+    /// place — redaction copying an image, clearing the redacted
+    /// pixels, and pointing the page at the copy — where keeping the
+    /// original name means the content stream's `Do` calls need no
+    /// rewriting at all.
+    ///
+    /// Everything on the way to the entry is copied onto this page
+    /// before being changed: the resource dictionary and the category
+    /// dictionary inside it are both routinely shared between the pages
+    /// of a scanned document, or inherited from `/Pages`, and editing
+    /// one in place would put this page's redaction holes on every page
+    /// that shares it. Copying costs a small dictionary of references
+    /// per redacted page.
+    pub fn set_page_resource(
+        &mut self,
+        page_index: u32,
+        category: &str,
+        name: &str,
+        id: ObjectId,
+    ) -> Result<(), DocError> {
+        let page_id = self.page_object_id(page_index)?;
+        let mut resources = self.page_resources(page_index)?;
+
+        let mut entries = match resources.get(category.as_bytes()) {
+            Ok(Object::Reference(id)) => self.dict_at(*id)?.clone(),
+            Ok(Object::Dictionary(d)) => d.clone(),
+            _ => Dictionary::new(),
+        };
+        entries.set(name, Object::Reference(id));
+        resources.set(category, Object::Dictionary(entries));
+
+        let mut page_dict = self.dict_at(page_id)?.clone();
+        page_dict.set("Resources", Object::Dictionary(resources));
+        self.current
+            .objects
+            .insert(page_id, Object::Dictionary(page_dict));
+        Ok(())
+    }
+
     fn dict_at(&self, id: ObjectId) -> Result<&Dictionary, DocError> {
         self.current
             .get_object(id)
@@ -1239,6 +1306,47 @@ impl Document {
     /// success, `original`/`original_bytes` become the new baseline, so a
     /// second call only writes what changed *since this call* — a proper
     /// revision chain, not a repeated full diff against the first load.
+    /// The whole document, rewritten from scratch.
+    ///
+    /// Use this instead of [`Self::save_incremental`] whenever the point of
+    /// the edit was to make something *unrecoverable*.
+    ///
+    /// An incremental save appends the changes and keeps every earlier byte,
+    /// which is exactly right for an ordinary edit — it is cheap, and it is
+    /// the only way to add to a signed document without breaking the
+    /// signature. It is exactly wrong for redaction: the content stream that
+    /// held the removed text is still in the file, one revision back, and
+    /// `strings redacted.pdf` will find it. The redaction itself is real —
+    /// the text is gone from the current page — but the file still carries
+    /// the copy it was removed from.
+    ///
+    /// A full rewrite alone is not enough either. Redaction repoints the
+    /// page at a *new* content stream and leaves the old one in the object
+    /// table, unreferenced — so a plain rewrite still emits it, and the
+    /// removed text is still one `strings` away. Unreachable objects are
+    /// therefore pruned first, which is what actually makes the removal
+    /// stick.
+    ///
+    /// The trade-off is the signature: rewriting invalidates any existing
+    /// one. That is inherent rather than incidental — altering the bytes a
+    /// signature covers invalidates it however the file is written, and
+    /// redacting a signed document was always going to break its signature.
+    pub fn save_full(&mut self) -> Result<Vec<u8>, DocError> {
+        // Drop everything unreachable from the trailer. This is the step
+        // that makes redaction real: the pre-redaction content stream is
+        // orphaned the moment the page is repointed, and without this it
+        // would still be written out.
+        self.current.prune_objects();
+        let mut out = Vec::new();
+        self.current.save_to(&mut out).map_err(DocError::from)?;
+        // Same baseline reset as the incremental path: a later
+        // save_incremental should diff against what was just written, not
+        // against the bytes this document was originally loaded from.
+        self.original = self.current.clone();
+        self.original_bytes = out.clone();
+        Ok(out)
+    }
+
     pub fn save_incremental(&mut self) -> Result<Vec<u8>, DocError> {
         let mut incremental = lopdf::IncrementalDocument::create_from(
             self.original_bytes.clone(),
@@ -1287,6 +1395,117 @@ fn decrement_count(dict: &mut Dictionary) {
         .and_then(|o| o.as_i64().ok())
         .unwrap_or(0);
     dict.set("Count", (count - 1).max(0));
+}
+
+#[cfg(test)]
+mod save_full_tests {
+    use super::*;
+
+    /// A one-page PDF whose content stream carries `text`.
+    fn pdf_with(text: &str) -> Vec<u8> {
+        use lopdf::content::{Content, Operation};
+        use lopdf::{dictionary, Object, Stream};
+
+        let mut doc = lopdf::Document::with_version("1.5");
+        let pages_id = doc.new_object_id();
+        let content = Content {
+            operations: vec![
+                Operation::new("BT", vec![]),
+                Operation::new("Tj", vec![Object::string_literal(text)]),
+                Operation::new("ET", vec![]),
+            ],
+        };
+        let content_id = doc.add_object(Stream::new(dictionary! {}, content.encode().unwrap()));
+        let page_id = doc.add_object(dictionary! {
+            "Type" => "Page",
+            "Parent" => pages_id,
+            "Contents" => content_id,
+            "MediaBox" => vec![0.into(), 0.into(), 612.into(), 792.into()],
+        });
+        doc.objects.insert(
+            pages_id,
+            Object::Dictionary(dictionary! {
+                "Type" => "Pages", "Count" => 1, "Kids" => vec![page_id.into()],
+            }),
+        );
+        let catalog_id = doc.add_object(dictionary! { "Type" => "Catalog", "Pages" => pages_id });
+        doc.trailer.set("Root", catalog_id);
+        let mut out = Vec::new();
+        doc.save_to(&mut out).unwrap();
+        out
+    }
+
+    /// Repoint the page at a fresh content stream, orphaning the old one —
+    /// exactly what redaction does.
+    fn replace_page_content(doc: &mut Document, text: &str) {
+        use lopdf::content::{Content, Operation};
+        use lopdf::{dictionary, Object, Stream};
+        let content = Content {
+            operations: vec![
+                Operation::new("BT", vec![]),
+                Operation::new("Tj", vec![Object::string_literal(text)]),
+                Operation::new("ET", vec![]),
+            ],
+        };
+        let new_id = doc
+            .current
+            .add_object(Stream::new(dictionary! {}, content.encode().unwrap()));
+        let page_id = doc.page_object_id(0).unwrap();
+        if let Ok(Object::Dictionary(page)) = doc.current.get_object_mut(page_id) {
+            page.set("Contents", new_id);
+        }
+    }
+
+    #[test]
+    fn an_incremental_save_keeps_the_replaced_content() {
+        // Not a complaint about save_incremental — this is what it is for,
+        // and it is why it must not be used for redaction. Pinned so the
+        // difference between the two saves stays visible.
+        let mut doc = Document::from_bytes(&pdf_with("SECRET-VALUE")).unwrap();
+        replace_page_content(&mut doc, "REPLACED");
+        let saved = doc.save_incremental().unwrap();
+        assert!(
+            String::from_utf8_lossy(&saved).contains("SECRET-VALUE"),
+            "an incremental save is expected to retain the earlier revision",
+        );
+    }
+
+    #[test]
+    fn a_full_save_drops_the_orphaned_content() {
+        // The property redaction depends on. A full rewrite alone is not
+        // enough: the replaced stream is unreferenced but still in the
+        // object table, so it must be pruned before writing.
+        let mut doc = Document::from_bytes(&pdf_with("SECRET-VALUE")).unwrap();
+        replace_page_content(&mut doc, "REPLACED");
+        let saved = doc.save_full().unwrap();
+        let text = String::from_utf8_lossy(&saved);
+        assert!(
+            !text.contains("SECRET-VALUE"),
+            "the orphaned content stream must not be written out",
+        );
+        assert!(text.contains("REPLACED"), "the live content must survive");
+    }
+
+    #[test]
+    fn a_full_save_leaves_a_readable_document() {
+        let mut doc = Document::from_bytes(&pdf_with("hello")).unwrap();
+        let saved = doc.save_full().unwrap();
+        let reopened = Document::from_bytes(&saved).unwrap();
+        assert_eq!(reopened.page_count().unwrap(), 1);
+    }
+
+    #[test]
+    fn saving_twice_is_stable() {
+        // save_full resets the baseline, so a second save must not lose
+        // anything or re-diff against the original load.
+        let mut doc = Document::from_bytes(&pdf_with("hello")).unwrap();
+        doc.save_full().unwrap();
+        let second = doc.save_full().unwrap();
+        assert_eq!(
+            Document::from_bytes(&second).unwrap().page_count().unwrap(),
+            1
+        );
+    }
 }
 
 #[cfg(test)]
