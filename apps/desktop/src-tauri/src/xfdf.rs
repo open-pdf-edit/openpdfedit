@@ -85,6 +85,24 @@ pub struct ExportMarkdownResult {
     characters: usize,
 }
 
+/// The open document as plain text, written to `output_path`.
+///
+/// Reuses `ExportMarkdownRequest`/`Result`: same two fields in, same
+/// two out, and a second pair of identical structs would only be two
+/// more things to keep in step.
+#[tauri::command]
+pub fn export_text_cmd(
+    state: State<'_, AppState>,
+    request: ExportMarkdownRequest,
+) -> Result<ExportMarkdownResult, CommandError> {
+    let text = openpdfedit_session::markdown::text_from_page_text(&state, request.handle)?;
+    std::fs::write(&request.output_path, text.as_bytes())?;
+    Ok(ExportMarkdownResult {
+        path: request.output_path,
+        characters: text.chars().count(),
+    })
+}
+
 #[tauri::command]
 pub fn export_markdown_cmd(
     state: State<'_, AppState>,

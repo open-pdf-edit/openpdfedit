@@ -413,10 +413,10 @@ test("every tool is named, and the names are grouped", async ({ browser }) => {
   await expect(page.locator(".tools__heading")).toHaveText([
     "Panels",
     "Document",
-    "Markup file",
+    "Markup",
     "Save & protect",
   ]);
-  for (const name of ["Comments", "OCR", "Watermark", "Flatten", "Compress"]) {
+  for (const name of ["Comments", "OCR", "Watermark", "Flatten", "Compress", "Remove markup", "Text"]) {
     await expect(page.locator(".tools__label", { hasText: new RegExp(`^${name}$`) })).toBeVisible();
   }
 

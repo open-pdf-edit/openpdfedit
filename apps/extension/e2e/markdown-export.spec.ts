@@ -178,3 +178,53 @@ test("a chosen folder is written into, and remembered", async ({ browser }) => {
 
   await ctx.close();
 });
+
+test("plain text is the words, not the Markdown renamed", async ({ browser }) => {
+  const ctx = await browser.newContext({
+    viewport: { width: 1440, height: 900 },
+    acceptDownloads: true,
+  });
+  const page = await ctx.newPage();
+
+  await page.addInitScript((base64: string) => {
+    const bytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
+    (window as unknown as Record<string, unknown>).showOpenFilePicker = async () => [
+      {
+        name: "report.pdf",
+        async getFile() {
+          return new File([bytes], "report.pdf", { type: "application/pdf" });
+        },
+        async createWritable() {
+          return { async write() {}, async close() {} };
+        },
+      },
+    ];
+  }, TEXT_PDF_BASE64);
+
+  await page.goto(ORIGIN);
+  await page.locator("header.topbar").getByRole("button", { name: "Open PDF…" }).click();
+  await expect(page.locator("canvas").first()).toBeVisible({ timeout: 30_000 });
+
+  // No vault question here, unlike Markdown: Obsidian reads Markdown,
+  // so offering to put a .txt in a vault would only be a way to get it
+  // wrong. Straight to the file.
+  // The waiter goes first. There is no dialog on this path, so the
+  // anchor click that starts the download happens in the same task as
+  // the button click — register afterwards and the event has already
+  // gone by.
+  const downloading = page.waitForEvent("download", { timeout: 60_000 });
+  await page.getByRole("button", { name: "Export as plain text" }).click();
+  const download = await downloading;
+  expect(download.suggestedFilename()).toBe("report.txt");
+
+  const path = await download.path();
+  const { readFileSync } = await import("node:fs");
+  const text = readFileSync(path!, "utf8");
+  expect(text, "the document's own text has to be in it").toContain("CONFIDENTIAL");
+  // The point of having both: Markdown ends a line with two spaces to
+  // force a hard break, which in a .txt is invisible trailing
+  // whitespace that turns up in every diff and every field-splitting
+  // script that reads the file.
+  expect(text, "no Markdown hard breaks in a plain-text file").not.toMatch(/ {2}\n/);
+  await ctx.close();
+});

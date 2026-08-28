@@ -449,6 +449,7 @@ pub fn run() {
             compare::compare_documents_cmd,
             xfdf::export_xfdf_cmd,
             xfdf::export_markdown_cmd,
+            xfdf::export_text_cmd,
             xfdf::import_xfdf_cmd,
         ])
         .run(tauri::generate_context!())

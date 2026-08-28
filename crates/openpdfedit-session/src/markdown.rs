@@ -97,6 +97,56 @@ pub fn markdown_from_page_text<E: Engine>(
     Ok(out)
 }
 
+/// Every page's text, as plain text, with nothing added.
+///
+/// The same extraction [`markdown_from_page_text`] uses, minus the
+/// Markdown. Worth having as its own thing rather than as "Markdown you
+/// rename": Markdown ends every line with two spaces to force a hard
+/// break, which is invisible in a viewer and wrong in a `.txt` — a file
+/// meant to be read as-is, fed to a script, or diffed.
+///
+/// Pages are separated by a form feed (`U+000C`), which is what
+/// `pdftotext` writes and what anything that cares about page breaks in
+/// plain text looks for. Anything that does not care sees a line break.
+pub fn text_from_page_text<E: Engine>(
+    state: &SessionState<E>,
+    handle: DocHandle,
+) -> Result<String, SessionError> {
+    let page_count = state.engine.page_count(handle)?;
+    let mut out = String::new();
+
+    for page_index in 0..page_count {
+        let text: String = state
+            .engine
+            .page_chars(handle, page_index)?
+            .iter()
+            .collect();
+        let cleaned = plain(&text);
+        if cleaned.is_empty() {
+            continue;
+        }
+        if !out.is_empty() {
+            out.push('\u{000c}');
+            out.push('\n');
+        }
+        out.push_str(&cleaned);
+        out.push('\n');
+    }
+
+    Ok(out)
+}
+
+/// PDFium's page text, tidied but not marked up: the same trimming and
+/// blank-line dropping as [`tidy`], joined with ordinary newlines.
+fn plain(text: &str) -> String {
+    text.replace('\r', "\n")
+        .lines()
+        .map(|line| line.trim_start_matches('\u{feff}').trim())
+        .filter(|line| !line.is_empty())
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
 /// PDFium's page text with its line breaks made into Markdown's.
 ///
 /// A single newline means nothing in Markdown — two lines run together
@@ -124,7 +174,7 @@ mod tests {
 
     /// A blank page with an OCR layer on it — invisible text, which is
     /// the only kind a scanned page can carry.
-    fn ocr_layer_over_a_blank_page(words: &[(&str, f32)]) -> Vec<u8> {
+    fn ocr_layer_over_a_blank_page(words: &[(&str, f32, f32)]) -> Vec<u8> {
         use lopdf::{dictionary, Object, Stream};
 
         let blank = {
@@ -153,10 +203,10 @@ mod tests {
         let mut doc = openpdfedit_doc::Document::from_bytes(&blank).unwrap();
         let words: Vec<openpdfedit_ocr::OcrWord> = words
             .iter()
-            .map(|(text, left)| openpdfedit_ocr::OcrWord {
+            .map(|(text, left, top)| openpdfedit_ocr::OcrWord {
                 text: text.to_string(),
                 left: *left,
-                top: 100.0,
+                top: *top,
                 width: 90.0,
                 height: 40.0,
                 confidence: 95.0,
@@ -189,7 +239,8 @@ mod tests {
             store: Box::new(MemWorkingStore::default()),
         };
 
-        let bytes = ocr_layer_over_a_blank_page(&[("HELLO", 100.0), ("WORLD", 220.0)]);
+        let bytes =
+            ocr_layer_over_a_blank_page(&[("HELLO", 100.0, 100.0), ("WORLD", 220.0, 100.0)]);
         // What `anydoc` alone makes of it, stated rather than assumed —
         // if this ever starts succeeding, the fallback below has stopped
         // being the thing under test.
@@ -205,6 +256,61 @@ mod tests {
             markdown.contains("HELLO") && markdown.contains("WORLD"),
             "the OCR'd words have to come out: {markdown:?}"
         );
+    }
+
+    /// The two exports actually differ on a real document.
+    ///
+    /// The unit test below compares the two helpers directly, which
+    /// says nothing about which one each export calls — a `.txt` built
+    /// with `tidy` passes that and is still Markdown with the extension
+    /// changed. This runs both exports over the same two-line page.
+    #[test]
+    fn the_text_export_is_not_the_markdown_export() {
+        let Some(engine) = crate::test_support::shared_handle() else {
+            return;
+        };
+        let state = SessionState {
+            engine: engine.clone(),
+            docs: Mutex::new(HashMap::new()),
+            history: Mutex::new(HashMap::new()),
+            store: Box::new(MemWorkingStore::default()),
+        };
+
+        // Two *lines*, not two words: a hard break needs something to
+        // break between, and on one line `join("  \n")` emits no
+        // separator at all — the two exports come out byte-identical
+        // and the test proves nothing. The second word is a hundred
+        // points further down the page.
+        let bytes = ocr_layer_over_a_blank_page(&[("FIRST", 60.0, 100.0), ("SECOND", 60.0, 240.0)]);
+        let opened = open_document_bytes(&state, "two.pdf", bytes).expect("should open");
+
+        let markdown = markdown_from_page_text(&state, opened.handle).expect("markdown");
+        let text = text_from_page_text(&state, opened.handle).expect("text");
+
+        assert!(
+            markdown.contains("FIRST") && text.contains("FIRST"),
+            "both should carry the words: {markdown:?} / {text:?}"
+        );
+        assert!(
+            markdown.contains("  \n"),
+            "Markdown forces hard breaks, or its line structure is lost: {markdown:?}"
+        );
+        assert!(
+            !text.contains("  \n"),
+            "a .txt must not carry Markdown's invisible trailing spaces: {text:?}"
+        );
+    }
+
+    /// Plain text is not Markdown with the extension changed. Markdown
+    /// ends a line with two spaces to force a hard break; in a `.txt`
+    /// that is invisible trailing whitespace that shows up in a diff
+    /// and in anything reading the file field by field.
+    #[test]
+    fn plain_text_has_no_markdown_line_breaks_in_it() {
+        assert_eq!(plain("  one \r\n\r\n two  "), "one\ntwo");
+        assert_eq!(tidy("  one \r\n\r\n two  "), "one  \ntwo");
+        assert_eq!(plain("\u{feff}first\nsecond"), "first\nsecond");
+        assert_eq!(plain("   \n  "), "");
     }
 
     #[test]
