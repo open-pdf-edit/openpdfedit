@@ -102,6 +102,9 @@ export interface FlattenResultDto {
   popupsRemoved: number;
 }
 
+import type { RecentDocument } from "$lib/recents";
+export type { RecentDocument };
+
 export interface RemoveMarkupRequest {
   handle: number;
 }
@@ -449,6 +452,23 @@ export interface Backend {
    * on the interface for the wasm backend and any future caller that
    * doesn't need that. */
   pickAndOpenDocument(): Promise<OpenedDocument | null>;
+
+  /** The documents opened most recently, newest first, for the landing
+   * screen. Only ones this backend can actually reopen — see
+   * `$lib/recents` for why the list is empty in Firefox and Safari
+   * rather than full of rows that do nothing. */
+  recentDocuments(): Promise<RecentDocument[]>;
+
+  /** Reopens one. Resolves to `null` when the file has moved, been
+   * deleted, or the browser refused permission to read it again — all
+   * ordinary outcomes for a list of files last seen days ago, none of
+   * them an error worth an alert. The entry is dropped when that
+   * happens, so a dead row does not sit there forever. */
+  openRecent(id: string): Promise<OpenedDocument | null>;
+
+  /** Forgets one entry, or all of them. */
+  forgetRecent(id: string): Promise<void>;
+  clearRecents(): Promise<void>;
   /** True when this backend can only save by handing the browser a
    * download, rather than writing back over the file that was opened.
    * The desktop always writes back; a browser can only do so where the

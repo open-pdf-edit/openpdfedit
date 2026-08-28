@@ -40,6 +40,7 @@
   import InstallPrompt from "$lib/InstallPrompt.svelte";
   import Icon from "$lib/Icon.svelte";
   import { tooltip } from "$lib/tooltip";
+  import { describeWhen, type RecentDocument } from "$lib/recents";
 
   // Milestone M2 scope (PLAN.md): annotations (markup tools + comments
   // panel), on top of M1's open/scroll/zoom viewer. Pixels come from the
@@ -265,6 +266,70 @@
       flattenBusy = false;
       mutationBusy = false;
     }
+  }
+
+  // ---- Recent documents ----
+  //
+  // Refreshed whenever the landing screen comes back rather than only
+  // on mount: closing a document returns you here, and the file you
+  // just had open should be at the top of the list when it does.
+  let recents = $state<RecentDocument[]>([]);
+  let recentBusy = $state<string | null>(null);
+  // Captured once per refresh rather than read per row, so every "20
+  // minutes ago" on screen is measured from the same instant.
+  let now = $state(Date.now());
+
+  async function refreshRecents() {
+    now = Date.now();
+    recents = await backend.recentDocuments();
+  }
+
+  $effect(() => {
+    // Reading `doc` subscribes this to opening and closing.
+    if (doc) return;
+    void refreshRecents();
+  });
+
+  async function handleOpenRecent(id: string) {
+    if (recentBusy) return;
+    recentBusy = id;
+    error = null;
+    try {
+      // Already open: the same check `openInNewTab` makes, and the same
+      // answer — go to it rather than opening a second copy.
+      const existing = tabs.findIndex((tab) => tab.filePath === id);
+      if (existing !== -1) {
+        await switchToTab(existing);
+        return;
+      }
+
+      const opened = await backend.openRecent(id);
+      if (!opened) {
+        // Gone, or permission refused. `openRecent` has already dropped
+        // the entry if the file itself is gone, so the refreshed list
+        // is the answer — no banner for something this ordinary.
+        await refreshRecents();
+        showToast("Couldn't reopen that one — it may have been moved, renamed or deleted.", {
+          title: "Recent",
+        });
+        return;
+      }
+      await adoptAsNewTab(opened, opened.file_path);
+    } catch (e) {
+      error = formatError(e);
+    } finally {
+      recentBusy = null;
+    }
+  }
+
+  async function handleForgetRecent(id: string) {
+    await backend.forgetRecent(id);
+    await refreshRecents();
+  }
+
+  async function handleClearRecents() {
+    await backend.clearRecents();
+    await refreshRecents();
   }
 
   // ---- Remove markup ----
@@ -1236,25 +1301,34 @@
     try {
       const opened = await openPossiblyProtected(path);
       if (!opened) return;
-      tabs.push({ doc: opened, filePath: path, zoom: 1, currentPage: 0 });
-      activeTabIndex = tabs.length - 1;
-      doc = opened;
-      filePath = path;
-      zoom = 1;
-      currentPage = 0;
-      activeTool = "select";
-      closeSearch();
-      await Promise.all([
-        refreshAnnotations(),
-        refreshFormFields(),
-        refreshSignatures(),
-        refreshOutline(),
-      ]);
+      await adoptAsNewTab(opened, path);
     } catch (e) {
       error = formatError(e);
     } finally {
       mutationBusy = false;
     }
+  }
+
+  /** The bookkeeping a newly opened document needs, whichever route it
+   * arrived by — the picker, or a row in the recent list. Extracted
+   * when the second route appeared, rather than copied: a tab that got
+   * only half of this is a document open with somebody else's outline
+   * and form fields still on screen. */
+  async function adoptAsNewTab(opened: OpenedDocument, path: string) {
+    tabs.push({ doc: opened, filePath: path, zoom: 1, currentPage: 0 });
+    activeTabIndex = tabs.length - 1;
+    doc = opened;
+    filePath = path;
+    zoom = 1;
+    currentPage = 0;
+    activeTool = "select";
+    closeSearch();
+    await Promise.all([
+      refreshAnnotations(),
+      refreshFormFields(),
+      refreshSignatures(),
+      refreshOutline(),
+    ]);
   }
 
   async function refreshSignatures() {
@@ -2735,6 +2809,41 @@
           <Icon name="folder-open" size={15} />
           Open PDF…
         </button>
+
+        <!-- The file you want next is usually one you had open
+             recently, and the picker made you go and find it again.
+             Absent rather than empty when there is nothing to show: a
+             "Recent" heading over blank space on first run is a promise
+             about a feature nobody asked about yet. -->
+        {#if recents.length > 0}
+          <div class="recents">
+            <div class="recents__head">
+              <span class="recents__title">Recent</span>
+              <button class="recents__clear" onclick={handleClearRecents}>Clear</button>
+            </div>
+            {#each recents as entry (entry.id)}
+              <div class="recent">
+                <button
+                  class="recent__open"
+                  onclick={() => handleOpenRecent(entry.id)}
+                  disabled={recentBusy !== null}
+                >
+                  <Icon name={recentBusy === entry.id ? "loader-circle" : "file-pen"} size={15} spin={recentBusy === entry.id} />
+                  <span class="recent__name">{entry.name}</span>
+                  <span class="recent__when">{describeWhen(entry.openedAt, now)}</span>
+                </button>
+                <button
+                  class="recent__forget"
+                  onclick={() => handleForgetRecent(entry.id)}
+                  use:tooltip={"Remove from this list"}
+                  aria-label={`Remove ${entry.name} from the recent list`}
+                >
+                  <Icon name="x" size={13} />
+                </button>
+              </div>
+            {/each}
+          </div>
+        {/if}
         <!-- Here rather than in the topbar: this is the one moment
              someone is deciding whether to keep the thing, and it is
              gone the instant a document is open. -->
@@ -3170,6 +3279,107 @@
   .empty-state p {
     font: var(--type-body);
     color: var(--text-muted);
+  }
+
+  /* Sized to the list rather than to the screen: a full-width column on
+     a 27-inch display would make six filenames look like a database. */
+  .recents {
+    width: min(420px, 100%);
+    margin-top: var(--space-2);
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+  }
+
+  .recents__head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    padding: 0 var(--space-2) var(--space-1);
+  }
+
+  .recents__title {
+    font: var(--type-eyebrow);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-muted);
+  }
+
+  .recents__clear {
+    background: none;
+    border: 0;
+    padding: 0;
+    cursor: pointer;
+    font: var(--type-caption);
+    color: var(--text-muted);
+  }
+  .recents__clear:hover {
+    color: var(--text-strong);
+  }
+
+  .recent {
+    display: flex;
+    align-items: stretch;
+    border-radius: var(--radius-sm);
+  }
+  .recent:hover {
+    background: var(--surface-hover);
+  }
+
+  .recent__open {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-2);
+    background: none;
+    border: 0;
+    cursor: pointer;
+    text-align: left;
+    color: inherit;
+    font: var(--type-body);
+  }
+  .recent__open:disabled {
+    cursor: default;
+  }
+
+  /* The filename is the row: it gets the space, and the age gets
+     whatever is left rather than pushing a long name out of view. */
+  .recent__name {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .recent__when {
+    flex: none;
+    font: var(--type-caption);
+    color: var(--text-muted);
+  }
+
+  /* Visible only on hover or focus: six of these down the side of the
+     list is a column of ✕ competing with the filenames, and removing a
+     row is the rarer thing to want by far. */
+  .recent__forget {
+    flex: none;
+    display: flex;
+    align-items: center;
+    padding: 0 var(--space-2);
+    background: none;
+    border: 0;
+    cursor: pointer;
+    color: var(--text-muted);
+    opacity: 0;
+  }
+  .recent:hover .recent__forget,
+  .recent__forget:focus-visible {
+    opacity: 1;
+  }
+  .recent__forget:hover {
+    color: var(--text-strong);
   }
 
   /* ---------------------------------------------------------------- *
