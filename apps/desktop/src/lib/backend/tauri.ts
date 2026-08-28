@@ -304,6 +304,22 @@ export const tauriBackend: Backend = {
     });
   },
 
+  async exportText({ handle, fileName, vault }) {
+    let outputPath: string | null;
+    if (vault) {
+      outputPath = `${vault.replace(/\/+$/, "")}/${fileName}`;
+    } else {
+      outputPath = await save({
+        defaultPath: fileName,
+        filters: [{ name: "Plain text", extensions: ["txt"] }],
+      });
+    }
+    if (!outputPath) return { path: null, characters: 0 };
+    return invoke<ExportMarkdownResult>("export_text_cmd", {
+      request: { handle, outputPath },
+    });
+  },
+
   supportsVault() {
     return true;
   },

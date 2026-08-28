@@ -554,6 +554,12 @@ export interface Backend {
    * See `Backend.savesByDownloading` for the same split on saving. */
   exportMarkdown(request: ExportMarkdownRequest): Promise<ExportMarkdownResult>;
 
+  /** The same, as plain text. Not the Markdown renamed: Markdown ends
+   * every line with two spaces to force a hard break, which is
+   * invisible trailing whitespace in a `.txt`. See
+   * `openpdfedit_session::markdown`. */
+  exportText(request: ExportMarkdownRequest): Promise<ExportMarkdownResult>;
+
   /** Whether this backend can write into a folder the user names — an
    * Obsidian vault, most usefully. True on the desktop; in a browser,
    * true only where the File System Access API exists (Chromium), since

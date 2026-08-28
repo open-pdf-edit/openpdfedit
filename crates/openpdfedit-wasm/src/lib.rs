@@ -253,7 +253,7 @@ use openpdfedit_session::forms::{
     create_form_field_impl, fill_form_fields_impl, list_form_fields_impl, CreateFormFieldRequest,
     FillFormRequest,
 };
-use openpdfedit_session::markdown::markdown_from_page_text;
+use openpdfedit_session::markdown::{markdown_from_page_text, text_from_page_text};
 use openpdfedit_session::numbering::{number_pages_impl, NumberPagesRequest};
 use openpdfedit_session::outline::document_outline_impl;
 use openpdfedit_session::pages::{
@@ -827,6 +827,14 @@ impl WasmSession {
         // JavaScript as a BigInt, and the caller has a number. The
         // symptom was "Cannot convert 2 to a BigInt".
         markdown_from_page_text(&self.state, handle as DocHandle).map_err(to_js_err)
+    }
+
+    /// Every page's text, as plain text. The `.txt` half of the two
+    /// text exports — see `openpdfedit_session::markdown` for why it is
+    /// not just the Markdown under a different name.
+    #[wasm_bindgen(js_name = textFromDocument)]
+    pub fn text_from_document(&self, handle: u32) -> Result<String, JsValue> {
+        text_from_page_text(&self.state, handle as DocHandle).map_err(to_js_err)
     }
 
     /// The same selection, with the characters as well as their

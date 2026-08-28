@@ -309,6 +309,7 @@ interface WasmSessionHandle {
    * number][]` JSON array of quads. */
   textSelectionQuads(requestJson: string): string;
   markdownFromText(handle: number): string;
+  textFromDocument(handle: number): string;
   selectText(requestJson: string): string;
   /** Mutating/rotates, same as `addAnnotation` above. */
   undo(handle: number): string;
@@ -1023,6 +1024,44 @@ function packLengthPrefixedSources(sources: Uint8Array[]): Uint8Array {
  * construction, for every document this backend ever opens from a real
  * picker pick — see `mergeDocuments`/`extractPages`/`saveDocumentAtPath`
  * below for the other three call sites this same fix touches). */
+/** Writes an exported text file where the caller asked, and says where
+ * it went.
+ *
+ * The two text exports differ only in what they produce, so this is
+ * everything after that: a folder the user named — an Obsidian vault,
+ * usually — or the downloads folder, which is all a browser without the
+ * File System Access API can offer.
+ */
+async function writeExport(
+  fileName: string,
+  vault: string | null | undefined,
+  content: string,
+  mime: string,
+): Promise<{ path: string | null; characters: number }> {
+  if (vault) {
+    const directory = await recallVault(vault);
+    if (!directory) {
+      throw new Error("that folder is no longer available — choose it again");
+    }
+    // Permission does not survive a reload, and asking for it needs a
+    // click — which is why this is reached from one.
+    const permission = await (directory as PermissionedDirectory).requestPermission?.({
+      mode: "readwrite",
+    });
+    if (permission && permission !== "granted") {
+      throw new Error(`no permission to write into ${directory.name}`);
+    }
+    const file = await directory.getFileHandle(fileName, { create: true });
+    const writable = await file.createWritable();
+    await writable.write(content);
+    await writable.close();
+    return { path: `${directory.name}/${fileName}`, characters: content.length };
+  }
+
+  downloadTextFile(fileName, content, mime);
+  return { path: null, characters: content.length };
+}
+
 async function openFromTarget(
   displayName: string,
   target: FileTarget,
@@ -1873,30 +1912,12 @@ export const wasmBackend: Backend = {
 
   async exportMarkdown({ handle, fileName, vault }) {
     const session = await ensureSession();
-    const markdown = await toMarkdown(session, handle);
+    return writeExport(fileName, vault, await toMarkdown(session, handle), "text/markdown");
+  },
 
-    if (vault) {
-      const directory = await recallVault(vault);
-      if (!directory) {
-        throw new Error("that folder is no longer available — choose it again");
-      }
-      // Permission does not survive a reload, and asking for it needs a
-      // click — which is why this is reached from one.
-      const permission = await (directory as PermissionedDirectory).requestPermission?.({
-        mode: "readwrite",
-      });
-      if (permission && permission !== "granted") {
-        throw new Error(`no permission to write into ${directory.name}`);
-      }
-      const file = await directory.getFileHandle(fileName, { create: true });
-      const writable = await file.createWritable();
-      await writable.write(markdown);
-      await writable.close();
-      return { path: `${directory.name}/${fileName}`, characters: markdown.length };
-    }
-
-    downloadTextFile(fileName, markdown, "text/markdown");
-    return { path: null, characters: markdown.length };
+  async exportText({ handle, fileName, vault }) {
+    const session = await ensureSession();
+    return writeExport(fileName, vault, session.textFromDocument(handle), "text/plain");
   },
 
   async importXfdf(handle) {

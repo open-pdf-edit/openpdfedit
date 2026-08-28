@@ -942,9 +942,53 @@
     }
   }
 
+  // ---- Export as plain text ----
+  let textBusy = $state(false);
+
+  /** No vault question, unlike Markdown. The vault exists because
+   * Obsidian reads Markdown; a `.txt` dropped into one is a file
+   * Obsidian will not treat as a note, so offering the choice would
+   * only be a way to get it wrong. */
+  async function handleExportText(): Promise<void> {
+    if (!doc || !filePath || textBusy) return;
+    const base = filePath.split(/[\\/]/).pop() || "document.pdf";
+    const fileName = `${base.replace(/\.pdf$/i, "")}.txt`;
+
+    textBusy = true;
+    error = null;
+    try {
+      const result = await backend.exportText({ handle: doc.handle, fileName, vault: null });
+      if (result.path === null && result.characters === 0) return; // cancelled
+      if (result.characters === 0) {
+        await showAlert(
+          "There was no text to extract. This looks like a scan — run OCR on it first, then export again.",
+          "Nothing to export",
+        );
+        return;
+      }
+      showToast(result.path ? `Saved ${result.path}.` : `Downloaded ${fileName}.`, {
+        title: "Plain text",
+      });
+    } catch (e) {
+      error = formatError(e);
+    } finally {
+      textBusy = false;
+    }
+  }
+
   /** The tools whose behaviour is not obvious from their name. */
   function toolHint(id: Tool): string | null {
     if (id === "select") return "Select — drag over text to select it, click a mark to delete it";
+    // Erase and Redact both "remove" something, and picking the wrong
+    // one is not symmetrical: erasing when you meant to redact leaves
+    // the text on the page, and both hints say which side of that line
+    // the tool is on rather than only what it does.
+    if (id === "erase") {
+      return "Erase — remove markup you have added. Leaves the document's own content untouched";
+    }
+    if (id === "redact") {
+      return "Redact — remove the document's own content in the area you drag. Gone from the file, not covered over";
+    }
     if (id === "moveText" || id === "moveImage") {
       return `${id === "moveText" ? "Move text" : "Move image"} — hold Shift to constrain to one axis`;
     }
@@ -2417,16 +2461,6 @@
             </button>
             <button
               class="oa-icon-btn oa-icon-btn--sm"
-              onclick={handleRemoveMarkup}
-              disabled={unmarkBusy || mutationBusy}
-              use:tooltip={"Remove markup — delete annotations, and pen layers already flattened into the page"}
-              aria-label="Remove markup"
-            >
-              <Icon name="eraser" size={15} spin={unmarkBusy} />
-            <span class="tools__label">Remove markup</span>
-            </button>
-            <button
-              class="oa-icon-btn oa-icon-btn--sm"
               onclick={handleCompareDocument}
               disabled={compareBusy}
               use:tooltip={"Compare the open document against another PDF (text and rendered-pixel differences)"}
@@ -2438,8 +2472,18 @@
           </div>
         </div>
         <div class="tools__section">
-          <p class="tools__heading">Markup file</p>
+          <p class="tools__heading">Markup</p>
           <div class="tools__group">
+            <button
+              class="oa-icon-btn oa-icon-btn--sm"
+              onclick={handleRemoveMarkup}
+              disabled={unmarkBusy || mutationBusy}
+              use:tooltip={"Remove markup — delete annotations, and pen layers already flattened into the page"}
+              aria-label="Remove markup"
+            >
+              <Icon name="eraser" size={15} spin={unmarkBusy} />
+            <span class="tools__label">Remove markup</span>
+            </button>
             <button
               class="oa-icon-btn oa-icon-btn--sm"
               onclick={handleExportXfdf}
@@ -2469,6 +2513,16 @@
             >
               <Icon name="file-code" size={15} spin={markdownBusy} />
               <span class="tools__label">Markdown</span>
+            </button>
+            <button
+              class="oa-icon-btn oa-icon-btn--sm"
+              onclick={handleExportText}
+              disabled={textBusy}
+              use:tooltip={"Extract the document's text to a plain .txt file — no formatting, just the words"}
+              aria-label="Export as plain text"
+            >
+              <Icon name="file-text" size={15} spin={textBusy} />
+              <span class="tools__label">Text</span>
             </button>
           </div>
         </div>
