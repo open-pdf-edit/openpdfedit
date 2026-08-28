@@ -8,6 +8,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { open, save } from "@tauri-apps/plugin-dialog";
 import { listen } from "@tauri-apps/api/event";
 import { TILE_ORIGIN } from "./tileOrigin";
+import { clearRecents, forgetRecent, listRecents, rememberRecent } from "$lib/recents";
 import type {
   AddAnnotationRequest,
   AnnotationSummaryDto,
@@ -49,11 +50,27 @@ import type {
 // Every file picker in this app filters to PDF only.
 const PDF_FILTERS = [{ name: "PDF", extensions: ["pdf"] }];
 
+/** The last path segment, for display. Both separators, because a
+ * Windows path arrives with backslashes and this runs in the same
+ * webview either way. */
+function basename(path: string): string {
+  const cut = Math.max(path.lastIndexOf("/"), path.lastIndexOf("\\"));
+  return cut >= 0 ? path.slice(cut + 1) : path;
+}
+
 export const tauriBackend: Backend = {
   // --- document lifecycle ---
 
   async openDocument(path, password) {
-    return invoke<OpenedDocument>("open_document", { path, password: password ?? null });
+    const opened = await invoke<OpenedDocument>("open_document", {
+      path,
+      password: password ?? null,
+    });
+    // Recorded here rather than at the call sites: a document can be
+    // reached through the picker, a recent, a drop, or a command-line
+    // argument, and every one of those should show up in the list.
+    rememberRecent(path, basename(path), Date.now());
+    return opened;
   },
 
   async pickAndOpenDocument() {
@@ -205,6 +222,34 @@ export const tauriBackend: Backend = {
 
   async documentOutline(handle) {
     return invoke<OutlineEntryDto[]>("document_outline_cmd", { handle });
+  },
+
+  // Recents, the desktop half. An id here is the file's own path: the
+  // app has a filesystem, so nothing needs storing beyond what the
+  // shared list already keeps, and dedupe on reopening the same file
+  // falls out of it.
+  async recentDocuments() {
+    return listRecents();
+  },
+
+  async openRecent(id) {
+    try {
+      // `openDocument` records it, which also moves it back to the top.
+      return await tauriBackend.openDocument(id);
+    } catch {
+      // Moved, renamed, deleted, or on a volume that is no longer
+      // mounted. All ordinary for a path last seen days ago.
+      forgetRecent(id);
+      return null;
+    }
+  },
+
+  async forgetRecent(id) {
+    forgetRecent(id);
+  },
+
+  async clearRecents() {
+    clearRecents();
   },
 
   async flattenDocument(request) {

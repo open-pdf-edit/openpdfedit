@@ -24,6 +24,7 @@
 // it already resolves this file correctly in both build directions
 // (verified in Task 7); nothing here needs it to change.
 
+import { clearRecents, forgetRecent, listRecents, rememberRecent } from "$lib/recents";
 import type {
   AddAnnotationRequest,
   AnnotationSummaryDto,
@@ -1031,6 +1032,11 @@ async function openFromTarget(
   const bytes = await readTarget(target);
   const doc = parseOpenedDocument(session.openDocument(displayName, bytes, password));
   openDocs.set(doc.handle, { target, doc });
+  // Recorded here rather than at the call sites: every route into a
+  // document — picker, recent, drop — comes through this function, and
+  // only after the open has actually succeeded, so a file that failed
+  // to parse or wanted a password it did not get is not offered back.
+  void rememberOpened(target);
   return doc;
 }
 
@@ -1147,6 +1153,12 @@ type PermissionedDirectory = FileSystemDirectoryHandle & {
   requestPermission?: (options: { mode: "read" | "readwrite" }) => Promise<PermissionState>;
 };
 
+/** The same, for a file handle — reopening a recent needs permission
+ * asked for again, because it does not survive the tab. */
+type PermissionedFile = FileSystemFileHandle & {
+  requestPermission?: (options: { mode: "read" | "readwrite" }) => Promise<PermissionState>;
+};
+
 interface WindowWithDirectoryPicker extends Window {
   showDirectoryPicker?: (options?: {
     mode?: "read" | "readwrite";
@@ -1167,6 +1179,90 @@ interface WindowWithDirectoryPicker extends Window {
  * into the same folder asks again, once, on the click that writes — see
  * `exportMarkdown`.
  */
+// ---------------------------------------------------------------- //
+// Recent documents.
+//
+// The desktop remembers a path; there are no paths here. What a picker
+// hands back is a `FileSystemFileHandle`, which is structured-
+// cloneable — so it goes in IndexedDB, not localStorage, and comes back
+// after the tab is closed. Reading it again needs permission, asked for
+// on the click that reopens it, because that is a user gesture and a
+// bare `queryPermission` on load is not.
+//
+// A file opened through a plain `<input>` (Firefox, Safari) yields a
+// `File`, which is a snapshot and cannot outlive the page. Those are
+// not recorded — see `$lib/recents` for why an unopenable row is worse
+// than a short list.
+// ---------------------------------------------------------------- //
+const RECENTS_DB = "openpdfedit-recents";
+const RECENTS_STORE = "handles";
+
+function openRecentsDb(): Promise<IDBDatabase> {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(RECENTS_DB, 1);
+    request.onupgradeneeded = () => request.result.createObjectStore(RECENTS_STORE);
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+}
+
+async function putRecentHandle(key: string, handle: FileSystemFileHandle): Promise<void> {
+  const db = await openRecentsDb();
+  await new Promise<void>((resolve, reject) => {
+    const tx = db.transaction(RECENTS_STORE, "readwrite");
+    tx.objectStore(RECENTS_STORE).put(handle, key);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+  db.close();
+}
+
+async function takeRecentHandle(key: string): Promise<FileSystemFileHandle | null> {
+  const db = await openRecentsDb();
+  const handle = await new Promise<FileSystemFileHandle | null>((resolve, reject) => {
+    const tx = db.transaction(RECENTS_STORE, "readonly");
+    const req = tx.objectStore(RECENTS_STORE).get(key);
+    req.onsuccess = () => resolve((req.result as FileSystemFileHandle | undefined) ?? null);
+    req.onerror = () => reject(req.error);
+  });
+  db.close();
+  return handle;
+}
+
+async function dropRecentHandle(key: string): Promise<void> {
+  try {
+    const db = await openRecentsDb();
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction(RECENTS_STORE, "readwrite");
+      tx.objectStore(RECENTS_STORE).delete(key);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+    db.close();
+  } catch {
+    // The entry is gone from the visible list either way, which is
+    // what the click asked for.
+  }
+}
+
+/** Records an opened file, if it is one that can be opened again.
+ *
+ * Keyed by name so reopening the same file replaces its entry rather
+ * than accumulating one per open — the same reasoning as the vault
+ * store below, and it keeps the IndexedDB keys and the localStorage
+ * ids in step without a second identifier to generate and match. */
+async function rememberOpened(target: FileTarget): Promise<void> {
+  if (target.kind !== "handle") return;
+  try {
+    await putRecentHandle(target.name, target.handle);
+    for (const stale of rememberRecent(target.name, target.name, Date.now())) {
+      await dropRecentHandle(stale);
+    }
+  } catch {
+    // Storage refused. The document is open; the list is a convenience.
+  }
+}
+
 const VAULT_DB = "openpdfedit-vaults";
 const VAULT_STORE = "handles";
 
@@ -1643,6 +1739,54 @@ export const wasmBackend: Backend = {
     const session = await ensureSession();
     const json = session.documentOutline(handle);
     return JSON.parse(json) as OutlineEntryDto[];
+  },
+
+  async recentDocuments() {
+    return listRecents();
+  },
+
+  async openRecent(id) {
+    const handle = await takeRecentHandle(id).catch(() => null);
+    if (!handle) {
+      forgetRecent(id);
+      return null;
+    }
+    // Permission does not survive the tab, so it is asked for again —
+    // on this click, which is the user gesture that makes it allowed to
+    // ask at all. `readwrite` because saving over the original is the
+    // whole reason the handle was kept rather than a copy of the bytes.
+    try {
+      const state = await (handle as PermissionedFile).requestPermission?.({
+        mode: "readwrite",
+      });
+      if (state && state !== "granted") return null;
+      // Not `forgetRecent` on a refusal: the file is still there and
+      // the answer might be different next time. Only a file that has
+      // actually gone is dropped, below.
+      const opened = await openFromTarget(handle.name, {
+        kind: "handle",
+        handle,
+        name: handle.name,
+      });
+      return opened;
+    } catch {
+      // Moved or deleted since it was last opened: `getFile()` throws
+      // NotFoundError. Nothing to come back to, so stop offering it.
+      forgetRecent(id);
+      await dropRecentHandle(id);
+      return null;
+    }
+  },
+
+  async forgetRecent(id) {
+    forgetRecent(id);
+    await dropRecentHandle(id);
+  },
+
+  async clearRecents() {
+    const ids = listRecents().map((entry) => entry.id);
+    clearRecents();
+    for (const id of ids) await dropRecentHandle(id);
   },
 
   async flattenDocument(request) {
