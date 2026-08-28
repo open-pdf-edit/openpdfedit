@@ -106,16 +106,14 @@ pub fn create_field(doc: &mut Document, field: NewField) -> Result<ObjectId, For
         // printed, standard practice for a field meant to be filled in,
         // not an interactive-only artifact.
         "F" => 4,
-        // Border/background hints, for viewers that regenerate
-        // appearances themselves rather than using the streams below.
-        "MK" => dictionary! {
-            "BC" => vec![0.35.into(), 0.35.into(), 0.35.into()],
-            "BG" => vec![0.95.into(), 0.95.into(), 0.95.into()],
-        },
-        // A 1pt solid border, so a viewer that synthesizes its own
-        // appearance still draws the box.
-        "BS" => dictionary! { "W" => 1, "S" => "S" },
     };
+
+    // `/MK` (border and background colours) and `/BS` (border width) are
+    // set per kind below rather than here. They used to be shared, which
+    // gave a text field a grey box it had no business drawing: a field
+    // added over a form that already has its own printed box came out
+    // with two, and one placed over artwork covered it. A checkbox is
+    // the opposite case — with no box drawn there is nothing to tick.
 
     // A widget with no `/AP` normal-appearance stream is drawn by
     // *nothing* — PDFium included. Viewers are only obliged to synthesize
@@ -131,7 +129,18 @@ pub fn create_field(doc: &mut Document, field: NewField) -> Result<ObjectId, For
             widget.set("DA", Object::string_literal("/Helv 0 Tf 0 g"));
             ensure_default_resources(doc)?;
 
-            let normal = appearance_stream(doc, width, height, checkbox_box_ops(width, height))?;
+            // Nothing drawn: no frame, no fill, only the typed value.
+            //
+            // All three of these are needed, and blanking the stream
+            // alone would not do it. `NeedAppearances` is set below, so
+            // a conforming viewer regenerates the appearance from `/MK`
+            // and `/BS` and never reads the stream — leaving either in
+            // place puts the box back everywhere it actually matters.
+            // `/BS` `/W 0` rather than no `/BS`, because the spec's
+            // default border width is 1: saying nothing is not the same
+            // as saying none.
+            widget.set("BS", dictionary! { "W" => 0, "S" => "S" });
+            let normal = appearance_stream(doc, width, height, Vec::new())?;
             widget.set("AP", dictionary! { "N" => Object::Reference(normal) });
         }
         NewFieldKind::Checkbox => {
@@ -144,13 +153,19 @@ pub fn create_field(doc: &mut Document, field: NewField) -> Result<ObjectId, For
             // caption `4` is the conventional check mark, and is what
             // viewers that regenerate appearances will look for.
             widget.set("DA", Object::string_literal("/ZaDb 0 Tf 0 g"));
-            if let Some(mk) = widget
-                .get_mut(b"MK")
-                .ok()
-                .and_then(|o| o.as_dict_mut().ok())
-            {
-                mk.set("CA", Object::string_literal("4"));
-            }
+            // Border and background hints, for viewers that regenerate
+            // appearances themselves rather than using the streams
+            // below. `/CA` is the caption a regenerating viewer draws
+            // for the checked state.
+            widget.set(
+                "MK",
+                dictionary! {
+                    "BC" => vec![0.35.into(), 0.35.into(), 0.35.into()],
+                    "BG" => vec![0.95.into(), 0.95.into(), 0.95.into()],
+                    "CA" => Object::string_literal("4"),
+                },
+            );
+            widget.set("BS", dictionary! { "W" => 1, "S" => "S" });
             ensure_checkbox_resources(doc)?;
 
             // The real fix for "it's not a checkbox": a checkbox's `/AP`
@@ -400,6 +415,93 @@ mod tests {
         let mut bytes = Vec::new();
         doc.save_to(&mut bytes).unwrap();
         bytes
+    }
+
+    /// A text field draws nothing of its own.
+    ///
+    /// It used to arrive as a grey box with a dark border, which is
+    /// wrong wherever a field is added over a form that already has its
+    /// own printed box, or over artwork it then covers. All three of
+    /// the things that can draw that box have to be absent, not just
+    /// the appearance stream: `NeedAppearances` is set on the document,
+    /// so a conforming viewer regenerates from `/MK` and `/BS` and
+    /// never reads the stream at all.
+    #[test]
+    fn a_text_field_draws_no_frame_and_no_background() {
+        let mut doc = Document::from_bytes(&minimal_pdf_bytes()).expect("should parse");
+        let field_id = create_field(
+            &mut doc,
+            NewField {
+                page_index: 0,
+                name: "over_a_printed_box".into(),
+                rect: [50.0, 700.0, 250.0, 720.0],
+                kind: NewFieldKind::Text,
+            },
+        )
+        .expect("create_field should succeed");
+        let saved = doc.save_incremental().expect("save should succeed");
+        let reopened = lopdf::Document::load_mem(&saved).unwrap();
+        let field = reopened.get_dictionary(field_id).unwrap();
+
+        // No colours for a regenerating viewer to paint.
+        match field.get(b"MK") {
+            Err(_) => {}
+            Ok(mk) => {
+                let mk = mk.as_dict().expect("/MK should be a dictionary");
+                assert!(
+                    mk.get(b"BC").is_err(),
+                    "a text field must declare no border colour"
+                );
+                assert!(
+                    mk.get(b"BG").is_err(),
+                    "a text field must declare no background"
+                );
+            }
+        }
+
+        // Zero, not absent: the spec's default border width is 1.
+        let bs = field.get(b"BS").unwrap().as_dict().unwrap();
+        assert_eq!(bs.get(b"W").unwrap().as_i64().unwrap(), 0);
+
+        // And nothing painted in the appearance either.
+        let ap = field.get(b"AP").unwrap().as_dict().unwrap();
+        let normal = ap.get(b"N").unwrap().as_reference().unwrap();
+        let stream = reopened.get_object(normal).unwrap().as_stream().unwrap();
+        let content = stream
+            .decompressed_content()
+            .unwrap_or_else(|_| stream.content.clone());
+        assert!(
+            Content::decode(&content).unwrap().operations.is_empty(),
+            "a text field's appearance should paint nothing, got {:?}",
+            String::from_utf8_lossy(&content)
+        );
+    }
+
+    /// The other half of the same change: a checkbox still has to look
+    /// like one. Removing the box from both would have made a checkbox
+    /// an invisible square with nothing to tick.
+    #[test]
+    fn a_checkbox_keeps_its_box() {
+        let mut doc = Document::from_bytes(&minimal_pdf_bytes()).expect("should parse");
+        let field_id = create_field(
+            &mut doc,
+            NewField {
+                page_index: 0,
+                name: "agree".into(),
+                rect: [50.0, 700.0, 70.0, 720.0],
+                kind: NewFieldKind::Checkbox,
+            },
+        )
+        .expect("create_field should succeed");
+        let saved = doc.save_incremental().expect("save should succeed");
+        let reopened = lopdf::Document::load_mem(&saved).unwrap();
+        let field = reopened.get_dictionary(field_id).unwrap();
+
+        let mk = field.get(b"MK").unwrap().as_dict().unwrap();
+        assert!(mk.get(b"BC").is_ok(), "a checkbox needs a border colour");
+        assert!(mk.get(b"BG").is_ok(), "a checkbox needs a background");
+        let bs = field.get(b"BS").unwrap().as_dict().unwrap();
+        assert_eq!(bs.get(b"W").unwrap().as_i64().unwrap(), 1);
     }
 
     #[test]
