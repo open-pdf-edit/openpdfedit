@@ -40,7 +40,8 @@
   import InstallPrompt from "$lib/InstallPrompt.svelte";
   import Icon from "$lib/Icon.svelte";
   import { tooltip } from "$lib/tooltip";
-  import { describeWhen, type RecentDocument } from "$lib/recents";
+  import RecentsList from "$lib/RecentsList.svelte";
+  import { type RecentDocument } from "$lib/recents";
 
   // Milestone M2 scope (PLAN.md): annotations (markup tools + comments
   // panel), on top of M1's open/scroll/zoom viewer. Pixels come from the
@@ -234,6 +235,38 @@
     void refreshRecents();
   });
 
+  // ---- History menu ----
+  let historyOpen = $state(false);
+  let historyEl = $state<HTMLElement | null>(null);
+
+  async function toggleHistory() {
+    // Refreshed on the way open. The effect above only runs on the
+    // start screen, so with a document open the list would otherwise
+    // still be the one from launch — missing, among other things, the
+    // document you are looking at.
+    if (!historyOpen) await refreshRecents();
+    historyOpen = !historyOpen;
+  }
+
+  $effect(() => {
+    if (!historyOpen) return;
+    const dismiss = (event: MouseEvent) => {
+      if (!historyEl?.contains(event.target as Node)) historyOpen = false;
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") historyOpen = false;
+    };
+    // Capture, so a click that also does something else still closes
+    // the menu — and pointerdown rather than click, so dragging out of
+    // the menu onto the page dismisses it the way a menu should.
+    addEventListener("pointerdown", dismiss, true);
+    addEventListener("keydown", onKey);
+    return () => {
+      removeEventListener("pointerdown", dismiss, true);
+      removeEventListener("keydown", onKey);
+    };
+  });
+
   async function handleOpenRecent(id: string) {
     if (recentBusy) return;
     recentBusy = id;
@@ -258,6 +291,7 @@
         });
         return;
       }
+      historyOpen = false;
       await adoptAsNewTab(opened, opened.file_path);
     } catch (e) {
       error = formatError(e);
@@ -274,6 +308,10 @@
   async function handleClearRecents() {
     await backend.clearRecents();
     await refreshRecents();
+    // The button that opened this menu is about to disappear with the
+    // list, taking the menu with it; closing first avoids a frame of
+    // an empty popover hanging off nothing.
+    historyOpen = false;
   }
 
   // ---- Remove markup ----
@@ -2220,6 +2258,38 @@
       Open PDF…
     </button>
 
+    <!-- The same list the start screen shows, reachable with a document
+         already open — which is when you want the previous one and the
+         start screen is no longer on screen. Absent rather than
+         disabled when there is nothing in it: a permanently dead
+         control teaches people to stop looking at that corner. -->
+    {#if recents.length > 0}
+      <div class="history" bind:this={historyEl}>
+        <button
+          class="oa-icon-btn oa-icon-btn--sm"
+          class:oa-icon-btn--selected={historyOpen}
+          onclick={toggleHistory}
+          use:tooltip={"Recent documents"}
+          aria-label="Recent documents"
+          aria-expanded={historyOpen}
+        >
+          <Icon name="clock" size={15} />
+        </button>
+        {#if historyOpen}
+          <div class="history__menu">
+            <RecentsList
+              entries={recents}
+              busy={recentBusy}
+              {now}
+              onOpen={handleOpenRecent}
+              onForget={handleForgetRecent}
+              onClear={handleClearRecents}
+            />
+          </div>
+        {/if}
+      </div>
+    {/if}
+
     {#if doc}
       <div class="topbar__group">
         <button
@@ -2794,33 +2864,14 @@
              "Recent" heading over blank space on first run is a promise
              about a feature nobody asked about yet. -->
         {#if recents.length > 0}
-          <div class="recents">
-            <div class="recents__head">
-              <span class="recents__title">Recent</span>
-              <button class="recents__clear" onclick={handleClearRecents}>Clear</button>
-            </div>
-            {#each recents as entry (entry.id)}
-              <div class="recent">
-                <button
-                  class="recent__open"
-                  onclick={() => handleOpenRecent(entry.id)}
-                  disabled={recentBusy !== null}
-                >
-                  <Icon name={recentBusy === entry.id ? "loader-circle" : "file-pen"} size={15} spin={recentBusy === entry.id} />
-                  <span class="recent__name">{entry.name}</span>
-                  <span class="recent__when">{describeWhen(entry.openedAt, now)}</span>
-                </button>
-                <button
-                  class="recent__forget"
-                  onclick={() => handleForgetRecent(entry.id)}
-                  use:tooltip={"Remove from this list"}
-                  aria-label={`Remove ${entry.name} from the recent list`}
-                >
-                  <Icon name="x" size={13} />
-                </button>
-              </div>
-            {/each}
-          </div>
+          <RecentsList
+            entries={recents}
+            busy={recentBusy}
+            {now}
+            onOpen={handleOpenRecent}
+            onForget={handleForgetRecent}
+            onClear={handleClearRecents}
+          />
         {/if}
         <!-- Here rather than in the topbar: this is the one moment
              someone is deciding whether to keep the thing, and it is
@@ -3260,104 +3311,45 @@
   }
 
   /* Sized to the list rather than to the screen: a full-width column on
-     a 27-inch display would make six filenames look like a database. */
-  .recents {
-    width: min(420px, 100%);
+     a 27-inch display would make six filenames look like a database.
+     The rows themselves live in RecentsList. */
+  :global(.empty-state .recents) {
     margin-top: var(--space-2);
+  }
+
+  /* The History menu hangs off its button, so the button is the
+     positioning context. */
+  .history {
+    position: relative;
     display: flex;
-    flex-direction: column;
-    gap: 1px;
   }
 
-  .recents__head {
-    display: flex;
-    align-items: baseline;
-    justify-content: space-between;
-    padding: 0 var(--space-2) var(--space-1);
-  }
-
-  .recents__title {
-    font: var(--type-eyebrow);
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-    color: var(--text-muted);
-  }
-
-  .recents__clear {
-    background: none;
-    border: 0;
-    padding: 0;
-    cursor: pointer;
-    font: var(--type-caption);
-    color: var(--text-muted);
-  }
-  .recents__clear:hover {
-    color: var(--text-strong);
-  }
-
-  .recent {
-    display: flex;
-    align-items: stretch;
-    border-radius: var(--radius-sm);
-  }
-  .recent:hover {
-    background: var(--surface-hover);
-  }
-
-  .recent__open {
-    flex: 1;
-    min-width: 0;
-    display: flex;
-    align-items: center;
-    gap: var(--space-2);
+  .history__menu {
+    position: absolute;
+    top: calc(100% + var(--space-2));
+    left: 0;
+    z-index: 40;
+    /* Narrower than the start screen's copy: this one is a menu beside
+       a button, not the main thing on an empty page. */
+    --recents-width: 320px;
     padding: var(--space-2);
-    background: none;
-    border: 0;
-    cursor: pointer;
-    text-align: left;
-    color: inherit;
-    font: var(--type-body);
-  }
-  .recent__open:disabled {
-    cursor: default;
+    background: var(--surface-raised);
+    border: var(--border-width) solid var(--border-hairline);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-lg, 0 8px 24px rgba(0, 0, 0, 0.18));
   }
 
-  /* The filename is the row: it gets the space, and the age gets
-     whatever is left rather than pushing a long name out of view. */
-  .recent__name {
-    flex: 1;
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .recent__when {
-    flex: none;
-    font: var(--type-caption);
-    color: var(--text-muted);
-  }
-
-  /* Visible only on hover or focus: six of these down the side of the
-     list is a column of ✕ competing with the filenames, and removing a
-     row is the rarer thing to want by far. */
-  .recent__forget {
-    flex: none;
-    display: flex;
-    align-items: center;
-    padding: 0 var(--space-2);
-    background: none;
-    border: 0;
-    cursor: pointer;
-    color: var(--text-muted);
-    opacity: 0;
-  }
-  .recent:hover .recent__forget,
-  .recent__forget:focus-visible {
-    opacity: 1;
-  }
-  .recent__forget:hover {
-    color: var(--text-strong);
+  /* On a phone the topbar has no room to hang a 320px panel off a
+     button near the left edge — it would run off the right. Pinned to
+     the viewport instead, with the same rows inside. */
+  @media (max-width: 720px) {
+    .history__menu {
+      position: fixed;
+      left: var(--space-3);
+      right: var(--space-3);
+      top: 56px;
+      --recents-width: auto;
+    }
   }
 
   /* ---------------------------------------------------------------- *

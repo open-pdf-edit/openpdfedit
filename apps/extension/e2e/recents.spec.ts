@@ -5,6 +5,7 @@
 // whose file is gone must not sit there forever pretending to work —
 // what makes the list worth having is that every row does something.
 import { expect, test } from "./fixtures";
+import { TEXT_PDF_BASE64 } from "./pdf-fixtures";
 
 const ORIGIN = "http://localhost:8099";
 const KEY = "openpdfedit.recents";
@@ -112,5 +113,88 @@ test("a row whose file is gone says so and stops being offered", async ({ browse
   await expect(page.getByText(/couldn't reopen that one/i)).toBeVisible();
   // Dropped rather than left to be clicked again to the same effect.
   await expect(page.locator(".recents")).toHaveCount(0);
+  await ctx.close();
+});
+
+/** Opens a document, so the start screen (and its copy of the list) is
+ *  gone and the topbar's History button is the only way to the recents. */
+async function openADocument(page: import("@playwright/test").Page) {
+  await page.addInitScript((base64: string) => {
+    const bytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
+    (window as unknown as Record<string, unknown>).showOpenFilePicker = async () => [
+      {
+        name: "report.pdf",
+        async getFile() {
+          return new File([bytes], "report.pdf", { type: "application/pdf" });
+        },
+        async createWritable() {
+          return { async write() {}, async close() {} };
+        },
+      },
+    ];
+  }, TEXT_PDF_BASE64);
+  // `addInitScript` only applies to navigations after it is added, and
+  // the seeding above has already loaded the page.
+  await page.reload();
+  await page.locator("header.topbar").getByRole("button", { name: "Open PDF…" }).click();
+  await expect(page.locator("canvas").first()).toBeVisible({ timeout: 30_000 });
+}
+
+test("History reaches the recents once the start screen is gone", async ({ browser }) => {
+  const ctx = await browser.newContext();
+  const page = await ctx.newPage();
+  await seed(page, [
+    ["board-pack.pdf", 40_000],
+    ["lease.pdf", 5 * 3600_000],
+  ]);
+  await openADocument(page);
+
+  // The start screen and its list are gone; the button is the way back.
+  await expect(page.locator(".empty-state")).toHaveCount(0);
+  await expect(page.locator(".history__menu")).toHaveCount(0);
+
+  await page.getByRole("button", { name: "Recent documents" }).click();
+  const menu = page.locator(".history__menu");
+  await expect(menu).toBeVisible();
+  await expect(menu.locator(".recent__name")).toHaveText(["board-pack.pdf", "lease.pdf"]);
+
+  await ctx.close();
+});
+
+test("the History menu closes the ways a menu should", async ({ browser }) => {
+  const ctx = await browser.newContext();
+  const page = await ctx.newPage();
+  await seed(page, [["board-pack.pdf", 40_000]]);
+  await openADocument(page);
+
+  const button = page.getByRole("button", { name: "Recent documents" });
+  const menu = page.locator(".history__menu");
+
+  await button.click();
+  await expect(menu).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(menu).toHaveCount(0);
+
+  await button.click();
+  await expect(menu).toBeVisible();
+  // A press anywhere else. Raw coordinates rather than a locator
+  // click: the point is that a press outside dismisses, and
+  // Playwright's actionability checks on whatever happens to be under
+  // the cursor are not what is being tested.
+  const size = page.viewportSize()!;
+  await page.mouse.click(size.width - 60, size.height - 60);
+  await expect(menu).toHaveCount(0);
+
+  await ctx.close();
+});
+
+test("no History button when there is no history", async ({ browser }) => {
+  const ctx = await browser.newContext();
+  const page = await ctx.newPage();
+  await page.goto(ORIGIN);
+  await openADocument(page);
+  // Absent, not disabled: a control that is permanently dead teaches
+  // people to stop looking at that corner of the screen.
+  await expect(page.getByRole("button", { name: "Recent documents" })).toHaveCount(0);
   await ctx.close();
 });
