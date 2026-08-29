@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Privacy — OpenPdfEdit</title>
-<meta name="description" content="OpenPdfEdit does not upload your documents. There is no analytics, no telemetry, and the only network request it makes is an optional sign-in.">
+<title>Privacy policy — OpenPdfEdit</title>
+<meta name="description" content="OpenPdfEdit's privacy policy: what is never collected, what stays on your device, the one optional sign-in that uses the network, and how to delete anything held.">
 <meta name="theme-color" content="#111111">
 <link rel="canonical" href="https://openpdfedit.com/privacy.html">
 <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1">
@@ -12,8 +12,8 @@
 <meta property="og:site_name" content="OpenPdfEdit">
 <meta property="og:locale" content="en">
 <meta property="og:url" content="https://openpdfedit.com/privacy.html">
-<meta property="og:title" content="Privacy — OpenPdfEdit">
-<meta property="og:description" content="OpenPdfEdit does not upload your documents. There is no analytics, no telemetry, and the only network request it makes is an optional sign-in.">
+<meta property="og:title" content="Privacy policy — OpenPdfEdit">
+<meta property="og:description" content="OpenPdfEdit's privacy policy: what is never collected, what stays on your device, the one optional sign-in that uses the network, and how to delete anything held.">
 <meta property="og:image" content="https://openpdfedit.com/og.png">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:image" content="https://openpdfedit.com/og.png">
@@ -394,17 +394,25 @@ footer{border-top:1px solid var(--white-10);background:var(--color-background-al
 
 <!-- Written to be checkable, not reassuring. Every claim here is
      either verifiable in the source or is about the one optional
-     feature that does talk to a server. -->
+     feature that does talk to a server.
+
+     Structured as a policy rather than as an essay, which is what this
+     used to be. The prose was accurate and is mostly kept, but a
+     reader looking for a specific answer — what is stored, who else is
+     involved, how to delete it, who to ask — had to infer it from
+     paragraphs about something else, and a store reviewer or a
+     procurement form has a list. -->
 <section class="hero">
   <div class="wrap" style="text-align:left;max-width:70ch">
-    <h1 style="font-size:clamp(32px,5vw,52px)">Privacy<span class="accent">.</span></h1>
+    <h1 style="font-size:clamp(32px,5vw,52px)">Privacy policy<span class="accent">.</span></h1>
     <p class="sub" style="margin-left:0">The short version: your documents never leave your machine, because nothing in the app can send them anywhere.</p>
+    <p class="tool-desc" style="font-size:14px;margin-top:18px">Last updated 29 August 2026.</p>
   </div>
 </section>
 
 <section>
   <div class="wrap" style="max-width:70ch">
-    <h2>Your documents</h2>
+    <h2>What is never collected</h2>
     <p class="tool-desc" style="font-size:16px;margin-top:14px">
       Every PDF you open is read, rendered and edited on your own device. The desktop app has no
       HTTP client in the binary — not disabled, not opt-out, absent. The browser version does the
@@ -413,7 +421,33 @@ footer{border-top:1px solid var(--white-10);background:var(--color-background-al
     </p>
     <p class="tool-desc" style="font-size:16px;margin-top:14px">
       Nothing about a document is collected, logged or transmitted. Not its contents, not its name,
-      not the fact that you opened one. There is no analytics, no telemetry and no crash reporting.
+      not the fact that you opened one. There is no analytics, no telemetry and no crash reporting,
+      in any of the three builds.
+    </p>
+  </div>
+</section>
+
+<section>
+  <div class="wrap" style="max-width:70ch">
+    <h2>What is stored on your device</h2>
+    <p class="tool-desc" style="font-size:16px;margin-top:14px">
+      All of it stays in your own browser or on your own disk. None of it is sent anywhere, and
+      the whole list is:
+    </p>
+    <ul class="tool-desc" style="font-size:16px;margin-top:14px;padding-left:1.2em">
+      <li style="margin-top:8px"><b>Recently opened documents</b> — the file name and when you
+        opened it, for the list on the start screen, plus a handle the browser uses to reopen the
+        file. The last six. Clearing the list removes both.</li>
+      <li style="margin-top:8px"><b>Signatures you have drawn</b>, so you do not redraw them each
+        time.</li>
+      <li style="margin-top:8px"><b>The folder you chose</b> for Markdown export, if you picked
+        one — a handle to it, not a copy of what is in it.</li>
+      <li style="margin-top:8px"><b>The OCR language</b> you last used.</li>
+      <li style="margin-top:8px"><b>Your sign-in session</b>, if you have signed in. Signing out
+        removes it.</li>
+    </ul>
+    <p class="tool-desc" style="font-size:16px;margin-top:14px">
+      No cookies, and nothing that identifies you across sites.
     </p>
   </div>
 </section>
@@ -458,24 +492,94 @@ footer{border-top:1px solid var(--white-10);background:var(--color-background-al
 
 <section>
   <div class="wrap" style="max-width:70ch">
-    <h2>This website</h2>
+    <h2>Payments</h2>
     <p class="tool-desc" style="font-size:16px;margin-top:14px">
-      No cookies, no analytics, no third-party scripts, no embedded fonts from anyone else’s
-      server. The web app stores one thing in your browser: your sign-in session, if you have one,
-      which signing out removes.
-    </p>
-    <p class="tool-desc" style="font-size:16px;margin-top:14px">
-      Downloads are served by GitHub, which will see your IP address the way any file host does.
+      The two Supporter tools cost 1,000 credits once, for both together. Credits are bought on the
+      account service's own pages, never inside the editor, and payment is handled entirely by its
+      payment processor. OpenPdfEdit never sees or stores a card number, a wallet seed phrase or a
+      private key.
     </p>
   </div>
 </section>
 
 <section>
   <div class="wrap" style="max-width:70ch">
-    <h2>Questions</h2>
+    <h2>Permissions</h2>
     <p class="tool-desc" style="font-size:16px;margin-top:14px">
-      Open an issue on <a href="https://github.com/open-pdf-edit/OpenPdfEdit/issues" style="text-decoration:underline">GitHub</a>.
-      If something here turns out to be inaccurate, that is a bug and worth reporting as one.
+      The Chrome extension requests <b>none</b>. Its manifest declares no permissions and no host
+      permissions at all — not <span class="mono">tabs</span>, not
+      <span class="mono">storage</span>, not <span class="mono">activeTab</span>. Files are opened
+      through the browser's own file picker, which you drive; the extension never gets standing
+      access to your filesystem, your tabs or any website.
+    </p>
+    <p class="tool-desc" style="font-size:16px;margin-top:14px">
+      The desktop app asks the operating system for nothing beyond the file you point it at.
+    </p>
+  </div>
+</section>
+
+<section>
+  <div class="wrap" style="max-width:70ch">
+    <h2>Third parties</h2>
+    <p class="tool-desc" style="font-size:16px;margin-top:14px">
+      Your data is never sold, rented or shared for advertising or any other purpose. The only
+      outside services involved at all are the sign-in provider you choose, if you sign in; the
+      payment processor, if you buy credits; and Telegram, if you deliberately open the app inside
+      Telegram. Each is involved only for the action you took, and none of them receives a
+      document.
+    </p>
+    <p class="tool-desc" style="font-size:16px;margin-top:14px">
+      Downloads of the desktop app are served by GitHub, which will see your IP address the way any
+      file host does.
+    </p>
+  </div>
+</section>
+
+<section>
+  <div class="wrap" style="max-width:70ch">
+    <h2>Deleting your data</h2>
+    <p class="tool-desc" style="font-size:16px;margin-top:14px">
+      Everything stored on your device can be removed from inside the app: clear the recent list,
+      delete a saved signature, sign out. Clearing the site's data in your browser, or uninstalling
+      the extension or desktop app, removes all of it at once. None of it needs asking us, because
+      none of it is ours.
+    </p>
+    <p class="tool-desc" style="font-size:16px;margin-top:14px">
+      To delete your account and the sign-in data held with it, write to the address below.
+    </p>
+  </div>
+</section>
+
+<section>
+  <div class="wrap" style="max-width:70ch">
+    <h2>Children</h2>
+    <p class="tool-desc" style="font-size:16px;margin-top:14px">
+      OpenPdfEdit is not directed at children under 13 and does not knowingly collect data from
+      them. It does not knowingly collect data from anyone, which is rather the point.
+    </p>
+  </div>
+</section>
+
+<section>
+  <div class="wrap" style="max-width:70ch">
+    <h2>Changes to this policy</h2>
+    <p class="tool-desc" style="font-size:16px;margin-top:14px">
+      If this policy changes, the date at the top of the page changes with it, and the change is in
+      the public commit history along with the code it describes.
+    </p>
+  </div>
+</section>
+
+<section>
+  <div class="wrap" style="max-width:70ch">
+    <h2>Contact</h2>
+    <p class="tool-desc" style="font-size:16px;margin-top:14px">
+      Questions about this policy, or about your data:
+      <a class="mono" href="mailto:openpdfedit@gmail.com">openpdfedit@gmail.com</a>.
+    </p>
+    <p class="tool-desc" style="font-size:16px;margin-top:14px">
+      If something here turns out to be inaccurate, that is a bug and worth reporting as one —
+      <a href="https://github.com/open-pdf-edit/OpenPdfEdit/issues">open an issue on GitHub</a>.
     </p>
   </div>
 </section>
