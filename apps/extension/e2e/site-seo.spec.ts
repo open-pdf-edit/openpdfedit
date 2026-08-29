@@ -165,3 +165,61 @@ test("the app host is one indexable page, not unlimited copies of one", () => {
   const ext = readFileSync(join(process.cwd(), "dist", "index.html"), "utf8");
   expect(ext, "the extension build must not carry the web app's canonical").not.toContain("canonical");
 });
+
+test("the privacy policy answers the questions a policy has to answer", () => {
+  const html = read("privacy.html");
+  const headings = [...html.matchAll(/<h2[^>]*>([\s\S]*?)<\/h2>/g)].map((m) => textOf(m[1]));
+
+  // It used to be an essay — accurate, well written, and organised
+  // around what the author found interesting rather than around what a
+  // reader, a store reviewer or a procurement form comes looking for.
+  // Each of these is a question someone arrives with.
+  for (const section of [
+    "What is never collected",
+    "What is stored on your device",
+    "Payments",
+    "Permissions",
+    "Third parties",
+    "Deleting your data",
+    "Children",
+    "Changes to this policy",
+    "Contact",
+  ]) {
+    expect(headings, `the policy has no "${section}" section`).toContain(section);
+  }
+
+  // A policy with no reachable contact cannot honour a deletion
+  // request, which is the one thing it promises to be able to do.
+  expect(html, "no contact address").toMatch(/mailto:[^"']+@[^"']+/);
+
+  // Dated, so a reader can tell whether it predates the thing they are
+  // asking about.
+  expect(html, "no last-updated date").toMatch(/Last updated \d{1,2} \w+ \d{4}/);
+});
+
+test("the policy's list of what is stored matches what the app stores", () => {
+  const html = read("privacy.html");
+  const stored = html.slice(html.indexOf("What is stored on your device"));
+
+  // The claim was "the web app stores one thing in your browser: your
+  // sign-in session" — true when written, false the moment the recent
+  // documents list landed. A privacy policy going quietly out of date
+  // as features arrive is the failure mode worth catching, so every
+  // storage key in the app has to be accounted for here.
+  const keyed: [string, RegExp][] = [
+    ["openpdfedit.recents", /recently opened/i],
+    ["openpdfedit.signatures", /signatures/i],
+    ["openpdfedit.markdown.vault", /folder you chose/i],
+    ["openpdfedit.ocr.lang", /OCR language/i],
+    ["openapps.session", /sign-in session/i],
+  ];
+
+  const src = ["lib/recents.ts", "lib/signatures.svelte.ts", "routes/+page.svelte", "lib/openapps.ts"]
+    .map((f) => readFileSync(join(process.cwd(), "..", "desktop", "src", f), "utf8"))
+    .join("\n");
+
+  for (const [key, described] of keyed) {
+    expect(src, `${key} is no longer in the app — is the policy stale the other way?`).toContain(key);
+    expect(stored, `the policy does not mention what ${key} stores`).toMatch(described);
+  }
+});
