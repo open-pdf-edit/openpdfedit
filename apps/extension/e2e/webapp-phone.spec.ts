@@ -452,3 +452,66 @@ test("a phone names the document tools too, since it has no hover", async ({ bro
 
   await ctx.close();
 });
+
+/**
+ * What a phone actually shows.
+ *
+ * The existing tests here checked that things exist and that the page
+ * does not overflow, and everything below was wrong while they passed:
+ * the rail's group headings were `display: none`, every topbar button
+ * carried a name only in `aria-label` — which a phone never renders,
+ * having no hover to trigger a tooltip — and the third colour swatch
+ * wrapped past the bottom edge of a 62px bar and could not be tapped.
+ *
+ * Reachability and legibility, then, not presence.
+ */
+test("iPhone 13: the phone names its controls and can reach all of them", async ({ browser }) => {
+  const ctx = await browser.newContext({ ...devices["iPhone 13"] });
+  const page = await ctx.newPage();
+  await openDocument(page);
+
+  // Sixteen tools in a strip a third their width: the group names are
+  // what makes scrolling past Draw to reach Edit content deliberate
+  // rather than exploratory.
+  await expect(page.locator(".rail__heading")).toHaveText([
+    "Select",
+    "Mark up",
+    "Draw",
+    "Edit content",
+    "Fill & sign",
+  ]);
+  for (const heading of await page.locator(".rail__heading").all()) {
+    await expect(heading).toBeVisible();
+  }
+
+  // Every topbar button says what it is, in text on the screen. A
+  // tooltip is not a label where there is no pointer to hover with.
+  const unnamed = await page.evaluate(() =>
+    [...document.querySelectorAll("header.topbar button")]
+      .filter((b) => (b as HTMLElement).offsetParent !== null)
+      .filter((b) => !(b as HTMLElement).innerText.trim())
+      .map((b) => b.getAttribute("aria-label") ?? "(no aria-label either)"),
+  );
+  // Zoom in and out are the exception: a magnifier with a plus in it is
+  // universal, and the zoom percentage sits between them saying what
+  // they act on.
+  expect(unnamed.filter((n) => !/^Zoom (in|out)$/.test(n))).toEqual([]);
+
+  // Every swatch has to be inside the bar. `flex-wrap` inherited from
+  // the desktop's column rail stacked them, and the third fell off the
+  // bottom of the screen — present in the DOM, unreachable by a thumb.
+  const swatches = await page.evaluate(() => {
+    const rail = document.querySelector(".rail")!.getBoundingClientRect();
+    return [...document.querySelectorAll(".swatch")].map((s) => {
+      const r = s.getBoundingClientRect();
+      return { inside: r.top >= rail.top - 1 && r.bottom <= rail.bottom + 1, size: r.width };
+    });
+  });
+  expect(swatches.length).toBeGreaterThan(0);
+  expect(swatches.filter((s) => !s.inside), "swatches outside the tool bar").toEqual([]);
+  for (const s of swatches) {
+    expect(s.size, "a swatch smaller than a fingertip").toBeGreaterThanOrEqual(24);
+  }
+
+  await ctx.close();
+});

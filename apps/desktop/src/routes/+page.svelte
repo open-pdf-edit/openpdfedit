@@ -235,6 +235,31 @@
     void refreshRecents();
   });
 
+  // Whether the tool rail has more beyond its right edge — on a phone
+  // it is a strip about a third the width of its contents, and without
+  // this there is nothing on screen to say the other eleven tools
+  // exist. Drives a fade at that edge, which goes once you reach the
+  // end so it never fades content that is all there is.
+  let railEl = $state<HTMLElement | null>(null);
+  let railHasMore = $state(false);
+
+  function updateRailScroll() {
+    const el = railEl;
+    if (!el) return;
+    railHasMore = el.scrollLeft + el.clientWidth < el.scrollWidth - 1;
+  }
+
+  $effect(() => {
+    // Re-measured when the rail appears, and when the window changes
+    // shape: rotating a phone can turn a scrolling strip into one that
+    // fits, and the fade has to go with it.
+    void railEl;
+    void doc;
+    updateRailScroll();
+    addEventListener("resize", updateRailScroll);
+    return () => removeEventListener("resize", updateRailScroll);
+  });
+
   // ---- History menu ----
   let historyOpen = $state(false);
   let historyEl = $state<HTMLElement | null>(null);
@@ -2253,9 +2278,17 @@
   <header class="topbar">
     <BrandMark size={17} />
 
-    <button class="oa-btn oa-btn--ghost" onclick={pickAndOpen}>
+    <!-- Two wordings, one button. "Open PDF…" is right on a desktop
+         and takes half the width of a 390px topbar, which is what left
+         no room to name anything else along it. -->
+    <button
+      class="oa-btn oa-btn--ghost topbar__open"
+      onclick={pickAndOpen}
+      aria-label="Open PDF…"
+    >
       <Icon name="folder-open" size={15} />
-      Open PDF…
+      <span class="topbar__open-wide">Open PDF…</span>
+      <span class="topbar__label">Open</span>
     </button>
 
     <!-- The same list the start screen shows, reachable with a document
@@ -2274,6 +2307,7 @@
           aria-expanded={historyOpen}
         >
           <Icon name="clock" size={15} />
+          <span class="topbar__label">Recent</span>
         </button>
         {#if historyOpen}
           <div class="history__menu">
@@ -2304,12 +2338,15 @@
           aria-label={savesByDownloading ? "Download a copy" : "Save"}
         >
           <Icon name="save" size={15} spin={saveBusy} />
+          <span class="topbar__label">Save</span>
         </button>
         <button class="oa-icon-btn oa-icon-btn--sm" onclick={handleUndo} disabled={!doc.can_undo || undoRedoBusy || mutationBusy} use:tooltip={"Undo (⌘Z)"} aria-label="Undo">
           <Icon name="undo-2" size={15} />
+          <span class="topbar__label">Undo</span>
         </button>
         <button class="oa-icon-btn oa-icon-btn--sm" onclick={handleRedo} disabled={!doc.can_redo || undoRedoBusy || mutationBusy} use:tooltip={"Redo (⌘⇧Z)"} aria-label="Redo">
           <Icon name="redo-2" size={15} />
+          <span class="topbar__label">Redo</span>
         </button>
       </div>
 
@@ -2342,6 +2379,7 @@
         aria-expanded={moreOpen}
       >
         <Icon name="layout-panel-left" size={15} />
+        <span class="topbar__label">Tools</span>
       </button>
     {/if}
     <div class="topbar__spacer"></div>
@@ -2355,6 +2393,7 @@
       aria-label={signedIn ? "Account — signed in" : "Account"}
     >
       <Icon name="circle-user" size={15} />
+          <span class="topbar__label">Account</span>
     </button>
   </header>
 
@@ -2746,10 +2785,20 @@
 
   <div class="body">
     {#if doc}
-      <aside class="rail">
+      <aside
+        class="rail"
+        class:rail--more={railHasMore}
+        bind:this={railEl}
+        onscroll={updateRailScroll}
+      >
         {#each TOOL_GROUPS as group, g (group.name)}
-          <!-- The heading is decorative on a phone, where the rail is a
-               horizontal strip and a left border stands in for it. -->
+          <!-- Shown in both arrangements. On a phone this used to be
+               hidden, on the reasoning that a rule between groups says
+               the same thing in less space — but it does not: sixteen
+               tools in a strip a third of them wide, with four thin
+               rules in it, is a strip of unexplained icons. The name is
+               what makes scrolling past "Draw" to reach "Edit content"
+               a thing anyone would do on purpose. -->
           <p class="rail__heading">{group.name}</p>
           <div class="rail__group" class:rail__group--later={g > 0}>
             {#each group.tools as tool (tool.id)}
@@ -3319,6 +3368,13 @@
 
   /* The History menu hangs off its button, so the button is the
      positioning context. */
+  /* On a desktop these names live in the tooltip. A phone has no
+     hover, so the tooltip never appears and the icon is all there is —
+     which is what "the icons have no labels" meant. Shown below. */
+  .topbar__label {
+    display: none;
+  }
+
   .history {
     position: relative;
     display: flex;
@@ -3373,20 +3429,53 @@
        comes from the wordmark instead: the app is already open, and the
        empty state carries the mark in the middle of the screen where
        there is room for it. */
+    /* Seven named buttons across 390px. The gap comes down from 8px to
+       4px and the wordmark goes entirely — the app is already open, and
+       the empty state carries the mark in the middle of the screen
+       where there is room for it. */
     .topbar {
-      gap: var(--space-2);
-      padding: 0 var(--space-3);
+      gap: var(--space-1);
+      padding: 0 var(--space-2);
       height: 56px;
+    }
+
+    /* Icon over name, the same arrangement the tool rail and the tools
+       sheet already use, so one glance teaches all three. */
+    .topbar__label {
+      display: block;
+      font-size: 9px;
+      line-height: 1.1;
+      color: inherit;
+    }
+
+    .topbar :global(.oa-icon-btn),
+    .topbar__open {
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 1px;
+    }
+
+    /* "Open PDF…" is the desktop wording; here the icon and "Open" say
+       it in a third of the width. */
+    .topbar__open-wide {
+      display: none;
+    }
+
+    .topbar__open {
+      padding: 0;
+      min-width: 46px;
     }
 
     .topbar :global(.oa-brandmark) {
       display: none;
     }
 
-    /* 40px, up from 28: the smallest thing worth aiming a thumb at. */
+    /* Wide enough for the longest of these names, tall enough for a
+       glyph with one under it, and still the 44px a thumb wants. */
     .topbar :global(.oa-icon-btn) {
-      width: 40px;
-      height: 40px;
+      width: 46px;
+      height: 44px;
     }
 
     .topbar :global(.oa-btn) {
@@ -3515,10 +3604,27 @@
       max-width: 100%;
     }
 
-    /* No room for headings across a phone. A rule between groups says
-       the same thing in the space available. */
+    /* The group name travels with its group, along the strip. It was
+       hidden here, with a rule standing in for it — but a rule says
+       "these are different", not "these are the drawing ones", and
+       with only a third of the rail on screen at a time the second is
+       the useful half. It doubles as the scroll cue: a name clipped by
+       the right edge is the clearest possible statement that there is
+       more over there. */
     .rail__heading {
-      display: none;
+      display: flex;
+      align-items: center;
+      flex: 0 0 auto;
+      height: 52px;
+      max-width: 56px;
+      margin: 0;
+      padding: 0 var(--space-2) 0 var(--space-1);
+      font: var(--type-eyebrow);
+      font-size: 9px;
+      line-height: 1.15;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
     }
 
     .rail__group {
@@ -3526,22 +3632,53 @@
       align-items: center;
     }
 
+    /* The rule belongs before the heading, not after it. On the
+       heading's own left edge it separates one named group from the
+       next; on the group's, it cut between a name and the tools it
+       names — so "Mark up" read as the end of Select. */
     .rail__group--later {
+      margin-left: 0;
+      padding-left: 0;
+      border-left: none;
+    }
+
+    .rail__heading:not(:first-of-type) {
       margin-left: var(--space-2);
-      padding-left: var(--space-2);
+      padding-left: var(--space-3);
       border-left: var(--border-width) solid var(--border-hairline);
+    }
+
+    /* Fades the right edge while there is more along the strip, and
+       only while there is: fading the last icon when it really is the
+       last reads as a rendering fault rather than an invitation. */
+    .rail--more {
+      -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
+      mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
     }
 
     .rail__spacer {
       display: none;
     }
 
+    /* `nowrap` matters: the desktop rail is a column, so it wraps its
+       swatches down the strip, and inheriting that here stacked three
+       18px circles in a 62px bar. The third one fell past the bottom
+       edge — on a phone the black was simply unreachable.
+
+       Bigger, too. 18px is a fine mouse target and not a finger one. */
     .rail__colors {
       flex-direction: row;
-      gap: 6px;
-      padding-left: var(--space-2);
+      flex-wrap: nowrap;
+      align-items: center;
+      gap: var(--space-2);
+      padding: 0 var(--space-2) 0 var(--space-3);
       border-top: none;
       border-left: var(--border-width) solid var(--border-hairline);
+    }
+
+    .rail__colors :global(.swatch) {
+      width: 26px;
+      height: 26px;
     }
 
 
