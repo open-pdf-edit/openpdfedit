@@ -1,0 +1,113 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  MSIX packaging manifest for the Microsoft Store.
+
+  Tauri has no MSIX bundler, so the Store package is assembled from the
+  ordinary release .exe by scripts/build-msix.ps1, which substitutes the
+  @PLACEHOLDERS@ below and runs makeappx.exe over the result.
+
+  Three of those placeholders are not ours to choose. Identity/Name,
+  Identity/Publisher and Properties/PublisherDisplayName must match the
+  values Partner Center assigns after the app name is reserved, exactly,
+  or the upload is rejected as an identity mismatch. They are visible in
+  Partner Center under Product identity. Publisher is the full X.500
+  string, e.g. CN=A1B2C3D4-....
+
+  Do not commit real values here: they are per-account, and this file is
+  the template, not the built manifest.
+-->
+<Package
+  xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
+  xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
+  xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
+  IgnorableNamespaces="uap rescap">
+
+  <!--
+    Version must be four parts and the Store requires the last to be 0 —
+    it reserves the revision field for its own use and rejects anything
+    non-zero. build-msix.ps1 derives this from tauri.conf.json's
+    three-part version so the two cannot drift.
+  -->
+  <Identity
+    Name="@IDENTITY_NAME@"
+    Publisher="@PUBLISHER@"
+    Version="@VERSION@"
+    ProcessorArchitecture="x64" />
+
+  <Properties>
+    <DisplayName>OpenPdfEdit</DisplayName>
+    <PublisherDisplayName>@PUBLISHER_DISPLAY_NAME@</PublisherDisplayName>
+    <Logo>Assets\StoreLogo.png</Logo>
+    <Description>Edit, merge, compare, and sign PDFs entirely on your own machine.</Description>
+  </Properties>
+
+  <Dependencies>
+    <!--
+      1809 is the floor for reliably shipping a WebView2-based desktop
+      app through the Store. Tauri needs the WebView2 runtime, which is
+      present in-box from Windows 11 and delivered by Evergreen on 10.
+    -->
+    <TargetDeviceFamily
+      Name="Windows.Desktop"
+      MinVersion="10.0.17763.0"
+      MaxVersionTested="10.0.22621.0" />
+  </Dependencies>
+
+  <Resources>
+    <Resource Language="en-us" />
+  </Resources>
+
+  <Applications>
+    <!--
+      EntryPoint Windows.FullTrustApplication is what makes this a
+      packaged desktop app rather than a UWP one: the .exe runs as
+      itself, with normal filesystem access, inside an MSIX container.
+      Without it the app would be sandboxed like a store UWP app and
+      could not open the files the user picks.
+    -->
+    <Application Id="OpenPdfEdit"
+                 Executable="OpenPdfEdit.exe"
+                 EntryPoint="Windows.FullTrustApplication">
+      <uap:VisualElements
+        DisplayName="OpenPdfEdit"
+        Description="Edit, merge, compare, and sign PDFs entirely on your own machine. No upload, no account."
+        BackgroundColor="transparent"
+        Square150x150Logo="Assets\Square150x150Logo.png"
+        Square44x44Logo="Assets\Square44x44Logo.png">
+        <uap:DefaultTile
+          Square71x71Logo="Assets\Square71x71Logo.png"
+          Square310x310Logo="Assets\Square310x310Logo.png" />
+        <uap:SplashScreen Image="Assets\Square310x310Logo.png" BackgroundColor="transparent" />
+      </uap:VisualElements>
+
+      <Extensions>
+        <!--
+          Puts OpenPdfEdit in Windows' "Open with" list for PDFs. This
+          is an association offer, not a seizure: Windows still asks the
+          user before changing their default handler.
+        -->
+        <uap:Extension Category="windows.fileTypeAssociation">
+          <uap:FileTypeAssociation Name="pdf">
+            <uap:DisplayName>PDF document</uap:DisplayName>
+            <uap:Logo>Assets\Square44x44Logo.png</uap:Logo>
+            <uap:SupportedFileTypes>
+              <uap:FileType ContentType="application/pdf">.pdf</uap:FileType>
+            </uap:SupportedFileTypes>
+          </uap:FileTypeAssociation>
+        </uap:Extension>
+      </Extensions>
+    </Application>
+  </Applications>
+
+  <Capabilities>
+    <!--
+      The only capability a packaged full-trust desktop app declares.
+      Deliberately nothing else: no internet, no broadFileSystemAccess,
+      no documentsLibrary. The app reaches files through the picker the
+      user drives, and the editor makes no network calls — declaring
+      capabilities it does not need would both be false and put the
+      submission in front of a stricter review.
+    -->
+    <rescap:Capability Name="runFullTrust" />
+  </Capabilities>
+</Package>

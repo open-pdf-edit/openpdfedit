@@ -1,0 +1,150 @@
+# Builds the Microsoft Store package (.msix) for the desktop app.
+#
+# Separate from release.yml on purpose. That workflow builds the three
+# artifacts anyone can download from a GitHub Release; this one builds
+# the artifact only Partner Center consumes, and it needs the account's
+# own identity values to produce something the Store will accept.
+#
+# Run it with no inputs to prove the packaging still works — it falls
+# back to placeholder identity values, which pack correctly but would be
+# rejected on upload. Run it with the real values (or set the three
+# repository variables below) to produce a submittable package.
+#
+# The identity values are not secrets. They are printed on the Partner
+# Center product page and embedded in every copy of the shipped package,
+# so they live in repository *variables*; nothing here needs a secret.
+name: msix
+
+on:
+  workflow_dispatch:
+    inputs:
+      identity_name:
+        description: "Package/Identity/Name from Partner Center (blank = placeholder smoke test)"
+        required: false
+        default: ""
+      publisher:
+        description: 'Package/Identity/Publisher, the full "CN=..." string'
+        required: false
+        default: ""
+      publisher_display_name:
+        description: "Publisher name shown to users"
+        required: false
+        default: ""
+
+jobs:
+  msix:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # Precedence: explicit input, then repository variable, then a
+      # placeholder. The placeholder makes this workflow runnable before
+      # the app name has been reserved, which is the whole point of being
+      # able to prove the packaging before the account exists.
+      - name: Resolve package identity
+        id: identity
+        shell: bash
+        run: |
+          name="${{ inputs.identity_name }}"
+          [ -n "$name" ] || name="${{ vars.MSIX_IDENTITY_NAME }}"
+          [ -n "$name" ] || name="OpenApps.OpenPdfEdit"
+
+          publisher="${{ inputs.publisher }}"
+          [ -n "$publisher" ] || publisher="${{ vars.MSIX_PUBLISHER }}"
+          [ -n "$publisher" ] || publisher="CN=OpenPdfEdit Packaging Placeholder"
+
+          display="${{ inputs.publisher_display_name }}"
+          [ -n "$display" ] || display="${{ vars.MSIX_PUBLISHER_DISPLAY_NAME }}"
+          [ -n "$display" ] || display="OpenApps"
+
+          if [ "$publisher" = "CN=OpenPdfEdit Packaging Placeholder" ]; then
+            echo "::warning::Placeholder identity — this package packs but Partner Center will reject it. Smoke test only."
+            echo "submittable=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "submittable=true" >> "$GITHUB_OUTPUT"
+          fi
+
+          echo "name=$name" >> "$GITHUB_OUTPUT"
+          echo "publisher=$publisher" >> "$GITHUB_OUTPUT"
+          echo "display=$display" >> "$GITHUB_OUTPUT"
+
+      # Shared with the Windows installer job in release.yml — the
+      # runners ship bash.exe, so the one fetch script serves both.
+      - name: Fetch PDFium
+        shell: bash
+        run: scripts/fetch-pdfium.sh
+
+      - name: Install frontend deps
+        working-directory: apps/desktop
+        run: npm ci
+
+      - name: Build the release executable
+        working-directory: apps/desktop
+        run: npm run tauri build -- --no-bundle
+
+      # -SkipBuild because the two steps above already did it, in the
+      # same shape the rest of CI uses. The script would otherwise redo
+      # the whole Rust compile.
+      - name: Pack the MSIX
+        shell: pwsh
+        run: |
+          ./scripts/build-msix.ps1 `
+            -SkipBuild `
+            -IdentityName '${{ steps.identity.outputs.name }}' `
+            -Publisher '${{ steps.identity.outputs.publisher }}' `
+            -PublisherDisplayName '${{ steps.identity.outputs.display }}'
+
+      # Proves the package is well-formed rather than merely produced.
+      # makeappx will happily pack a payload whose manifest references a
+      # file that is not there, and the failure would otherwise surface
+      # as a Partner Center rejection days later.
+      - name: Verify the package contents
+        shell: pwsh
+        run: |
+          $msix = Get-ChildItem -Path . -Filter '*.msix' | Select-Object -First 1
+          if (-not $msix) { throw 'no .msix was produced' }
+          Write-Host "Packed $($msix.Name) ($([math]::Round($msix.Length/1MB,2)) MB)"
+
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+          $zip = [System.IO.Compression.ZipFile]::OpenRead($msix.FullName)
+          try {
+            $names = $zip.Entries | ForEach-Object { $_.FullName }
+            foreach ($required in @(
+                'AppxManifest.xml', 'OpenPdfEdit.exe', 'pdfium.dll',
+                'Assets/Square44x44Logo.png', 'Assets/Square150x150Logo.png',
+                'Assets/StoreLogo.png')) {
+              if ($names -notcontains $required) {
+                throw "package is missing $required"
+              }
+              Write-Host "  ok  $required"
+            }
+          } finally { $zip.Dispose() }
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: msix-package
+          path: "*.msix"
+          if-no-files-found: error
+
+      - name: Summary
+        shell: bash
+        run: |
+          {
+            echo "### MSIX package"
+            echo
+            if [ "${{ steps.identity.outputs.submittable }}" = "true" ]; then
+              echo "Built with real Partner Center identity — ready to upload."
+            else
+              echo "Built with a **placeholder identity**. This proves the packaging"
+              echo "works; Partner Center will reject it. Re-run with the real values"
+              echo "once the app name is reserved."
+            fi
+            echo
+            echo "- Identity: \`${{ steps.identity.outputs.name }}\`"
+            echo "- Publisher: \`${{ steps.identity.outputs.publisher }}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
