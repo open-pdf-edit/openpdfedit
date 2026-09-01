@@ -61,11 +61,29 @@ done
 # so nothing about a normal checkout or pull refreshes it, and uploading
 # a months-old build looks exactly like uploading a current one. Refuse
 # rather than publish the wrong bytes.
-zip_epoch="$(date -r "$ZIP" +%s 2>/dev/null || stat -c %Y "$ZIP")"
-head_epoch="$(git log -1 --format=%ct)"
-if [ "$zip_epoch" -lt "$head_epoch" ]; then
-  behind="$(git log --oneline --since="@$zip_epoch" | wc -l | tr -d ' ')"
-  die "$ZIP was built before the current commit ($behind commits ago).
+#
+# Against the source files on disk, not against a commit. Comparing with
+# git gets this wrong in both directions: against HEAD, editing a line
+# of prose invalidates a perfectly good zip, and a guard that cries wolf
+# is one people learn to bypass; against the last commit that touched a
+# source path, the ordinary build-then-commit order looks stale, because
+# the zip is genuinely older than the commit recording what went into
+# it. What is actually being asked is whether anything the build reads
+# has changed since the build — which is a question about files.
+SOURCES=(
+  apps/extension/public apps/extension/src apps/extension/scripts
+  apps/extension/background.ts apps/extension/package.json
+  apps/extension/vite.config.js apps/extension/tsconfig.json
+  apps/desktop/src apps/desktop/static apps/desktop/package.json
+  apps/desktop/svelte.config.js apps/desktop/vite.config.js
+  crates Cargo.toml Cargo.lock
+)
+newer="$(find "${SOURCES[@]}" \
+  \( -name node_modules -o -name .svelte-kit -o -name target -o -name dist \) -prune -o \
+  -type f -newer "$ZIP" -print 2>/dev/null | head -5)"
+if [ -n "$newer" ]; then
+  die "$ZIP is older than files it is built from:
+$(printf '       %s\n' $newer)
        Rebuild it:  (cd apps/extension && npm run package)"
 fi
 
