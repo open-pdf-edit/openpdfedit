@@ -1,0 +1,108 @@
+# Publishes an extension update to Microsoft Edge Add-ons.
+#
+# Deliberately manual (`workflow_dispatch`) rather than firing on a tag.
+# Publishing enters a review queue that a human then has to answer for,
+# and tags get pushed for reasons that have nothing to do with wanting a
+# store release — a release cut to fix the macOS build should not also
+# put the extension in front of Microsoft's reviewers.
+#
+# This cannot make the *first* submission. Edge's REST API replaces the
+# package of a product that already exists and does nothing else: there
+# is no endpoint to create a product or to edit listing text. The first
+# release is filled in by hand at Partner Center, once. See
+# scripts/publish-edge.sh's header.
+#
+# Required repository secrets:
+#   EDGE_PRODUCT_ID  EDGE_CLIENT_ID  EDGE_API_KEY
+# all three from Partner Center > Microsoft Edge > Publish API.
+name: publish-edge
+
+on:
+  workflow_dispatch:
+    inputs:
+      notes:
+        description: "Certification notes for the Edge reviewer"
+        required: false
+        default: "Package update from the OpenPdfEdit repository."
+      dry_run:
+        description: "Build and check credentials, but do not upload"
+        type: boolean
+        default: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # Kept in step with release.yml's extension job — build-wasm.sh
+      # hard-checks the CLI version against the workspace's pinned
+      # `wasm-bindgen = "=0.2.126"`, so this pin has to move with it.
+      - name: Install wasm-bindgen-cli (pinned to the workspace's wasm-bindgen)
+        run: cargo install wasm-bindgen-cli --version 0.2.126 --locked
+
+      - name: Fetch PDFium wasm binary
+        run: scripts/fetch-pdfium-wasm.sh
+
+      - name: Install frontend deps
+        run: |
+          (cd apps/desktop && npm ci)
+          (cd apps/extension && npm ci)
+
+      # Always built here rather than downloaded from a release: the zip
+      # is a gitignored build artifact, so an uploaded one can silently
+      # be months older than the commit it claims to be.
+      - name: Build and package the extension
+        working-directory: apps/extension
+        run: npm run package
+
+      - name: Report what is about to be published
+        run: |
+          version="$(unzip -p apps/extension/openpdfedit-dist.zip manifest.json \
+            | sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -1)"
+          size="$(du -h apps/extension/openpdfedit-dist.zip | cut -f1)"
+          {
+            echo "### Edge Add-ons"
+            echo
+            echo "- Manifest version: \`$version\`"
+            echo "- Package size: $size"
+            echo "- Commit: \`${GITHUB_SHA:0:8}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Check the credentials are present
+        env:
+          EDGE_PRODUCT_ID: ${{ secrets.EDGE_PRODUCT_ID }}
+          EDGE_CLIENT_ID: ${{ secrets.EDGE_CLIENT_ID }}
+          EDGE_API_KEY: ${{ secrets.EDGE_API_KEY }}
+        run: |
+          missing=""
+          for var in EDGE_PRODUCT_ID EDGE_CLIENT_ID EDGE_API_KEY; do
+            [ -n "${!var:-}" ] || missing="$missing $var"
+          done
+          if [ -n "$missing" ]; then
+            echo "::error::missing repository secret(s):$missing"
+            echo "Set them with: gh secret set EDGE_API_KEY --repo \$GITHUB_REPOSITORY"
+            exit 1
+          fi
+          echo "all three credentials are set"
+
+      - name: Upload and publish
+        if: ${{ !inputs.dry_run }}
+        env:
+          EDGE_PRODUCT_ID: ${{ secrets.EDGE_PRODUCT_ID }}
+          EDGE_CLIENT_ID: ${{ secrets.EDGE_CLIENT_ID }}
+          EDGE_API_KEY: ${{ secrets.EDGE_API_KEY }}
+        run: ./scripts/publish-edge.sh --notes "${{ inputs.notes }}"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: extension-zip
+          path: apps/extension/openpdfedit-dist.zip
+          if-no-files-found: error
