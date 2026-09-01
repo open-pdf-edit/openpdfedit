@@ -26,6 +26,25 @@ if [ ! -f "$DIST_DIR/manifest.json" ]; then
   exit 1
 fi
 
+# Both stores cap the manifest description at 132 characters, and
+# neither Chrome nor anything local enforces it: the extension loads
+# unpacked, the build succeeds, and the first thing to measure it is the
+# dashboard, after the upload. A v0.1.7 upload was rejected exactly this
+# way. e2e/manifest.spec.ts covers it too, but nothing makes a person
+# run the suite before uploading, and this is the step that produces the
+# thing they upload.
+DESCRIPTION_LIMIT=132
+description_length="$(
+  python3 -c 'import json,sys; print(len(json.load(open(sys.argv[1]))["description"]))' \
+    "$DIST_DIR/manifest.json" 2>/dev/null || echo 0
+)"
+if [ "$description_length" -gt "$DESCRIPTION_LIMIT" ]; then
+  echo "package-zip.sh: manifest description is $description_length characters;" >&2
+  echo "  stores reject anything over $DESCRIPTION_LIMIT. Shorten it in public/manifest.json" >&2
+  echo "  (and in STORE.md, which has to match)." >&2
+  exit 1
+fi
+
 rm -f "$OUT_ZIP"
 (cd "$DIST_DIR" && zip -r -X -q "$OUT_ZIP" .)
 
