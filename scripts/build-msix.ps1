@@ -129,8 +129,34 @@ if (-not $SkipBuild) {
 
 # Tauri honours CARGO_TARGET_DIR, so look where cargo actually wrote.
 $targetRoot = if ($env:CARGO_TARGET_DIR) { $env:CARGO_TARGET_DIR } else { Join-Path $RepoRoot 'target' }
-$exe = Join-Path $targetRoot 'release\OpenPdfEdit.exe'
-if (-not (Test-Path $exe)) { Die "no executable at $exe — run without -SkipBuild" }
+$releaseDir = Join-Path $targetRoot 'release'
+
+# The binary's name is not knowable from the config alone. Tauri renames
+# it to productName while *bundling*, and --no-bundle skips that step, so
+# what lands here is cargo's own name for the package —
+# openpdfedit-desktop.exe — not OpenPdfEdit.exe. Which of the two it is
+# depends on the Tauri version and on whether mainBinaryName is set, so
+# this looks for either rather than encoding a guess that goes stale
+# silently the next time Tauri changes its mind.
+$exe = @('OpenPdfEdit.exe', 'openpdfedit-desktop.exe') |
+  ForEach-Object { Join-Path $releaseDir $_ } |
+  Where-Object { Test-Path $_ } |
+  Select-Object -First 1
+
+if (-not $exe) {
+  # Name the alternatives rather than only the absence: a wrong guess
+  # about the filename otherwise costs two CI runs to diagnose, one to
+  # fail and one to print the directory.
+  $found = Get-ChildItem $releaseDir -Filter '*.exe' -File -ErrorAction SilentlyContinue |
+    Where-Object { $_.Name -notmatch '^build[-_]' } |
+    ForEach-Object { "  $($_.Name)" }
+  $listing = if ($found) { ($found -join "`n") } else { '  (no .exe files)' }
+  Die "no application executable in $releaseDir
+       Looked for OpenPdfEdit.exe and openpdfedit-desktop.exe. Present:
+$listing
+       Run without -SkipBuild, or add the real name to the list above."
+}
+Step "Executable: $(Split-Path -Leaf $exe)"
 
 $dll = Join-Path $RepoRoot '.vendor\pdfium\bin\pdfium.dll'
 if (-not (Test-Path $dll)) {
