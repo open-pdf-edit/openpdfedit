@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "OpenPdfEdit",
-  "version": "0.1.7",
+  "version": "0.1.8",
   "description": "Edit, merge, compare, sign, and redact PDFs right in your browser. Your documents never leave your machine.",
   "minimum_chrome_version": "103",
   "icons": {
