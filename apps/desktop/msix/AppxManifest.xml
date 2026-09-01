@@ -77,10 +77,21 @@
         BackgroundColor="transparent"
         Square150x150Logo="Assets\Square150x150Logo.png"
         Square44x44Logo="Assets\Square44x44Logo.png">
-        <uap:DefaultTile
-          Square71x71Logo="Assets\Square71x71Logo.png"
-          Square310x310Logo="Assets\Square310x310Logo.png" />
-        <uap:SplashScreen Image="Assets\Square310x310Logo.png" BackgroundColor="transparent" />
+        <!--
+          No Square310x310Logo here, deliberately. Declaring it obliges
+          the manifest to declare Wide310x150Logo as well — makeappx
+          rejects the package otherwise — and Tauri's icon generator
+          produces every square size but no wide one.
+
+          Nothing is lost. The 310 and wide tiles are for the live-tile
+          Start menu that Windows 11 does not have; it draws the 44 and
+          the 150. Inventing a wide asset to satisfy a schema rule for a
+          surface no supported Windows renders is not worth the artwork.
+
+          No SplashScreen either: it is ignored for a
+          Windows.FullTrustApplication, which shows its own window.
+        -->
+        <uap:DefaultTile Square71x71Logo="Assets\Square71x71Logo.png" />
       </uap:VisualElements>
 
       <Extensions>
