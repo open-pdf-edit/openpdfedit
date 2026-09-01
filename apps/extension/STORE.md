@@ -1,15 +1,27 @@
-# Chrome Web Store listing — OpenPdfEdit
+# Extension store listing — OpenPdfEdit
 
-Phase 5 Task 3 (packaging). This is the store-listing draft plus the
-submission checklist. Nothing here has been submitted anywhere yet — see
-the checklist at the bottom for what's still a human step.
+The listing copy for the two stores that take this package: the Chrome
+Web Store and Microsoft Edge Add-ons. Both accept the same MV3 zip
+unmodified, and the copy below serves both — only the dashboards differ.
+
+Nothing here has been submitted anywhere yet. For the operational steps
+— registering, reserving, uploading, and the automation that handles
+every release after the first — see `docs/STORES.md`.
+
+**Keep this honest.** Reviewers compare what a listing claims against
+what the bundle does, and a claim that is merely out of date reads
+exactly like one that was never true. Two claims here were wrong by
+2026-09-01 and are corrected below: OCR is no longer desktop-only, and
+"no account" is no longer unqualified now that OCR and watermarking are
+Supporter tools. If the gate in `lib/openapps.ts` moves again, this file
+moves with it.
 
 ## Listing copy
 
-### Short description (≤132 characters — Chrome Web Store's own limit)
+### Short description (≤132 characters — both stores' own limit)
 
 ```
-Edit, merge, compare, and sign PDFs 100% locally in your browser. No upload, no account, no tracking.
+Edit, merge, compare, sign, and redact PDFs right in your browser. Your documents never leave your machine.
 ```
 
 (101 characters.)
@@ -33,13 +45,21 @@ What you can do:
 - Redact — permanently remove sensitive content, not just paint over it
 - Merge multiple PDFs into one
 - Compare two PDFs — see both text and rendered-pixel differences
+- OCR a scanned document so its text can be searched and selected
 - Undo/redo across your whole editing session
+
+Free, with two exceptions:
+- Everything in the list above is free and needs no account, except OCR
+  and watermarking. Those two are Supporter tools: they need a signed-in
+  account and a one-time unlock. Nothing else asks you to sign in, and
+  nothing is time-limited, watermarked, or capped.
 
 Privacy, by construction, not by policy:
 - 100% local PDF processing — your document is never uploaded anywhere,
-  opened and edited entirely by an in-browser WASM engine
-- No account required to edit — every editing feature above works with
-  no sign-in at all
+  opened and edited entirely by an in-browser WASM engine. This is true
+  of the Supporter tools too: OCR runs Tesseract compiled to WebAssembly
+  in a worker on your own machine, so a scanned page is read locally and
+  the unlock check is the only thing that touches the network
 - An optional account panel (for credits/purchases, not editing) talks to
   OpenApps' own account server only if and when you choose to sign in —
   see the privacy declaration below for exactly what that does and
@@ -51,10 +71,8 @@ Privacy, by construction, not by policy:
   from anywhere at runtime (this is also enforced by its Content-Security-
   Policy, not just a claim: `script-src 'self' 'wasm-unsafe-eval'`)
 
-One current gap: OCR (making a scanned PDF searchable) needs a local
-Tesseract install and isn't available in this browser build — it's the
-one feature still exclusive to the OpenPdfEdit desktop app. Everything
-else above is fully live in the extension.
+Everything above is live in the extension. Nothing is exclusive to the
+desktop app any more.
 ```
 
 ### Category
@@ -94,16 +112,17 @@ surface, even though the PDF editor itself is not.
   when there is no signed-in session (confirmed by reading
   `openapps-credits.ts`'s `refresh()`, which checks `sdk.isLoggedIn`
   before ever calling `sdk.credits.balance()`). Configuring the shared
-  SDK client at app startup (`configure({ baseUrl:
-  "https://accounts.openapps.network" })` in `+layout.svelte`) only
-  constructs a local client object and reads a local token store — it
-  does not itself make a network request either (confirmed by reading
-  `OpenApps`'s constructor in the SDK). **If and only if you choose to
-  sign in**, that panel communicates with
-  `accounts.openapps.network` solely for account/credit-balance/purchase
-  functionality (checking your session, showing your credit balance,
-  processing a credit purchase). No document content or metadata is ever
-  sent to it — the PDF engine and the account client are two unconnected
+  SDK client at app startup (`configure({ baseUrl: OPENAPPS_BASE_URL })`
+  in `+layout.svelte`) only constructs a local client object and reads a
+  local token store — it does not itself make a network request either
+  (confirmed by reading `OpenApps`'s constructor in the SDK). **If and
+  only if you choose to sign in**, that panel communicates with exactly
+  two hosts, both named in `apps/desktop/src/lib/openapps.ts`:
+  `auth.openpdfedit.com` for the session, credit balance and the
+  Supporter entitlement check, and `gateway.openapps.network` for the
+  one route that can actually spend credits — the Supporter unlock. No
+  document content or metadata is ever
+  sent to either — the PDF engine and the account client are two unconnected
   code paths that never pass document data to each other.
 - **Data collected: none.** No analytics, no crash reporting, no
   telemetry, no remote logging — from either the PDF editor or the
@@ -125,39 +144,41 @@ surface, even though the PDF editor itself is not.
 
 ## Submission checklist
 
-Automated / already done by this task:
-- [x] `npm run build` produces a current `dist/`
-- [x] `npm run package` zips `dist/` into `openpdfedit-dist.zip`
-      (run it fresh right before uploading — see below)
+Already true of the repository:
+- [x] `npm run package` produces a store-shaped zip with `manifest.json`
+      at its root — run it fresh immediately before uploading, since the
+      zip is gitignored and a stale one looks identical to a current one
+- [x] **Zero permissions.** The manifest declares no `permissions` and
+      no `host_permissions`, so both dashboards' "justify each
+      permission" step is empty. This is the single biggest thing in
+      this submission's favour and it is worth not spending: think hard
+      before any future change adds one.
+- [x] **Privacy policy URL** — <https://openpdfedit.com/privacy.html>,
+      live and current
+- [x] **128×128 listing icon** — `apps/extension/public/icons/128.png`,
+      which both dashboards want uploaded separately from the manifest's
+      own icon
 
 Human-only — nothing in this repo can do these:
-- [ ] **Chrome Web Store developer account** — register at
-      https://chrome.google.com/webstore/devconsole (one-time $5 registration
-      fee at time of writing) if not already done for the OpenApps org
-- [ ] **Screenshots** — the Store requires at least one 1280x800 or
-      640x400 screenshot; capture the extension actually open in a real
-      Chrome tab with a PDF loaded (a promotional tile image is optional
-      but recommended). Nothing in this repo can drive a *visible* browser
-      and capture a polished marketing screenshot — the e2e suite runs
-      headless and is not meant to produce store assets.
-- [ ] **Store listing icon** — the Store dashboard also wants a
-      standalone 128x128 icon upload separate from the manifest's own
-      icon; `apps/extension/public/icons/128.png` (generated by
-      `scripts/generate-icons.sh`) can be reused directly for this.
-- [ ] **Privacy policy URL** — the Store requires a hosted privacy policy
-      page if any permission implies data access; given the "no data
-      collection" declaration above this may qualify for the Store's
-      simplified flow, but the dashboard will say definitively once the
-      listing form is actually filled in — read what it asks for at
-      submission time rather than guessing here.
-- [ ] **Fill in the dashboard's listing form** with the copy above (short
-      description, long description, category, privacy practices tab)
-- [ ] **Upload `openpdfedit-dist.zip`** via the dashboard's package
-      upload step
-- [ ] **Submit for review** and monitor the review outcome (Chrome Web
-      Store reviews typically take hours to a few days; a rejection needs
-      a human to read the specific reason and decide the fix — not
-      something to pre-guess here)
+- [ ] **Screenshots.** At least one at 1280×800 or 640×400, showing the
+      extension open on a real PDF. Nothing here can produce them: the
+      e2e suite is headless and is not a marketing tool. The same set
+      serves both stores.
+- [ ] **Chrome Web Store developer account** —
+      <https://chrome.google.com/webstore/devconsole>, one-time
+      registration fee
+- [ ] **Microsoft Partner Center account** for Edge Add-ons — free to
+      register for the Edge program, and the same account is later used
+      for the Microsoft Store desktop submission
+- [ ] **Fill in each dashboard's listing form** with the copy above, and
+      the privacy declaration below in the privacy-practices tab
+- [ ] **Upload `openpdfedit-dist.zip`** and submit
+
+After the first submission of each, releases are automated: see
+`docs/STORES.md` and `scripts/publish-edge.sh`. Neither store's API can
+make the *first* submission — Edge's has no endpoint that creates a
+product at all — so the list above is genuinely once-only, not a
+process.
 
 ## Producing the upload zip
 
