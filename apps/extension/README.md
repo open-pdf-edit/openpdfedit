@@ -143,8 +143,11 @@ npm run package
 ```
 
 Runs a fresh `npm run build`, then zips `dist/`'s contents into
-`openpdfedit-dist.zip` (this package's root, gitignored — a regenerable
-build artifact, not something to commit) via `scripts/package-zip.sh`.
+`openpdfedit-dist.zip` (this package's root) via
+`scripts/package-zip.sh`. That zip *is* committed, deliberately — the
+root README points people at it as the fastest way to load the
+extension without a Rust toolchain, and the root `.gitignore` says so.
+Rebuild and commit it when the extension changes.
 See `STORE.md` for the listing copy (short/long description, category,
 privacy declaration) and the submission checklist — most of that
 checklist is human-only (developer account, screenshots, actually

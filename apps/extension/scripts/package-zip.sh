@@ -9,10 +9,11 @@
 # makes manifest.json land at the zip's own root instead of inside a
 # nested dist/ directory — Chrome's uploader requires the former.
 #
-# Named `openpdfedit-dist.zip`, not e.g. `openpdfedit-extension.zip`, to
-# match the workspace root .gitignore's existing `*-dist.zip` pattern
-# ("Packaged browser extension, produced by the extension build") — this
-# is a regenerable build artifact, not something to commit.
+# The result is committed, unlike most build output. The root README
+# points people at it as the fastest way to try the extension without a
+# Rust toolchain, and the root .gitignore names it as tracked on
+# purpose. So rebuild and commit it whenever the extension changes —
+# a stale one there is a broken "fastest path".
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
