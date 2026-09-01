@@ -50,3 +50,13 @@ for f in "${FILES[@]}"; do
   perl -0pi -e 's/"version"(\s*:\s*)"[^"]*"/"version"${1}"'"$VERSION"'"/' "$f"
   printf '%-46s %s\n' "$f" "$(current "$f")"
 done
+
+# The marketing site carries the version a sixth time, in the JSON-LD
+# that answer engines read. That block is generated rather than edited,
+# and its generator already reads apps/desktop/package.json — but the
+# generated copy on disk is what ships, and site-seo.spec.ts fails when
+# the two disagree. Leaving that regeneration to whoever bumps next is
+# how this script would come to cause the drift it exists to prevent.
+python3 site/scripts/build-jsonld.py
+printf '%-46s %s\n' "site/index.html" \
+  "$(sed -n 's/.*"softwareVersion": "\([^"]*\)".*/\1/p' site/index.html | head -1)"
