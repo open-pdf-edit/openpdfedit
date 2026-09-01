@@ -3,8 +3,11 @@
   MSIX packaging manifest for the Microsoft Store.
 
   Tauri has no MSIX bundler, so the Store package is assembled from the
-  ordinary release .exe by scripts/build-msix.ps1, which substitutes the
-  @PLACEHOLDERS@ below and runs makeappx.exe over the result.
+  ordinary release .exe by scripts/build-msix.ps1, which fills in the
+  at-sign-delimited placeholders below and runs makeappx.exe over the
+  result. (Written out in words rather than shown: the script refuses to
+  pack a manifest with any placeholder left in it, and a literal example
+  in this comment is indistinguishable from a real one that was missed.)
 
   Three of those placeholders are not ours to choose. Identity/Name,
   Identity/Publisher and Properties/PublisherDisplayName must match the
