@@ -38,6 +38,13 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
+        with:
+          # The packaging steps run after a fifteen-minute Windows
+          # compile, and they are the steps most likely to fail while
+          # this is new. Without this the cache is discarded on failure,
+          # so every fix to a one-line packaging bug pays for the whole
+          # compile again.
+          cache-on-failure: true
       - uses: actions/setup-node@v4
         with:
           node-version: 22
