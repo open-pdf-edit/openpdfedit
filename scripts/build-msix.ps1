@@ -177,9 +177,12 @@ Copy-Item $dll (Join-Path $stage 'pdfium.dll')
 # Tauri already generates every tile size MSIX asks for; they have been
 # sitting unused in src-tauri/icons since the project was scaffolded.
 $icons = Join-Path $Tauri 'icons'
+# Exactly the four the manifest references — see its comment on why the
+# 310 and wide tiles are not among them. Shipping an asset nothing points
+# at only grows the package.
 foreach ($logo in @(
     'Square44x44Logo.png', 'Square71x71Logo.png', 'Square150x150Logo.png',
-    'Square310x310Logo.png', 'StoreLogo.png')) {
+    'StoreLogo.png')) {
   $src = Join-Path $icons $logo
   if (-not (Test-Path $src)) { Die "missing tile asset $src" }
   Copy-Item $src (Join-Path $assets $logo)
