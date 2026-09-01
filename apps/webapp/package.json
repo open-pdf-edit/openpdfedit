@@ -1,6 +1,6 @@
 {
   "name": "openpdfedit-webapp",
-  "version": "0.1.7",
+  "version": "0.1.8",
   "private": true,
   "description": "OpenPdfEdit as a plain web page: the same Rust core compiled to WebAssembly, running entirely in the browser.",
   "type": "module",
