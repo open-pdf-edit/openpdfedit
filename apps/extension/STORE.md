@@ -77,8 +77,8 @@ Privacy, by construction, not by policy:
   from anywhere at runtime (this is also enforced by its Content-Security-
   Policy, not just a claim: `script-src 'self' 'wasm-unsafe-eval'`)
 
-Everything above is live in the extension. Nothing is exclusive to the
-desktop app any more.
+Everything in the feature list above is live in this extension. OCR, as
+noted, is not.
 ```
 
 ### Category
