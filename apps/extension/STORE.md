@@ -10,11 +10,15 @@ every release after the first — see `docs/STORES.md`.
 
 **Keep this honest.** Reviewers compare what a listing claims against
 what the bundle does, and a claim that is merely out of date reads
-exactly like one that was never true. Two claims here were wrong by
-2026-09-01 and are corrected below: OCR is no longer desktop-only, and
-"no account" is no longer unqualified now that OCR and watermarking are
-Supporter tools. If the gate in `lib/openapps.ts` moves again, this file
-moves with it.
+exactly like one that was never true. Check claims against the *built*
+`dist/`, not against the source tree — the two differ. The listing
+briefly claimed OCR worked here because `ocr-browser.ts` exists and the
+web app ships it; the extension build does not copy the `/ocr` assets,
+so it does not. Corrected below.
+
+Also corrected: "no account required" stopped being true when
+watermarking became a Supporter tool. If the gate in `lib/openapps.ts`
+moves again, this file moves with it.
 
 ## Listing copy
 
@@ -45,21 +49,23 @@ What you can do:
 - Redact — permanently remove sensitive content, not just paint over it
 - Merge multiple PDFs into one
 - Compare two PDFs — see both text and rendered-pixel differences
-- OCR a scanned document so its text can be searched and selected
 - Undo/redo across your whole editing session
 
-Free, with two exceptions:
-- Everything in the list above is free and needs no account, except OCR
-  and watermarking. Those two are Supporter tools: they need a signed-in
-  account and a one-time unlock. Nothing else asks you to sign in, and
-  nothing is time-limited, watermarked, or capped.
+Free, with one exception:
+- Everything in the list above is free and needs no account. Watermarking
+  is a Supporter tool: it needs a signed-in account and a one-time
+  unlock. Nothing else asks you to sign in, and nothing is time-limited,
+  watermarked, or capped.
+
+One thing this extension does not do: OCR. Making a scanned PDF
+searchable needs Tesseract's engine and language data — about 70 MB —
+and packaging that into an extension is the wrong trade. OCR is
+available in the web app at app.openpdfedit.com and in the desktop app,
+both of which do it locally too.
 
 Privacy, by construction, not by policy:
 - 100% local PDF processing — your document is never uploaded anywhere,
-  opened and edited entirely by an in-browser WASM engine. This is true
-  of the Supporter tools too: OCR runs Tesseract compiled to WebAssembly
-  in a worker on your own machine, so a scanned page is read locally and
-  the unlock check is the only thing that touches the network
+  opened and edited entirely by an in-browser WASM engine
 - An optional account panel (for credits/purchases, not editing) talks to
   OpenApps' own account server only if and when you choose to sign in —
   see the privacy declaration below for exactly what that does and
