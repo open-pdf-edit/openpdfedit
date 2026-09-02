@@ -58,6 +58,37 @@ test("the social card points at an image that exists, at the size it claims", ()
   expect(html).toContain('property="og:image:height" content="630"');
 });
 
+// The same class of bug as the blank social card, one line up in the
+// browser: the site declared no icon at all and shipped no icon file,
+// so every tab showed the generic blank-page glyph. Nobody looks at
+// their own favicon either.
+test("every page declares an icon, and the icon files are there", () => {
+  const png = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
+
+  for (const page of ["index.html", "privacy.html"]) {
+    const html = read(page);
+    expect(html, `${page} declares no favicon`).toContain('rel="icon" href="/favicon.ico"');
+    expect(html, `${page} declares no PNG icon`).toContain('href="/favicon.png"');
+    expect(html, `${page} declares no apple-touch-icon`).toContain(
+      'rel="apple-touch-icon" href="/apple-touch-icon.png"',
+    );
+  }
+
+  // A declared icon that 404s is worse than none — the browser retries
+  // it on every page load.
+  expect(statSync(join(SITE, "favicon.ico")).size).toBeGreaterThan(0);
+
+  const favicon = readFileSync(join(SITE, "favicon.png"));
+  expect(favicon.subarray(0, 8)).toEqual(Buffer.from(png));
+  expect(favicon.readUInt32BE(16), "favicon.png width").toBe(32);
+
+  const apple = readFileSync(join(SITE, "apple-touch-icon.png"));
+  expect(apple.subarray(0, 8)).toEqual(Buffer.from(png));
+  // 180 is what iOS asks for; anything smaller is upscaled on the home
+  // screen.
+  expect(apple.readUInt32BE(16), "apple-touch-icon.png width").toBe(180);
+});
+
 test("the structured data still says what the page says", () => {
   const html = read("index.html");
   const graph = jsonLd(html);
