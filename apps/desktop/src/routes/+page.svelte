@@ -2385,20 +2385,16 @@
     <div class="topbar__spacer"></div>
 
 
-    <!-- Not in the extension: signing in cannot work there, so offering
-         it is offering a dead end. See `isBrowserExtension`. -->
-    {#if !isBrowserExtension}
-      <button
-        class="oa-icon-btn oa-icon-btn--sm account-btn"
-        class:account-btn--in={signedIn}
-        onclick={() => (showAccount = true)}
-        use:tooltip={signedIn ? "Account — signed in" : "Account — sign in, credits"}
-        aria-label={signedIn ? "Account — signed in" : "Account"}
-      >
-        <Icon name="circle-user" size={15} />
-        <span class="topbar__label">Account</span>
-      </button>
-    {/if}
+    <button
+      class="oa-icon-btn oa-icon-btn--sm account-btn"
+      class:account-btn--in={signedIn}
+      onclick={() => (showAccount = true)}
+      use:tooltip={signedIn ? "Account — signed in" : "Account — sign in, credits"}
+      aria-label={signedIn ? "Account — signed in" : "Account"}
+    >
+      <Icon name="circle-user" size={15} />
+      <span class="topbar__label">Account</span>
+    </button>
   </header>
 
     {#if doc}
@@ -2483,24 +2479,25 @@
               <Icon name="hash" size={15} />
             <span class="tools__label">Page numbers</span>
             </button>
-            <!-- The two Supporter tools. Hidden in the extension, where
-                 the account they need cannot be signed into — a gate whose
-                 only button is a dead link is worse than no tool. OCR
-                 could not run there regardless: the extension does not
-                 package the recogniser or its language data. -->
+            <!-- Not in the extension. The recogniser and its language
+                 data are about 70 MB and are not packaged there, so this
+                 button would raise the Supporter gate, take a payment, and
+                 then fail. Present in the web app and the desktop app,
+                 which both ship what it needs. -->
             {#if !isBrowserExtension}
               <button
-                class="oa-icon-btn oa-icon-btn--sm"
-                onclick={handleOcrDocument}
-                disabled={ocrBusy}
-                use:tooltip={backendKind === "wasm"
-                  ? "Make a scanned document searchable — the first run downloads the recogniser (about 3 MB), then works offline"
-                  : "Make a scanned document searchable (requires tesseract installed locally)"}
-                aria-label="OCR document"
-              >
-                <Icon name="scan-text" size={15} spin={ocrBusy} />
-                <span class="tools__label">OCR</span>
-              </button>
+                  class="oa-icon-btn oa-icon-btn--sm"
+                  onclick={handleOcrDocument}
+                  disabled={ocrBusy}
+                  use:tooltip={backendKind === "wasm"
+                    ? "Make a scanned document searchable — the first run downloads the recogniser (about 3 MB), then works offline"
+                    : "Make a scanned document searchable (requires tesseract installed locally)"}
+                  aria-label="OCR document"
+                >
+                  <Icon name="scan-text" size={15} spin={ocrBusy} />
+                  <span class="tools__label">OCR</span>
+                </button>
+            {/if}
               <button
                 class="oa-icon-btn oa-icon-btn--sm"
                 class:oa-icon-btn--selected={showWatermark}
@@ -2509,10 +2506,9 @@
                 use:tooltip={"Watermark — tile text or a logo across every page"}
                 aria-label="Watermark document"
               >
-                <Icon name="stamp" size={15} />
-                <span class="tools__label">Watermark</span>
-              </button>
-            {/if}
+              <Icon name="stamp" size={15} />
+              <span class="tools__label">Watermark</span>
+            </button>
             <button
               class="oa-icon-btn oa-icon-btn--sm"
               onclick={handleFlatten}

@@ -25,7 +25,15 @@
   import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
   import { listen, type UnlistenFn } from "@tauri-apps/api/event";
   import { getClient, onChange, notify } from "@openapps/ui";
-  import { SESSION_STORAGE_KEY, SIGNIN_DONE_MESSAGE, signInWithTelegram } from "$lib/openapps";
+  import {
+    OPENER_EXTENSION_PARAM,
+    SESSION_STORAGE_KEY,
+    extensionRuntime,
+    SIGNIN_DONE_MESSAGE,
+    WEBAPP_ORIGIN,
+    signInWithTelegram,
+  } from "$lib/openapps";
+  import { isBrowserExtension } from "$lib/backend";
   import { initData as telegramInitData, isTelegram } from "$lib/telegram";
   import Icon from "./Icon.svelte";
   import { showToast } from "./toast.svelte";
@@ -84,9 +92,35 @@
       if (e.key === null || e.key === SESSION_STORAGE_KEY) sessionChangedElsewhere();
     };
     const onMessage = (e: MessageEvent) => {
-      if (e.origin !== window.location.origin) return;
-      if ((e.data as { type?: string } | null)?.type === SIGNIN_DONE_MESSAGE) sessionChangedElsewhere();
+      const data = e.data as { type?: string; session?: string } | null;
+      if (data?.type !== SIGNIN_DONE_MESSAGE) return;
+      // Same origin: the web app's own popup, which already wrote the
+      // session into the storage this window shares.
+      if (e.origin === window.location.origin) {
+        sessionChangedElsewhere();
+        return;
+      }
+      // The extension: the login page ran on the web app's origin, so its
+      // localStorage is not ours and the session has to be carried over.
+      // Only from that one origin, and only when it brought a session.
+      if (isBrowserExtension && e.origin === WEBAPP_ORIGIN && data.session) {
+        receiveExtensionSession(data.session);
+      }
     };
+    // The opener relationship does not always survive an OAuth round
+    // trip — a hop that sets Cross-Origin-Opener-Policy severs it, and
+    // then no `message` ever arrives. `externally_connectable` gives the
+    // login page a second route that does not depend on it, relayed here
+    // by the service worker.
+    const onRelay = (message: unknown) => {
+      const relayed = message as { type?: string; session?: string } | null;
+      if (relayed?.type === SIGNIN_DONE_MESSAGE && relayed.session) {
+        receiveExtensionSession(relayed.session);
+      }
+    };
+    const runtime = extensionRuntime();
+    runtime?.onMessage.addListener(onRelay);
+
     window.addEventListener("storage", onStorage);
     window.addEventListener("message", onMessage);
 
@@ -96,8 +130,27 @@
       stopRemote?.();
       window.removeEventListener("storage", onStorage);
       window.removeEventListener("message", onMessage);
+      runtime?.onMessage.removeListener(onRelay);
     };
   });
+
+  /** Adopts a session the web app's login page finished for us.
+   *
+   * Written straight into this origin's storage under the key the SDK
+   * reads, because the SDK's store reads localStorage live — there is no
+   * client to re-hydrate, only a value to put where it looks. Rejects
+   * anything that is not the session shape, so a malformed or hostile
+   * message cannot poison the store. */
+  function receiveExtensionSession(raw: string): void {
+    try {
+      const parsed = JSON.parse(raw) as { accessToken?: unknown };
+      if (typeof parsed?.accessToken !== "string" || !parsed.accessToken) return;
+      localStorage.setItem(SESSION_STORAGE_KEY, raw);
+    } catch {
+      return;
+    }
+    sessionChangedElsewhere();
+  }
 
   /** A session written by another window of this origin. The client here
    * needs no re-hydration — its store reads localStorage live — but
@@ -151,7 +204,18 @@
       // OpenCapture opens as a tab (`ext.tabs.create`). Google was
       // unaffected either way, because a full-page OAuth redirect never
       // involves an extension.
-      const signinTab = window.open("/login", "openpdfedit-signin");
+      // Absolute, on the web app's own origin, when this is the
+      // extension: a relative "/login" resolves against
+      // `chrome-extension://` and is not a file in the package. The
+      // extension's id rides along so the login page knows where to hand
+      // the session back — see `receiveExtensionSession` below.
+      let target = "/login";
+      if (isBrowserExtension) {
+        const url = new URL("/login", WEBAPP_ORIGIN);
+        url.searchParams.set(OPENER_EXTENSION_PARAM, extensionRuntime()?.id ?? "");
+        target = url.toString();
+      }
+      const signinTab = window.open(target, "openpdfedit-signin");
       if (!signinTab) {
         showToast("Allow pop-ups for this site to sign in.", { tone: "warning", title: "Pop-up blocked" });
       }

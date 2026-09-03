@@ -619,24 +619,10 @@ async function installAccountStubs(
   }, options);
 }
 
-// --- The account surface: web app only -----------------------------------
-//
-// These tests navigate to the web app rather than the extension, because
-// the extension no longer has an account surface to test. Signing in
-// there opened `/login`, which the web app's server rewrites to the SPA
-// fallback and `chrome-extension://` cannot resolve at all — an Edge
-// reviewer got Chrome's "File not found" and failed the submission. The
-// tools that need an account are hidden in that build now; see
-// `isBrowserExtension`, and `no-dead-ends.spec.ts` for the guard.
-//
-// The gate itself is unchanged and still worth testing, so the coverage
-// moves rather than disappears.
-const ACCOUNT_ORIGIN = "http://localhost:8099";
-
-async function openFixtureAndClickWatermark(page: Page): Promise<void> {
+async function openFixtureAndClickWatermark(page: Page, extensionId: string): Promise<void> {
   await installFilePickerStubs(page);
   await page.setViewportSize({ width: 1200, height: 1400 });
-  await page.goto(ACCOUNT_ORIGIN);
+  await page.goto(`chrome-extension://${extensionId}/index.html`);
   await seedFile(page, "a.pdf", TEXT_PDF_BASE64);
   await queueOpenPick(page, ["a.pdf"]);
   await page.locator("header.topbar").getByRole("button", { name: "Open PDF…" }).click();
@@ -647,10 +633,13 @@ async function openFixtureAndClickWatermark(page: Page): Promise<void> {
 const watermarkDialog = (page: Page) => page.getByRole("dialog", { name: "Watermark" });
 const gate = (page: Page) => page.getByRole("dialog", { name: "Supporter feature" });
 
-test("the Supporter gate: signed out, the watermark tool asks for an account", async ({ context }) => {
+test("the Supporter gate: signed out, the watermark tool asks for an account", async ({
+  context,
+  extensionId,
+}) => {
   const page = await context.newPage();
   await installAccountStubs(page, { signedIn: false, unlocked: false });
-  await openFixtureAndClickWatermark(page);
+  await openFixtureAndClickWatermark(page, extensionId);
 
   await expect(gate(page)).toBeVisible({ timeout: 15_000 });
   await expect(gate(page)).toContainText("Sign in to unlock");
@@ -661,10 +650,13 @@ test("the Supporter gate: signed out, the watermark tool asks for an account", a
   await page.close();
 });
 
-test("the Supporter gate: already unlocked, the tool opens with no gate at all", async ({ context }) => {
+test("the Supporter gate: already unlocked, the tool opens with no gate at all", async ({
+  context,
+  extensionId,
+}) => {
   const page = await context.newPage();
   await installAccountStubs(page, { signedIn: true, unlocked: true });
-  await openFixtureAndClickWatermark(page);
+  await openFixtureAndClickWatermark(page, extensionId);
 
   // Someone who has already paid should never see the gate — not even
   // briefly enough to click.
@@ -674,10 +666,13 @@ test("the Supporter gate: already unlocked, the tool opens with no gate at all",
   await page.close();
 });
 
-test("the Supporter gate: locked, then unlocked, opens the tool", async ({ context }) => {
+test("the Supporter gate: locked, then unlocked, opens the tool", async ({
+  context,
+  extensionId,
+}) => {
   const page = await context.newPage();
   await installAccountStubs(page, { signedIn: true, unlocked: false, unlock: "ok" });
-  await openFixtureAndClickWatermark(page);
+  await openFixtureAndClickWatermark(page, extensionId);
 
   await expect(gate(page)).toBeVisible({ timeout: 15_000 });
   const unlockButton = gate(page).getByRole("button", { name: /Unlock for/ });
@@ -693,10 +688,13 @@ test("the Supporter gate: locked, then unlocked, opens the tool", async ({ conte
   await page.close();
 });
 
-test("the Supporter gate: too few credits says how many, and doesn't open the tool", async ({ context }) => {
+test("the Supporter gate: too few credits says how many, and doesn't open the tool", async ({
+  context,
+  extensionId,
+}) => {
   const page = await context.newPage();
   await installAccountStubs(page, { signedIn: true, unlocked: false, unlock: "insufficient" });
-  await openFixtureAndClickWatermark(page);
+  await openFixtureAndClickWatermark(page, extensionId);
 
   await expect(gate(page)).toBeVisible({ timeout: 15_000 });
   await gate(page).getByRole("button", { name: /Unlock for/ }).click();
@@ -726,7 +724,10 @@ test("the Supporter gate: too few credits says how many, and doesn't open the to
  * pass or fail depending on how many packages happened to be on sale
  * that day.
  */
-test("the account panel: a tall dialog stays inside a short window and scrolls", async ({ context }) => {
+test("the account panel: a tall dialog stays inside a short window and scrolls", async ({
+  context,
+  extensionId,
+}) => {
   const page = await context.newPage();
   // Short enough that this panel's content genuinely exceeds the cap, so
   // the scrolling half is exercised rather than merely available. 560
@@ -764,7 +765,7 @@ test("the account panel: a tall dialog stays inside a short window and scrolls",
     }) as typeof window.fetch;
   });
 
-  await page.goto(ACCOUNT_ORIGIN);
+  await page.goto(`chrome-extension://${extensionId}/index.html`);
   await page.getByRole("button", { name: "Account" }).click();
 
   const dialog = page.getByRole("dialog", { name: "Account" });
@@ -807,36 +808,9 @@ test("the account panel: a tall dialog stays inside a short window and scrolls",
   await page.close();
 });
 
-test("the Supporter gate: OCR is gated too, and one unlock covers both", async ({ context }) => {
-  const page = await context.newPage();
-  await installAccountStubs(page, { signedIn: true, unlocked: false, unlock: "ok" });
-  await installFilePickerStubs(page);
-  await page.setViewportSize({ width: 1200, height: 1400 });
-  await page.goto(ACCOUNT_ORIGIN);
-  await seedFile(page, "a.pdf", TEXT_PDF_BASE64);
-  await queueOpenPick(page, ["a.pdf"]);
-  await page.locator("header.topbar").getByRole("button", { name: "Open PDF…" }).click();
-  await expect(page.locator(".path-bar__text")).toHaveText("a.pdf");
-
-  // Reaching for OCR must raise the gate, not run it.
-  await page.getByRole("button", { name: "OCR document" }).click();
-  const gate = page.getByRole("dialog", { name: "Supporter feature" });
-  await expect(gate).toBeVisible({ timeout: 15_000 });
-  // Titled for the tool that was clicked, so it does not look like the
-  // wrong panel opened...
-  await expect(gate.getByRole("heading", { name: "OCR" })).toBeVisible();
-  // ...while saying plainly that the purchase is not per tool.
-  await expect(gate).toContainText("both Supporter tools");
-
-  await page.getByRole("button", { name: "Not now" }).click();
-
-  // And the watermark shares the entitlement rather than having its own.
-  await page.getByRole("button", { name: "Watermark document" }).click();
-  await expect(gate).toBeVisible({ timeout: 15_000 });
-  await expect(gate.getByRole("heading", { name: "Watermark" })).toBeVisible();
-  await gate.getByRole("button", { name: /Unlock for/ }).click();
-  await expect(page.getByRole("dialog", { name: "Watermark" })).toBeVisible({ timeout: 15_000 });
-
-  await page.close();
-});
-
+// The OCR gate had a test here. It cannot run in the extension any
+// more: that button is not in this build, because the recogniser and its
+// language data are not packaged and the gate would take a payment for
+// something that then fails. The watermark tests above cover the gate
+// itself, which is the shared part; OCR-specific coverage belongs with
+// the web app, which ships the assets.
