@@ -224,6 +224,40 @@ Then restart the server the way you normally do (`deploy/run.sh`, or
 Note `https://openpdfedit.com` is deliberately *not* in that list: the
 marketing site never signs anyone in. Only the app does.
 
+### The browser extension's origin
+
+The extension's pages are served from `chrome-extension://<id>`, and its
+`fetch()` calls are ordinary cross-origin requests governed by CORS —
+the extension requests no host permissions, which is what would
+otherwise exempt them. So that origin needs to be in the list too, or
+signing in *appears* to work and every call after it fails with "Could
+not reach the server. Check your connection."
+
+That is not the same failure as the one above, and it looks nothing like
+it: the session really does arrive, the panel really does render, and
+only the balance and entitlement calls die. Diagnose it by asking the
+server directly, which shows the missing header without a browser in the
+way:
+
+```sh
+curl -s -i -X OPTIONS https://auth.openpdfedit.com/v1/credits/entitlement \
+  -H 'Origin: chrome-extension://<id>' \
+  -H 'Access-Control-Request-Method: GET' | grep -i access-control-allow-origin
+```
+
+No output means the origin is not on the list.
+
+**The id is not stable across builds.** An unpacked extension takes its
+id from the absolute path it was loaded from, so a developer copy and
+the published one differ. Both need listing: the published id, from the
+store dashboard once the listing exists, and whichever dev id is in use.
+
+```sh
+OPENAPPS_SERVER_ALLOWED_ORIGINS=<what is already there>,chrome-extension://<published id>,chrome-extension://<dev id>
+```
+
+The gateway needs the same treatment for the unlock — see §4.
+
 ---
 
 ## 4. Register OpenPdfEdit as a paid app
@@ -256,8 +290,12 @@ And add the web app's origin to the gateway's CORS list, since the
 unlock is called from the browser:
 
 ```sh
-GATEWAY_ALLOWED_ORIGINS=<what is already there>,https://app.openpdfedit.com
+GATEWAY_ALLOWED_ORIGINS=<what is already there>,https://app.openpdfedit.com,chrome-extension://<published id>
 ```
+
+The extension buys the same unlock from the same gateway, so its origin
+belongs here as well — see the note in §3 about the id not being stable
+across builds.
 
 Restart the gateway (`deploy/run-gateway.sh`). It logs the app ids it can
 bill for at startup — check `openpdfedit` is among them:
@@ -368,6 +406,7 @@ branding alone.
 | reloading `/login` gives a 404 | §2 — `try_files` missing on the app block |
 | the app loads but the editor never appears | §2 — `.wasm` served as `application/octet-stream`; check `curl -sI https://app.openpdfedit.com/pdfium.wasm` |
 | unlock fails with a network error, nothing in the gateway log | §4 — origin missing from `GATEWAY_ALLOWED_ORIGINS`; the browser blocks it before the request is sent |
+| in the extension: signed in, but "Could not reach the server" | §3 — `chrome-extension://<id>` missing from `OPENAPPS_SERVER_ALLOWED_ORIGINS`. Sign-in succeeds because it happens on the web app's origin; only the calls the extension makes afterwards are blocked |
 | unlock returns 500 | §4 — no `OPENAPPS_KEY_OPENPDFEDIT` in the gateway's environment |
 | the app loads yesterday's build | a stale service worker; hard-reload once, then check §5's `--delete` actually ran |
 | certbot fails on one name | §1 — that name has no DNS record yet; certbot must answer a challenge on every `-d` |
