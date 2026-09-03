@@ -165,9 +165,19 @@ jobs:
             NOTES="Local-first PDF editor. Downloads: the macOS app (.dmg, Apple Silicon), the Windows installer (.exe), and the Chrome extension (unzip, then chrome://extensions → Developer mode → Load unpacked). Chrome 103+. Documents never leave your machine."
           fi
 
+          # A tag with a suffix — v0.1.10-rc1 — is a candidate, not a
+          # release. Without --prerelease it would be marked Latest, and
+          # the site's Download buttons follow releases/latest, so a tag
+          # cut to test something would become what everybody downloads.
+          PRERELEASE=""
+          case "$GITHUB_REF_NAME" in
+            v*.*.*-*) PRERELEASE="--prerelease" ;;
+          esac
+
           gh release create "$GITHUB_REF_NAME" \
             --repo "$GITHUB_REPOSITORY" \
             --title "OpenPdfEdit $GITHUB_REF_NAME" \
             --notes "$NOTES" \
+            $PRERELEASE \
             artifacts/* \
           || gh release upload "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --clobber artifacts/*
