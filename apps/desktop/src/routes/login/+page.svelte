@@ -95,9 +95,30 @@
 
   $effect(() => {
     // Reopening this window while already signed in (a stale window, or a
-    // races with the main window's own check) — nothing to do here.
-    if (getClient()?.isLoggedIn) {
-      void finish();
+    // race with the main window's own check) — nothing to do here.
+    //
+    // `isLoggedIn` is only "a session object exists in storage"; it makes
+    // no claim that the token still works. Taking it at face value is
+    // what produced the worst version of this bug: an expired session
+    // from an earlier visit meant this page never offered Google, Nostr
+    // or a wallet at all — it closed immediately and handed the dead
+    // token on, leaving an account panel that says "Not signed in" four
+    // times over a "Sign out" button.
+    //
+    // So ask the server whether the session is real before acting on it.
+    // A session that cannot fetch its own account is not one to keep, or
+    // to pass to an extension.
+    const client = getClient();
+    if (client?.isLoggedIn) {
+      void client.auth
+        .me()
+        .then(() => finish())
+        .catch(() => {
+          // Expired, revoked, or the server disowned it. Drop it and let
+          // the sign-in buttons below render, which is what the person
+          // opening this window came for.
+          client.clearSession();
+        });
       return;
     }
     if (!containerEl) return;
