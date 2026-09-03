@@ -1,46 +1,79 @@
 // Nothing in the extension may lead somewhere the extension cannot go.
 //
 // This exists because an Edge review failed on exactly that. Signing in
-// opened `/login`; the web app's server rewrites unknown paths to the SPA
-// fallback, so it works there, while `chrome-extension://` has no server
-// and answers a literal file lookup. The reviewer got Chrome's "File not
-// found. It may have been moved, edited, or deleted." and reported the
-// product's primary functions as unusable.
+// opened `/login`, a *relative* path — which the web app resolves against
+// its own origin, where a server rewrites unknown paths to the SPA
+// fallback. `chrome-extension://` has no server and answers a literal
+// file lookup, so the reviewer got Chrome's "File not found. It may have
+// been moved, edited, or deleted." and reported the product's primary
+// functions as unusable. The path had been relative since the flow was
+// written; it had simply never been clicked in the extension.
 //
 // Every existing test missed it. `boot.spec.ts` navigates straight to
 // `index.html`, and every flow test stubs the file picker, so nothing
-// ever followed a link the app offers and checked that it resolves.
+// ever followed a link the app offers to see whether it resolves.
 //
-// Two things are asserted, because fixing only the first would move the
-// failure rather than remove it:
-//
-//   1. No account surface is offered in the extension at all. The
-//      sign-in page redirects the whole window out to an OAuth provider
-//      and back, and a `chrome-extension://` redirect URI is not
-//      something those providers accept — so a working `/login` would
-//      still dead-end, one step later and less legibly.
-//   2. Every same-origin URL the page does offer resolves to something
-//      real.
+// The fix keeps sign-in and sends it somewhere that can serve it: the web
+// app's own login page, at its real origin, with the session handed back
+// afterwards. So what is asserted here is that sign-in *leaves* the
+// extension, and that the route home exists.
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
 import { expect, test } from "./fixtures";
 
-/** Tools that need the account, and so cannot work here. Named by their
- * accessible names, which is what a reviewer clicking around sees. */
-const ACCOUNT_GATED = ["Account", "OCR document", "Watermark document"];
+const WEBAPP_ORIGIN = "https://app.openpdfedit.com";
 
-test("the extension offers nothing that needs an account", async ({ context, extensionId }) => {
+test("sign-in leaves the extension for an origin that can serve it", async ({
+  context,
+  extensionId,
+}) => {
   const page = await context.newPage();
   await page.goto(`chrome-extension://${extensionId}/index.html`);
-  await page
-    .locator("header.topbar")
-    .getByRole("button", { name: "Open PDF…" })
-    .waitFor({ state: "visible", timeout: 30_000 });
 
-  for (const name of ACCOUNT_GATED) {
-    await expect(
-      page.getByRole("button", { name, exact: true }),
-      `"${name}" is offered in the extension, where signing in cannot work`,
-    ).toHaveCount(0);
-  }
+  // Capture what the Sign in button asks the browser to open, without
+  // letting it actually open.
+  await page.evaluate(() => {
+    (window as unknown as { __opened: string | null }).__opened = null;
+    window.open = ((url?: string | URL) => {
+      (window as unknown as { __opened: string | null }).__opened = url ? String(url) : null;
+      return null;
+    }) as typeof window.open;
+  });
+
+  await page.getByRole("button", { name: "Account", exact: true }).click();
+  await page.getByRole("button", { name: "Sign in", exact: true }).click();
+
+  const opened = await page.evaluate(
+    () => (window as unknown as { __opened: string | null }).__opened,
+  );
+
+  expect(opened, "the Sign in button opened nothing").not.toBeNull();
+  // The bug, asserted directly: a relative path here resolves against
+  // chrome-extension://, which cannot serve it.
+  expect(opened!, "sign-in must not resolve against chrome-extension://").not.toContain(
+    "chrome-extension://",
+  );
+  expect(opened!).toContain(`${WEBAPP_ORIGIN}/login`);
+  // The extension's own id has to ride along, or the login page has
+  // nowhere to hand the finished session back to.
+  expect(opened!, "no extension id for the hand-back").toContain(`ext=${extensionId}`);
+});
+
+test("the login origin can reach the extension back", () => {
+  const manifest = JSON.parse(
+    readFileSync(join(process.cwd(), "public", "manifest.json"), "utf8"),
+  ) as { externally_connectable?: { matches?: string[] }; permissions?: string[] };
+
+  // Without this the hand-back has only the opener `postMessage`, which
+  // a Cross-Origin-Opener-Policy header anywhere in the OAuth round trip
+  // is free to sever.
+  expect(manifest.externally_connectable?.matches).toContain(`${WEBAPP_ORIGIN}/*`);
+
+  // And it has to stay a manifest key rather than become a permission.
+  // Requesting none at all is this submission's strongest point, and
+  // `identity` — the other way to do sign-in — would spend it.
+  expect(manifest.permissions ?? []).toEqual([]);
 });
 
 test("every in-extension link resolves to a file that exists", async ({ context, extensionId }) => {
@@ -67,13 +100,13 @@ test("every in-extension link resolves to a file that exists", async ({ context,
 
 // The specific URL that failed, asserted directly: `/login` is not a file
 // in this package and never will be, so nothing may navigate to it.
-test("the sign-in path the review hit is not reachable", async ({ context, extensionId }) => {
+test("the sign-in path the review hit is still not a file in the package", async ({
+  context,
+  extensionId,
+}) => {
   const page = await context.newPage();
   const response = await page.goto(`chrome-extension://${extensionId}/login`).catch(() => null);
 
-  // Chrome serves a real error page for a missing extension resource
-  // rather than throwing, so "did it load" is not the question — "is
-  // there anything there" is.
   const missing =
     response === null ||
     response.status() >= 400 ||

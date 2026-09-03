@@ -41,6 +41,55 @@ export const SESSION_STORAGE_KEY = "openapps.session";
 /// What the sign-in popup posts back to its opener when it is done.
 export const SIGNIN_DONE_MESSAGE = "openpdfedit-signin-done";
 
+/// Where the browser extension sends someone to sign in.
+///
+/// The extension cannot host this itself. Its pages are served from
+/// `chrome-extension://`, which has no server behind it, so the relative
+/// `/login` the web app opens resolves to a file that is not in the
+/// package — Chrome answers "File not found. It may have been moved,
+/// edited, or deleted." That is what failed an Edge review, and it had
+/// never worked: the path has been relative since the flow was written,
+/// and in the web app, where it is relative to a real origin, it works.
+///
+/// So the extension opens the web app's own login page, at its real
+/// origin, in a real tab. The OAuth redirect then happens entirely
+/// between `https://` origins, which is the only place it can happen.
+export const WEBAPP_ORIGIN = "https://app.openpdfedit.com";
+
+/// The query parameter the extension uses to tell the login page where to
+/// hand the session back to. Carries the extension's own id, not a URL,
+/// so the login page can address it with `chrome.runtime.sendMessage`
+/// without having to trust an arbitrary origin string.
+export const OPENER_EXTENSION_PARAM = "ext";
+
+/// A Chrome extension id: 32 characters, a-p. Validated on both sides —
+/// the login page will not hand a session to anything that is not shaped
+/// like an extension id, and the extension will not accept one that did
+/// not come from the web app's origin.
+export function isExtensionId(value: string | null | undefined): value is string {
+  return typeof value === "string" && /^[a-p]{32}$/.test(value);
+}
+
+/// The sliver of the extension API this app touches, typed here rather
+/// than by depending on `@types/chrome`. The desktop and web builds are
+/// the same source and must keep compiling with no extension types in
+/// sight, so the global is reached through this accessor and nowhere
+/// else — it returns `null` everywhere that is not the extension.
+export interface ExtensionRuntime {
+  id: string;
+  onMessage: {
+    addListener(fn: (message: unknown) => void): void;
+    removeListener(fn: (message: unknown) => void): void;
+  };
+}
+
+export function extensionRuntime(): ExtensionRuntime | null {
+  const runtime = (globalThis as { chrome?: { runtime?: Partial<ExtensionRuntime> } }).chrome
+    ?.runtime;
+  if (!runtime || typeof runtime.id !== "string" || !runtime.onMessage) return null;
+  return runtime as ExtensionRuntime;
+}
+
 /// The ledger reference for the one-time watermark unlock. The server
 /// keys the entitlement on this string, so it is a permanent identifier:
 /// changing it would orphan every unlock already sold.

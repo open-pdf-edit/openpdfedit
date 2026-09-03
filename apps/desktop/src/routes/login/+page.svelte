@@ -10,7 +10,12 @@
   import { emit } from "@tauri-apps/api/event";
   import { getCurrentWindow } from "@tauri-apps/api/window";
   import { getClient } from "@openapps/ui";
-  import { SIGNIN_DONE_MESSAGE } from "$lib/openapps";
+  import {
+    OPENER_EXTENSION_PARAM,
+    SESSION_STORAGE_KEY,
+    SIGNIN_DONE_MESSAGE,
+    isExtensionId,
+  } from "$lib/openapps";
 
   let containerEl: HTMLDivElement | null = null;
 
@@ -19,8 +24,63 @@
   // they throw rather than reject and no `.catch` would help.
   const tauriAvailable = "__TAURI_INTERNALS__" in window;
 
+  /** Hands the finished session to the browser extension that sent us
+   * here, if one did.
+   *
+   * The extension cannot run this page: `chrome-extension://` has no
+   * server, so it opens the web app's copy instead — which means the
+   * session lands in *this* origin's localStorage and not in the one the
+   * extension reads. It has to be carried across deliberately.
+   *
+   * Two routes, because neither alone is reliable. `postMessage` to the
+   * opener is immediate but depends on the opener relationship, which a
+   * Cross-Origin-Opener-Policy header anywhere in the OAuth round trip
+   * severs. `chrome.runtime.sendMessage` does not depend on it at all,
+   * and works because the extension names this origin in
+   * `externally_connectable` — a manifest key, not a permission, so it
+   * costs the extension no warning at install.
+   *
+   * The id is validated before either: it arrives in a query parameter,
+   * so it is untrusted input, and it decides who receives a credential. */
+  function handOverToExtension(): void {
+    const extensionId = new URLSearchParams(window.location.search).get(OPENER_EXTENSION_PARAM);
+    if (!isExtensionId(extensionId)) return;
+
+    const session = localStorage.getItem(SESSION_STORAGE_KEY);
+    if (!session) return;
+    const payload = { type: SIGNIN_DONE_MESSAGE, session };
+
+    window.opener?.postMessage(payload, `chrome-extension://${extensionId}`);
+
+    // `chrome.runtime` is injected into this page only because the
+    // extension names this origin in `externally_connectable`; on every
+    // other browser, and for every visitor without the extension, it is
+    // simply absent.
+    const runtime = (
+      globalThis as {
+        chrome?: {
+          runtime?: {
+            sendMessage?: (id: string, message: unknown, cb: () => void) => void;
+            lastError?: unknown;
+          };
+        };
+      }
+    ).chrome?.runtime;
+    if (typeof runtime?.sendMessage === "function") {
+      try {
+        // An extension that is not installed simply never answers. The
+        // callback form is what keeps that from surfacing as an
+        // unhandled rejection — reading `lastError` marks it handled.
+        runtime.sendMessage(extensionId, payload, () => void runtime.lastError);
+      } catch {
+        // Nothing to do: the postMessage above is the other half.
+      }
+    }
+  }
+
   async function finish(): Promise<void> {
     if (!tauriAvailable) {
+      handOverToExtension();
       // The browser build. The session is already in this origin's
       // localStorage, which the opener shares and reads live, so there
       // is nothing to hand over — this only says "look again", so the

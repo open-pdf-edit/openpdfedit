@@ -4,8 +4,9 @@ The listing copy for the two stores that take this package: the Chrome
 Web Store and Microsoft Edge Add-ons. Both accept the same MV3 zip
 unmodified, and the copy below serves both — only the dashboards differ.
 
-Submitted to Edge and rejected once; see the note below and
-`docs/STORES.md` for the operational steps.
+Submitted to Edge once and rejected; see the note below. For the
+operational steps — registering, uploading, and the automation that
+handles every release after the first — see `docs/STORES.md`.
 
 **Keep this honest.** Reviewers compare what a listing claims against
 what the bundle does, and a claim that is merely out of date reads
@@ -13,14 +14,20 @@ exactly like one that was never true. Check claims against the *built*
 `dist/`, not against the source tree — the two differ. The listing
 briefly claimed OCR worked here because `ocr-browser.ts` exists and the
 web app ships it; the extension build does not copy the `/ocr` assets,
-so it does not.
+so it does not. Corrected below.
 
-An Edge review then failed the submission over the same class of
-mistake, one level down: the account panel offered a Sign in that opened
-`/login`, a path only a server can resolve, so the reviewer got "File
-not found" and reported the primary functions as unusable. The extension
-has no account surface at all now, which makes "no account required"
-true again without qualification — see `isBrowserExtension`.
+Also corrected: "no account required" stopped being true when
+watermarking became a Supporter tool. If the gate in `lib/openapps.ts`
+moves again, this file moves with it.
+
+The Edge rejection was the same class of error one level down, and in
+code rather than copy: Sign in opened a *relative* `/login`, which the
+web app resolves against its own origin and `chrome-extension://` cannot
+resolve at all. Sign-in now opens the web app's login page at its real
+origin and the finished session is handed back to the extension. Worth
+knowing when writing the privacy declaration below: the extension is
+reachable from `app.openpdfedit.com` for that hand-back, declared as
+`externally_connectable` — a manifest key, not a permission.
 
 ## Listing copy
 
@@ -53,21 +60,25 @@ What you can do:
 - Compare two PDFs — see both text and rendered-pixel differences
 - Undo/redo across your whole editing session
 
-Free, with no exceptions:
-- Everything above is free. There is no account to create, nothing to
-  sign in to, nothing time-limited, nothing watermarked, and no caps.
+Free, with one exception:
+- Everything in the list above is free and needs no account. Watermarking
+  is a Supporter tool: it needs a signed-in account and a one-time
+  unlock. Nothing else asks you to sign in, and nothing is time-limited,
+  watermarked, or capped.
 
-Two things this extension does not do, both of which the web app at
-app.openpdfedit.com and the desktop app do: OCR, and watermarking. OCR
-needs Tesseract's engine and language data — about 70 MB — which is the
-wrong thing to put in an extension. Watermarking is a paid Supporter
-tool, and paid tools need an account, which needs a sign-in flow a
-browser extension cannot host. Rather than ship either as a button that
-leads nowhere, this build leaves them out.
+One thing this extension does not do: OCR. Making a scanned PDF
+searchable needs Tesseract's engine and language data — about 70 MB —
+and packaging that into an extension is the wrong trade. OCR is
+available in the web app at app.openpdfedit.com and in the desktop app,
+both of which do it locally too.
 
 Privacy, by construction, not by policy:
 - 100% local PDF processing — your document is never uploaded anywhere,
   opened and edited entirely by an in-browser WASM engine
+- An optional account panel (for credits/purchases, not editing) talks to
+  OpenApps' own account server only if and when you choose to sign in —
+  see the privacy declaration below for exactly what that does and
+  doesn't send
 - No analytics, no tracking, no telemetry — nothing about your usage is
   ever collected
 - No remote code — everything the extension runs shipped inside the
@@ -75,8 +86,8 @@ Privacy, by construction, not by policy:
   from anywhere at runtime (this is also enforced by its Content-Security-
   Policy, not just a claim: `script-src 'self' 'wasm-unsafe-eval'`)
 
-Everything in the feature list above is live in this extension. OCR and
-watermarking, as noted, are not in it at all.
+Everything in the feature list above is live in this extension. OCR, as
+noted, is not.
 ```
 
 ### Category
@@ -86,10 +97,11 @@ tooling — PDF editors from other vendors list here too).
 
 ### Privacy declaration (for the Store's "Privacy practices" tab)
 
-This used to need care, because the account panel was a real network
-surface even though the PDF editor was not. That panel is gone from this
-build, so the simple claim is now the true one: nothing here talks to
-anything.
+This has two genuinely different parts, and the declaration below is
+deliberately precise about which is which — a blanket "no data leaves the
+browser" claim would be false and is a real rejection/compliance risk, not
+just imprecise wording: the optional Account panel is a real network
+surface, even though the PDF editor itself is not.
 
 - **PDF/document processing: 100% local, always, no exceptions.** Every
   editing feature — view, annotate, edit text, fill/create form fields,
@@ -101,22 +113,51 @@ anything.
   disk via the browser's File System Access API (a direct user-initiated
   file write, not a network request). This holds regardless of whether
   the optional account feature below is used at all.
-- **No network activity at all.** This build has no account surface: no
-  sign-in, no credits, no purchases. Those exist in the web app and the
-  desktop app, and are deliberately absent here, because the sign-in flow
-  they need cannot be hosted inside an extension. Nothing in this package
-  contacts any server, for any reason, at any point. Verified rather than
-  asserted: with every non-extension request blocked outright, the
-  extension still loads and opens, edits and saves a document, because it
-  never asks for one.
+- **Optional account panel — network activity, but not document data.**
+  The account/credits UI (sign in, view balance, buy credits) is a
+  separate, optional surface, not part of PDF editing. **With no session
+  (not signed in — the default state), it renders a single "Sign in"
+  button and makes no network requests at all**: the three underlying
+  components (`<openapps-account>`, `<openapps-credits
+  poll-seconds="30">`, `<openapps-buy>`) are not even mounted into the
+  page unless the app's own `loggedIn` check is already true (see
+  `apps/desktop/src/lib/AccountPanel.svelte`'s `{#if loggedIn}` gate —
+  confirmed by reading that component's template, not assumed), and each
+  of those components independently no-ops instead of calling the network
+  when there is no signed-in session (confirmed by reading
+  `openapps-credits.ts`'s `refresh()`, which checks `sdk.isLoggedIn`
+  before ever calling `sdk.credits.balance()`). Configuring the shared
+  SDK client at app startup (`configure({ baseUrl: OPENAPPS_BASE_URL })`
+  in `+layout.svelte`) only constructs a local client object and reads a
+  local token store — it does not itself make a network request either
+  (confirmed by reading `OpenApps`'s constructor in the SDK). **If and
+  only if you choose to sign in**, that panel communicates with exactly
+  two hosts, both named in `apps/desktop/src/lib/openapps.ts`:
+  `auth.openpdfedit.com` for the session, credit balance and the
+  Supporter entitlement check, and `gateway.openapps.network` for the
+  one route that can actually spend credits — the Supporter unlock. No
+  document content or metadata is ever
+  sent to either — the PDF engine and the account client are two unconnected
+  code paths that never pass document data to each other.
+- **Signing in happens on the web app, not in the extension.** Choosing
+  Sign in opens `https://app.openpdfedit.com/login` in a tab. The whole
+  sign-in exchange happens there, on that origin; when it finishes, that
+  page hands the resulting session back to this extension and nothing
+  else. The manifest's `externally_connectable` entry names that one
+  origin as the only thing permitted to message the extension. It is a
+  manifest key rather than a permission, and it grants the extension no
+  access to that site — only the reverse, and only from that site.
 - **Data collected: none.** No analytics, no crash reporting, no
-  telemetry, no remote logging.
+  telemetry, no remote logging — from either the PDF editor or the
+  account panel.
 - **Remote code:** none. The CSP (`content_security_policy` in
   `manifest.json`) disallows inline scripts and restricts script sources
   to `'self'` plus `'wasm-unsafe-eval'` (required to instantiate the
   bundled WASM module) — there is no `eval`, no remotely-fetched script,
   and no third-party script host permitted, enforced by Chrome itself,
-  not just declared.
+  not just declared. This applies to the account panel's network calls
+  too: they're plain `fetch()` API calls for JSON data, not script
+  loading.
 - **Permissions requested:** none beyond what MV3 grants any extension by
   default (this manifest declares no `permissions` array at all — no
   `tabs`, `storage`, `activeTab`, host permissions, etc.). File access
