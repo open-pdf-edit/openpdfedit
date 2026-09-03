@@ -78,6 +78,32 @@ cp -R "$DESKTOP_DIR/build/." "$DIST_DIR/"
 echo "build-spa.sh: externalizing inline <script> tag(s) in dist/index.html (MV3 CSP forbids inline script content)..."
 node "$SCRIPT_DIR/externalize-inline.mjs"
 
+# --- Step 4b: drop the modulepreload hints --------------------------------
+#
+# Chrome will not use them on an extension page. Every one produces a
+# console warning — "A preload for ... is found, but is not used because
+# it is a cross-world extension resource mismatch" — and fetches a module
+# that is then fetched again through the real import graph.
+#
+# The URLs are not wrong: the preload and the import name the same
+# absolute path, and both resolve to the same file. It is Chromium's own
+# handling of preloads in extension pages, so there is nothing to fix on
+# this side other than not asking.
+#
+# Safe to remove because they are only hints. `inline-1.js` imports the
+# same modules directly, which is what actually loads them; boot.spec.ts
+# is the check that the page still starts.
+echo "build-spa.sh: dropping <link rel=modulepreload> (Chrome ignores them on extension pages, and warns once each)..."
+node -e '
+  const fs = require("fs");
+  const path = process.argv[1];
+  const before = fs.readFileSync(path, "utf8");
+  const after = before.replace(/<link[^>]+rel="modulepreload"[^>]*>/g, "");
+  const removed = (before.match(/rel="modulepreload"/g) || []).length;
+  if (after !== before) fs.writeFileSync(path, after);
+  console.log(`externalize: removed ${removed} modulepreload hint(s)`);
+' "$DIST_DIR/index.html"
+
 # --- Step 5: re-assert the vendored/generated assets ----------------------
 #
 # Step 1's vite-plugin hook already ran this once, before the SPA copy in
