@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { backend, backendKind, isPasswordRequired } from "$lib/backend";
+  import { backend, backendKind, isBrowserExtension, isPasswordRequired } from "$lib/backend";
   import type {
     AnnotationSummaryDto,
     CompareReportDto,
@@ -2385,16 +2385,20 @@
     <div class="topbar__spacer"></div>
 
 
-    <button
-      class="oa-icon-btn oa-icon-btn--sm account-btn"
-      class:account-btn--in={signedIn}
-      onclick={() => (showAccount = true)}
-      use:tooltip={signedIn ? "Account — signed in" : "Account — sign in, credits"}
-      aria-label={signedIn ? "Account — signed in" : "Account"}
-    >
-      <Icon name="circle-user" size={15} />
-          <span class="topbar__label">Account</span>
-    </button>
+    <!-- Not in the extension: signing in cannot work there, so offering
+         it is offering a dead end. See `isBrowserExtension`. -->
+    {#if !isBrowserExtension}
+      <button
+        class="oa-icon-btn oa-icon-btn--sm account-btn"
+        class:account-btn--in={signedIn}
+        onclick={() => (showAccount = true)}
+        use:tooltip={signedIn ? "Account — signed in" : "Account — sign in, credits"}
+        aria-label={signedIn ? "Account — signed in" : "Account"}
+      >
+        <Icon name="circle-user" size={15} />
+        <span class="topbar__label">Account</span>
+      </button>
+    {/if}
   </header>
 
     {#if doc}
@@ -2479,29 +2483,36 @@
               <Icon name="hash" size={15} />
             <span class="tools__label">Page numbers</span>
             </button>
-            <button
-              class="oa-icon-btn oa-icon-btn--sm"
-              onclick={handleOcrDocument}
-              disabled={ocrBusy}
-              use:tooltip={backendKind === "wasm"
-                ? "Make a scanned document searchable — the first run downloads the recogniser (about 3 MB), then works offline"
-                : "Make a scanned document searchable (requires tesseract installed locally)"}
-              aria-label="OCR document"
-            >
-              <Icon name="scan-text" size={15} spin={ocrBusy} />
-            <span class="tools__label">OCR</span>
-            </button>
-            <button
-              class="oa-icon-btn oa-icon-btn--sm"
-              class:oa-icon-btn--selected={showWatermark}
-              onclick={handleWatermarkClick}
-              disabled={mutationBusy}
-              use:tooltip={"Watermark — tile text or a logo across every page"}
-              aria-label="Watermark document"
-            >
-              <Icon name="stamp" size={15} />
-            <span class="tools__label">Watermark</span>
-            </button>
+            <!-- The two Supporter tools. Hidden in the extension, where
+                 the account they need cannot be signed into — a gate whose
+                 only button is a dead link is worse than no tool. OCR
+                 could not run there regardless: the extension does not
+                 package the recogniser or its language data. -->
+            {#if !isBrowserExtension}
+              <button
+                class="oa-icon-btn oa-icon-btn--sm"
+                onclick={handleOcrDocument}
+                disabled={ocrBusy}
+                use:tooltip={backendKind === "wasm"
+                  ? "Make a scanned document searchable — the first run downloads the recogniser (about 3 MB), then works offline"
+                  : "Make a scanned document searchable (requires tesseract installed locally)"}
+                aria-label="OCR document"
+              >
+                <Icon name="scan-text" size={15} spin={ocrBusy} />
+                <span class="tools__label">OCR</span>
+              </button>
+              <button
+                class="oa-icon-btn oa-icon-btn--sm"
+                class:oa-icon-btn--selected={showWatermark}
+                onclick={handleWatermarkClick}
+                disabled={mutationBusy}
+                use:tooltip={"Watermark — tile text or a logo across every page"}
+                aria-label="Watermark document"
+              >
+                <Icon name="stamp" size={15} />
+                <span class="tools__label">Watermark</span>
+              </button>
+            {/if}
             <button
               class="oa-icon-btn oa-icon-btn--sm"
               onclick={handleFlatten}
