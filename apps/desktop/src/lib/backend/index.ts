@@ -96,6 +96,33 @@ export let backend: Backend = tauriBackend;
 export const backendKind: "tauri" | "wasm" =
   import.meta.env.VITE_BACKEND === "wasm" ? "wasm" : "tauri";
 
+/**
+ * Running as the packaged browser extension rather than the web app.
+ *
+ * `backendKind` cannot answer this: both are built with
+ * `VITE_BACKEND=wasm` from the same source and ship the same bundle. Only
+ * the origin they are loaded from tells them apart, so this is a runtime
+ * check and not a compile-time constant.
+ *
+ * What it gates is the account surface. Signing in works on the web app
+ * and cannot work in the extension: the flow opens `/login`, which the
+ * web app's server rewrites to the SPA fallback, while
+ * `chrome-extension://` has no server and answers a literal file lookup —
+ * Chrome's "File not found. It may have been moved, edited, or deleted."
+ * That is what an Edge reviewer hit, and it failed the submission.
+ *
+ * Making the page resolve would only move the failure: the sign-in page
+ * redirects the whole window out to the OAuth provider and back, and a
+ * `chrome-extension://` redirect URI is not something those providers
+ * accept. The honest answer for this build is not to offer an account at
+ * all — which costs it only the two Supporter tools, one of which
+ * (OCR) the extension cannot perform anyway, since its engine and
+ * language data are not packaged.
+ */
+export const isBrowserExtension =
+  typeof location !== "undefined" &&
+  (location.protocol === "chrome-extension:" || location.protocol === "moz-extension:");
+
 /** Resolves which `Backend` implementation to use and installs it as
  * `backend` above. Must be awaited once, before the app mounts anything
  * that might call into `backend` — see +layout.svelte, which awaits this

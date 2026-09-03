@@ -619,10 +619,24 @@ async function installAccountStubs(
   }, options);
 }
 
-async function openFixtureAndClickWatermark(page: Page, extensionId: string): Promise<void> {
+// --- The account surface: web app only -----------------------------------
+//
+// These tests navigate to the web app rather than the extension, because
+// the extension no longer has an account surface to test. Signing in
+// there opened `/login`, which the web app's server rewrites to the SPA
+// fallback and `chrome-extension://` cannot resolve at all — an Edge
+// reviewer got Chrome's "File not found" and failed the submission. The
+// tools that need an account are hidden in that build now; see
+// `isBrowserExtension`, and `no-dead-ends.spec.ts` for the guard.
+//
+// The gate itself is unchanged and still worth testing, so the coverage
+// moves rather than disappears.
+const ACCOUNT_ORIGIN = "http://localhost:8099";
+
+async function openFixtureAndClickWatermark(page: Page): Promise<void> {
   await installFilePickerStubs(page);
   await page.setViewportSize({ width: 1200, height: 1400 });
-  await page.goto(`chrome-extension://${extensionId}/index.html`);
+  await page.goto(ACCOUNT_ORIGIN);
   await seedFile(page, "a.pdf", TEXT_PDF_BASE64);
   await queueOpenPick(page, ["a.pdf"]);
   await page.locator("header.topbar").getByRole("button", { name: "Open PDF…" }).click();
@@ -633,13 +647,10 @@ async function openFixtureAndClickWatermark(page: Page, extensionId: string): Pr
 const watermarkDialog = (page: Page) => page.getByRole("dialog", { name: "Watermark" });
 const gate = (page: Page) => page.getByRole("dialog", { name: "Supporter feature" });
 
-test("the Supporter gate: signed out, the watermark tool asks for an account", async ({
-  context,
-  extensionId,
-}) => {
+test("the Supporter gate: signed out, the watermark tool asks for an account", async ({ context }) => {
   const page = await context.newPage();
   await installAccountStubs(page, { signedIn: false, unlocked: false });
-  await openFixtureAndClickWatermark(page, extensionId);
+  await openFixtureAndClickWatermark(page);
 
   await expect(gate(page)).toBeVisible({ timeout: 15_000 });
   await expect(gate(page)).toContainText("Sign in to unlock");
@@ -650,13 +661,10 @@ test("the Supporter gate: signed out, the watermark tool asks for an account", a
   await page.close();
 });
 
-test("the Supporter gate: already unlocked, the tool opens with no gate at all", async ({
-  context,
-  extensionId,
-}) => {
+test("the Supporter gate: already unlocked, the tool opens with no gate at all", async ({ context }) => {
   const page = await context.newPage();
   await installAccountStubs(page, { signedIn: true, unlocked: true });
-  await openFixtureAndClickWatermark(page, extensionId);
+  await openFixtureAndClickWatermark(page);
 
   // Someone who has already paid should never see the gate — not even
   // briefly enough to click.
@@ -666,13 +674,10 @@ test("the Supporter gate: already unlocked, the tool opens with no gate at all",
   await page.close();
 });
 
-test("the Supporter gate: locked, then unlocked, opens the tool", async ({
-  context,
-  extensionId,
-}) => {
+test("the Supporter gate: locked, then unlocked, opens the tool", async ({ context }) => {
   const page = await context.newPage();
   await installAccountStubs(page, { signedIn: true, unlocked: false, unlock: "ok" });
-  await openFixtureAndClickWatermark(page, extensionId);
+  await openFixtureAndClickWatermark(page);
 
   await expect(gate(page)).toBeVisible({ timeout: 15_000 });
   const unlockButton = gate(page).getByRole("button", { name: /Unlock for/ });
@@ -688,13 +693,10 @@ test("the Supporter gate: locked, then unlocked, opens the tool", async ({
   await page.close();
 });
 
-test("the Supporter gate: too few credits says how many, and doesn't open the tool", async ({
-  context,
-  extensionId,
-}) => {
+test("the Supporter gate: too few credits says how many, and doesn't open the tool", async ({ context }) => {
   const page = await context.newPage();
   await installAccountStubs(page, { signedIn: true, unlocked: false, unlock: "insufficient" });
-  await openFixtureAndClickWatermark(page, extensionId);
+  await openFixtureAndClickWatermark(page);
 
   await expect(gate(page)).toBeVisible({ timeout: 15_000 });
   await gate(page).getByRole("button", { name: /Unlock for/ }).click();
@@ -724,10 +726,7 @@ test("the Supporter gate: too few credits says how many, and doesn't open the to
  * pass or fail depending on how many packages happened to be on sale
  * that day.
  */
-test("the account panel: a tall dialog stays inside a short window and scrolls", async ({
-  context,
-  extensionId,
-}) => {
+test("the account panel: a tall dialog stays inside a short window and scrolls", async ({ context }) => {
   const page = await context.newPage();
   // Short enough that this panel's content genuinely exceeds the cap, so
   // the scrolling half is exercised rather than merely available. 560
@@ -765,7 +764,7 @@ test("the account panel: a tall dialog stays inside a short window and scrolls",
     }) as typeof window.fetch;
   });
 
-  await page.goto(`chrome-extension://${extensionId}/index.html`);
+  await page.goto(ACCOUNT_ORIGIN);
   await page.getByRole("button", { name: "Account" }).click();
 
   const dialog = page.getByRole("dialog", { name: "Account" });
@@ -808,15 +807,12 @@ test("the account panel: a tall dialog stays inside a short window and scrolls",
   await page.close();
 });
 
-test("the Supporter gate: OCR is gated too, and one unlock covers both", async ({
-  context,
-  extensionId,
-}) => {
+test("the Supporter gate: OCR is gated too, and one unlock covers both", async ({ context }) => {
   const page = await context.newPage();
   await installAccountStubs(page, { signedIn: true, unlocked: false, unlock: "ok" });
   await installFilePickerStubs(page);
   await page.setViewportSize({ width: 1200, height: 1400 });
-  await page.goto(`chrome-extension://${extensionId}/index.html`);
+  await page.goto(ACCOUNT_ORIGIN);
   await seedFile(page, "a.pdf", TEXT_PDF_BASE64);
   await queueOpenPick(page, ["a.pdf"]);
   await page.locator("header.topbar").getByRole("button", { name: "Open PDF…" }).click();
