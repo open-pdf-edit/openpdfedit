@@ -220,6 +220,11 @@ const inject = [
   // standalone iOS window, so an installed app does not open with a
   // white strip above a dark UI.
   '<meta name="theme-color" content="#111111">',
+  // Both spellings. `apple-mobile-web-app-capable` is the one iOS has
+  // always read; Chrome now warns that it is deprecated and asks for the
+  // standard name, which Android reads. Neither browser reads the
+  // other's, so dropping either loses a platform.
+  '<meta name="mobile-web-app-capable" content="yes">',
   '<meta name="apple-mobile-web-app-capable" content="yes">',
   '<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">',
   '<meta name="apple-mobile-web-app-title" content="OpenPdfEdit">',

@@ -65,6 +65,13 @@ test("iOS gets the tags it reads, since it reads none of the manifest's icons", 
   expect(html).toContain('name="apple-mobile-web-app-capable"');
   expect(html).toContain('name="theme-color"');
 
+  // And the standard spelling beside it. Chrome warns that the Apple one
+  // is deprecated and reads `mobile-web-app-capable` instead, while iOS
+  // reads only the Apple one — so neither can be dropped for the other.
+  expect(html, "Android's installability tag is missing").toContain(
+    'name="mobile-web-app-capable"',
+  );
+
   const icon = await request.get(`${ORIGIN}/icons/apple-touch-icon.png`);
   expect(icon.status()).toBe(200);
   const bytes = Buffer.from(await icon.body());
