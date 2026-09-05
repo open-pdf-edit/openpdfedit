@@ -260,6 +260,58 @@ The gateway needs the same treatment for the unlock — see §4.
 
 ---
 
+## 3b. Apple in-app purchase (only once there is an iOS app)
+
+Credits bought on iOS have to go through Apple. The backend rail is built
+and tested; what remains is configuration, and none of it can be done
+before the app exists in App Store Connect.
+
+**In `deploy/prod.env`**, or the equivalent section of the server's TOML:
+
+```toml
+[apple_iap]
+# "sandbox" on staging, "production" on the live server. This is the only
+# thing separating a tester's purchase from a paying customer's — a sandbox
+# receipt verifies against Apple's real certificates exactly as a paid one
+# does, so a production server that accepts sandbox receipts is an
+# unlimited credit printer for anyone who can run one.
+environment = "production"
+# Apple's root CA, PEM. Configured rather than compiled in so it can be
+# rotated without a release.
+root_certificates_pem = """
+-----BEGIN CERTIFICATE-----
+...
+-----END CERTIFICATE-----"""
+```
+
+**Then map the products.** Nothing is redeemable until this row exists —
+in-app purchase is opt-in by data, which is why apps without a mobile
+form, like OpenCapture, need no exclusion:
+
+```sql
+INSERT INTO app_iap_products
+  (platform, product_id, app_id, bundle_id, credits, usd_price, created_at)
+VALUES
+  ('apple', 'credits_1000', 'openpdfedit', 'com.openpdfedit.app', 1000, 500, unixepoch()),
+  ('apple', 'credits_5000', 'openpdfedit', 'com.openpdfedit.app', 5000, 2000, unixepoch());
+```
+
+`product_id` must match the identifier in App Store Connect exactly, and
+`bundle_id` must match the app's — it is what stops a receipt from
+somebody else's App Store app crediting an account here.
+
+**Point Apple at the notification endpoint.** In App Store Connect, set
+the Server Notifications V2 URL to
+`https://auth.openpdfedit.com/v1/webhooks/apple`. Without it a refund is
+never clawed back: Apple grants the refund, the customer keeps the
+credits, and the loss shows up only as a discrepancy nobody is watching.
+
+Nothing else is needed. Redemption is verified offline from the
+certificate chain in the receipt, so there is no App Store Server API key
+to manage for the purchase path.
+
+---
+
 ## 4. Register OpenPdfEdit as a paid app
 
 The watermark unlock charges 1,000 credits through
@@ -406,6 +458,9 @@ branding alone.
 | reloading `/login` gives a 404 | §2 — `try_files` missing on the app block |
 | the app loads but the editor never appears | §2 — `.wasm` served as `application/octet-stream`; check `curl -sI https://app.openpdfedit.com/pdfium.wasm` |
 | unlock fails with a network error, nothing in the gateway log | §4 — origin missing from `GATEWAY_ALLOWED_ORIGINS`; the browser blocks it before the request is sent |
+| iOS purchase succeeds in the app, no credits appear | §3b — the product is not in `app_iap_products`, or `bundle_id` does not match. The response says which |
+| iOS purchases credited on staging but not live | §3b — `apple_iap.environment`. A production server refuses sandbox receipts on purpose |
+| refunds never claw back | §3b — the Server Notifications V2 URL is not set in App Store Connect |
 | in the extension: signed in, but "Could not reach the server" | §3 — `chrome-extension://<id>` missing from `OPENAPPS_SERVER_ALLOWED_ORIGINS`. Sign-in succeeds because it happens on the web app's origin; only the calls the extension makes afterwards are blocked |
 | unlock returns 500 | §4 — no `OPENAPPS_KEY_OPENPDFEDIT` in the gateway's environment |
 | the app loads yesterday's build | a stale service worker; hard-reload once, then check §5's `--delete` actually ran |
