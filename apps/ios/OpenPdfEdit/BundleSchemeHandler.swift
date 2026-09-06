@@ -114,9 +114,9 @@ final class BundleSchemeHandler: NSObject, WKURLSchemeHandler {
     /// usable stand-in — would mean not testing it.
     ///
     /// The path comes from the page, and a page can ask for anything —
-    /// including `../../../` up into the rest of the app bundle. Resolving
-    /// symlinks and then checking the prefix is what makes that impossible
-    /// rather than merely unlikely.
+    /// including `../../../` up into the rest of the app bundle.
+    /// Standardising the path collapses those, and the containment check
+    /// below is what makes escaping impossible rather than unlikely.
     func resolve(_ url: URL) -> URL? {
         guard url.host == Self.host else { return nil }
         var path = url.path
@@ -130,7 +130,12 @@ final class BundleSchemeHandler: NSObject, WKURLSchemeHandler {
         }
 
         let candidate = root.appendingPathComponent(path).standardizedFileURL
-        guard candidate.path.hasPrefix(root.standardizedFileURL.path) else { return nil }
+        // The trailing separator matters: without it a sibling directory
+        // named `wwwsomething` shares the prefix and passes.
+        let inside = root.standardizedFileURL.path.hasSuffix("/")
+            ? root.standardizedFileURL.path
+            : root.standardizedFileURL.path + "/"
+        guard candidate.path.hasPrefix(inside) else { return nil }
 
         var isDirectory: ObjCBool = false
         if FileManager.default.fileExists(atPath: candidate.path, isDirectory: &isDirectory) {
