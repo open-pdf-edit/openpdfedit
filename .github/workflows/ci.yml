@@ -142,7 +142,16 @@ jobs:
       # whatever runtime its image shipped with, and a hard-coded device
       # name is a build that breaks the next time the image is updated.
       - name: Test
-        run: bash apps/ios/scripts/test.sh
+        run: |
+          set -eo pipefail
+          bash apps/ios/scripts/test.sh 2>&1 | tee /tmp/ios-test.log
+          # Surfaced rather than left in the log. The skip is correct on a
+          # runtime whose StoreKit test service ignores the local
+          # catalogue, but a skip nobody sees is how coverage quietly
+          # becomes zero.
+          if grep -q "StoreKit test service ignored" /tmp/ios-test.log; then
+            echo "::warning::This runner's simulator ignored the local StoreKit catalogue, so the purchase tests were skipped. Run apps/ios/scripts/test.sh on a machine with an iOS 17 simulator to exercise them."
+          fi
 
   # The rule deny.toml has described as a release gate since before this
   # workflow existed: no AGPL/GPL/LGPL anywhere in the dependency graph,
