@@ -93,3 +93,14 @@ final class SchemeHandlerTests: XCTestCase {
         XCTAssertNil(handler.resolve(url(path)))
     }
 }
+
+/// Containment, checked against the shape of the check rather than only
+/// against paths that happen to be in the bundle.
+extension SchemeHandlerTests {
+    func testASiblingDirectoryThatSharesThePrefixIsNotInside() {
+        // `/…/www` and `/…/wwwsomething` share a string prefix and share no
+        // directory. A prefix check without the trailing separator lets the
+        // second through.
+        XCTAssertNil(handler.resolve(url("/../wwwsomething/secret.txt")))
+    }
+}
