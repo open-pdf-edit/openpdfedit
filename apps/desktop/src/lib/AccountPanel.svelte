@@ -34,6 +34,8 @@
     signInWithTelegram,
   } from "$lib/openapps";
   import { isBrowserExtension } from "$lib/backend";
+  import { nativeShell } from "$lib/native";
+  import IapPanel from "./IapPanel.svelte";
   import { initData as telegramInitData, isTelegram } from "$lib/telegram";
   import Icon from "./Icon.svelte";
   import { showToast } from "./toast.svelte";
@@ -181,6 +183,31 @@
       });
       return;
     }
+    // The iOS shell. No popups exist here — `window.open` in a WKWebView
+    // has nowhere to go — and pushing the sign-in page into this web view
+    // would replace the editor with an OAuth screen and lose whatever is
+    // open behind it. ASWebAuthenticationSession is Apple's answer and a
+    // better one: it shows the real address bar, so someone typing a
+    // Google password can see whose page they are typing it into, and it
+    // shares Safari's cookies, so an account already signed in on the
+    // device usually needs one tap.
+    const shell = nativeShell();
+    if (shell) {
+      void shell
+        .signIn()
+        .then((result) => {
+          if (result.status !== "signed_in") return;
+          getClient()?.adoptSession(result.accessToken, result.refreshToken);
+          sessionChangedElsewhere();
+        })
+        .catch((e: unknown) => {
+          showToast(e instanceof Error ? e.message : "Sign-in failed.", {
+            tone: "warning",
+            title: "Sign-in failed",
+          });
+        });
+      return;
+    }
     if (!tauriAvailable) {
       // The browser builds (web app, extension page) get a real popup
       // rather than the short-circuit that used to live here. Same
@@ -266,7 +293,16 @@
         {#if loggedIn}
           <openapps-account></openapps-account>
           <openapps-credits poll-seconds="30"></openapps-credits>
-          <openapps-buy></openapps-buy>
+          <!-- One or the other, never both. Inside the iOS app, digital
+               content has to be sold through in-app purchase — a card
+               checkout there is not a second option, it is grounds for
+               rejection under guideline 3.1.1. Everywhere else there is no
+               App Store to sell through. -->
+          {#if nativeShell()}
+            <IapPanel />
+          {:else}
+            <openapps-buy></openapps-buy>
+          {/if}
           <!-- Same reason the extension sets one: this is a Tauri webview,
                so the page's own URL is a tauri:// (or localhost) origin that
                means nothing to whoever the link is sent to. `app-id` lets

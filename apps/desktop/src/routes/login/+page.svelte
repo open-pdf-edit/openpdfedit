@@ -11,6 +11,8 @@
   import { getCurrentWindow } from "@tauri-apps/api/window";
   import { getClient } from "@openapps/ui";
   import {
+    NATIVE_AUTH_CALLBACK,
+    NATIVE_PARAM,
     OPENER_EXTENSION_PARAM,
     SESSION_STORAGE_KEY,
     SIGNIN_DONE_MESSAGE,
@@ -78,7 +80,39 @@
     }
   }
 
+  /** Hands the session back to the iOS app, if that is who opened this.
+   *
+   * The app runs this page inside ASWebAuthenticationSession, which is not
+   * a window with an opener and not an origin that shares any storage with
+   * the app — it is Safari. The only channel out is a redirect to a URL
+   * scheme the app claims, which is how every native OAuth flow on iOS
+   * ends.
+   *
+   * The tokens go in the **fragment**, not the query. A fragment is never
+   * sent to a server, so it cannot appear in an access log or a referrer
+   * on the way past. The redirect itself never leaves the device: iOS
+   * intercepts the scheme and hands the URL straight to the app.
+   *
+   * Returns true if it took over; the caller must then do nothing else,
+   * because the page is already navigating away.
+   */
+  function handOverToNativeApp(): boolean {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get(NATIVE_PARAM) !== "ios") return false;
+
+    const session = getClient()?.session;
+    if (!session?.accessToken || !session?.refreshToken) return false;
+
+    const fragment = new URLSearchParams({
+      access_token: session.accessToken,
+      refresh_token: session.refreshToken,
+    });
+    window.location.href = `${NATIVE_AUTH_CALLBACK}#${fragment.toString()}`;
+    return true;
+  }
+
   async function finish(): Promise<void> {
+    if (handOverToNativeApp()) return;
     if (!tauriAvailable) {
       handOverToExtension();
       // The browser build. The session is already in this origin's
