@@ -22,9 +22,8 @@
   // `recover()` is the other half: it runs on mount rather than behind a
   // "Restore purchases" button, because someone whose payment went through
   // should not have to know that word.
-  import { getClient, notify } from "@openapps/ui";
+  import { collect } from "$lib/iap";
   import { nativeShell, type NativeProduct, type NativePurchase } from "$lib/native";
-  import { redeemAppleReceipt } from "$lib/openapps";
   import { showToast } from "$lib/toast.svelte";
 
   const shell = nativeShell();
@@ -33,10 +32,6 @@
   let loading = $state(true);
   let busy = $state<string | null>(null);
   let problem = $state<string | null>(null);
-
-  function accessToken(): string | undefined {
-    return getClient()?.session?.accessToken;
-  }
 
   $effect(() => {
     if (!shell) return;
@@ -55,28 +50,17 @@
 
     // A purchase StoreKit delivers on its own: an interrupted one
     // completing, an Ask to Buy approval, or one made on another device.
+    // The sweep for anything left owing from an earlier run happens at
+    // startup instead (see +page.svelte) — waiting until someone opens
+    // this panel would leave credits they paid for uncollected until they
+    // went looking for them.
     const stop = shell.on("receipt", (receipt) => void grant(receipt, { quiet: true }));
-    void recover();
 
     return () => {
       cancelled = true;
       stop();
     };
   });
-
-  /** Anything StoreKit still considers owing, including from earlier runs. */
-  async function recover(): Promise<void> {
-    if (!shell) return;
-    try {
-      for (const receipt of await shell.outstanding()) {
-        await grant(receipt, { quiet: true });
-      }
-    } catch {
-      // Recovery is best-effort and runs unprompted. Nobody asked for it,
-      // so nobody should be shown an error when it cannot run — StoreKit
-      // will offer the same transactions again next launch.
-    }
-  }
 
   async function buy(product: NativeProduct): Promise<void> {
     if (!shell || busy) return;
@@ -99,23 +83,19 @@
     }
   }
 
-  /** Steps 2 and 3: redeem, then finish. */
+  /** Steps 2 and 3, which `collect` keeps in that order. */
   async function grant(receipt: NativePurchase, opts: { quiet: boolean }): Promise<void> {
     if (!shell) return;
-    const result = await redeemAppleReceipt(accessToken(), receipt.receipt);
+    const result = await collect(receipt, shell);
 
     if (result.ok) {
-      // Finished only now. Everything above this line is retryable; past
-      // it, StoreKit has been told to forget the transaction.
-      await shell.finish(receipt.transactionId);
-      notify();
       if (!result.alreadyCredited) {
         showToast(`${result.credits.toLocaleString()} credits added.`, { title: "Thank you" });
       }
       return;
     }
 
-    // Deliberately *not* finished in any branch below. A receipt the
+    // The transaction is deliberately still unfinished here: a receipt the
     // server has not honoured is the customer's only evidence they paid.
     if (result.kind === "unauthorized") {
       problem = "Sign in again to collect these credits — the purchase is safe until you do.";
