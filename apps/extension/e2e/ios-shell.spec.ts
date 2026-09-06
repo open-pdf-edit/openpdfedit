@@ -23,9 +23,15 @@ const ORIGIN = "http://localhost:8099";
  */
 async function inTheShell(
   page: import("@playwright/test").Page,
-  options: { redeem: "ok" | "fails" } = { redeem: "ok" },
+  options: {
+    redeem?: "ok" | "fails" | "stale-token-then-ok";
+    outstanding?: { transactionId: string; productId: string }[];
+    openPanel?: boolean;
+  } = {},
 ) {
-  await page.addInitScript(() => {
+  const { redeem = "ok", outstanding = [], openPanel = true } = options;
+
+  await page.addInitScript((owed: { transactionId: string; productId: string }[]) => {
     localStorage.setItem(
       "openapps.session",
       JSON.stringify({ accessToken: "good-token", refreshToken: "good-refresh" }),
@@ -58,7 +64,13 @@ async function inTheShell(
       },
       outstanding: async () => {
         calls.push("outstanding");
-        return [];
+        return owed.map((o) => ({
+          status: "purchased",
+          transactionId: o.transactionId,
+          productId: o.productId,
+          receipt: "eyJ.header.signature",
+          verifiedLocally: true,
+        }));
       },
       purchase: async (productId: string) => {
         calls.push(`purchase:${productId}`);
@@ -75,7 +87,7 @@ async function inTheShell(
         return { finished: true };
       },
     };
-  });
+  }, outstanding);
 
   // The account server, in miniature.
   await page.route("**/v1/auth/refresh", (route) =>
@@ -99,26 +111,37 @@ async function inTheShell(
       body: JSON.stringify({ balance: 0 }),
     }),
   );
+  let redeemAttempts = 0;
   await page.route("**/v1/payments/apple/redeem", async (route) => {
-    await page.evaluate(() =>
-      (window as unknown as { __calls: string[] }).__calls.push("redeem"),
+    redeemAttempts += 1;
+    const attempt = redeemAttempts;
+    await page.evaluate(
+      (n) => (window as unknown as { __calls: string[] }).__calls.push(`redeem:${n}`),
+      attempt,
     );
-    if (options.redeem === "ok") {
+    if (redeem === "fails") {
       return route.fulfill({
-        status: 200,
+        status: 503,
         contentType: "application/json",
-        body: JSON.stringify({ topup_id: "iap_apple_1", credits: 1000, status: "credited" }),
+        body: JSON.stringify({ error: "the store could not be reached" }),
+      });
+    }
+    if (redeem === "stale-token-then-ok" && attempt === 1) {
+      return route.fulfill({
+        status: 401,
+        contentType: "application/json",
+        body: JSON.stringify({ error: "unauthorized" }),
       });
     }
     return route.fulfill({
-      status: 503,
+      status: 200,
       contentType: "application/json",
-      body: JSON.stringify({ error: "the store could not be reached" }),
+      body: JSON.stringify({ topup_id: "iap_apple_1", credits: 1000, status: "credited" }),
     });
   });
 
   await page.goto(ORIGIN + "/");
-  await page.getByRole("button", { name: /^Account/ }).click();
+  if (openPanel) await page.getByRole("button", { name: /^Account/ }).click();
 }
 
 async function calls(page: import("@playwright/test").Page): Promise<string[]> {
@@ -155,7 +178,7 @@ test("the receipt is redeemed before the transaction is finished", async ({ page
 
   const sequence = await calls(page);
   const purchased = sequence.indexOf("purchase:credits_1000");
-  const redeemed = sequence.indexOf("redeem");
+  const redeemed = sequence.findIndex((c) => c.startsWith("redeem:"));
   const finished = sequence.indexOf("finish:2000000900000001");
 
   expect(purchased, "the purchase never reached the shell").toBeGreaterThanOrEqual(0);
@@ -179,17 +202,43 @@ test("a receipt the server could not honour is not finished", async ({ page }) =
   expect(sequence.some((c) => c.startsWith("finish:"))).toBe(false);
 });
 
-test("purchases outstanding from an earlier run are collected without being asked", async ({
-  page,
-}) => {
-  await inTheShell(page);
-  await expect(page.getByRole("heading", { name: "Buy credits" })).toBeVisible({
-    timeout: 15_000,
+test("a purchase left owing from an earlier run is collected at startup", async ({ page }) => {
+  await inTheShell(page, {
+    outstanding: [{ transactionId: "2000000900000009", productId: "credits_1000" }],
+    // Nobody opens anything. Not a "Restore purchases" button, and not
+    // even the account panel: someone short of credits they paid for
+    // should not have to go looking, and the case this recovers from —
+    // a redemption interrupted by a crash — is one they cannot describe.
+    openPanel: false,
   });
 
-  // Not behind a "Restore purchases" button. Someone whose payment went
-  // through should not have to know that word.
-  expect(await calls(page)).toContain("outstanding");
+  await expect
+    .poll(async () => await calls(page), { timeout: 15_000 })
+    .toContain("finish:2000000900000009");
+
+  const sequence = await calls(page);
+  expect(sequence.indexOf("redeem:1")).toBeLessThan(
+    sequence.indexOf("finish:2000000900000009"),
+  );
+});
+
+test("an access token that aged out does not lose a purchase", async ({ page }) => {
+  // `redeemAppleReceipt` is a plain fetch, so the SDK's refresh-on-401
+  // does not cover it. Left unhandled, a stale token tells someone who has
+  // just paid to sign in again — the same trap the entitlement check fell
+  // into before it learned to refresh and ask once more.
+  await inTheShell(page, { redeem: "stale-token-then-ok" });
+  await expect(page.getByRole("button", { name: "$4.99" })).toBeVisible({ timeout: 15_000 });
+
+  await page.getByRole("button", { name: "$4.99" }).click();
+
+  await expect
+    .poll(async () => await calls(page), { timeout: 15_000 })
+    .toContain("finish:2000000900000001");
+  const sequence = await calls(page);
+  expect(sequence).toContain("redeem:1");
+  expect(sequence, "the refused redemption was never retried").toContain("redeem:2");
+  await expect(page.getByRole("alert")).toHaveCount(0);
 });
 
 test("a PDF handed over by another app opens in the editor", async ({ page }) => {

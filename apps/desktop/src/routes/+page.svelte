@@ -7,6 +7,7 @@
     offerExternalFile,
   } from "$lib/backend";
   import { nativeShell } from "$lib/native";
+  import { collectOutstanding } from "$lib/iap";
   import type {
     AnnotationSummaryDto,
     CompareReportDto,
@@ -1228,6 +1229,20 @@
       }
     });
     void shell.ready();
+
+    // Credits paid for but never collected — a redemption interrupted by a
+    // crash or a dead network. Here rather than in the account panel,
+    // which only exists while it is open: waiting for someone to go
+    // looking would leave them short in the meantime, and the case this
+    // recovers from is one they have no way to describe.
+    void collectOutstanding(shell).then((credits) => {
+      if (credits > 0) {
+        showToast(`${credits.toLocaleString()} credits from an earlier purchase have arrived.`, {
+          title: "Purchase collected",
+        });
+      }
+    });
+
     return stop;
   });
 
