@@ -71,6 +71,20 @@ export const SIGNIN_DONE_MESSAGE = "openpdfedit-signin-done";
 /// between `https://` origins, which is the only place it can happen.
 export const WEBAPP_ORIGIN = "https://app.openpdfedit.com";
 
+/// The query parameter that tells the login page it is being shown inside
+/// a native app rather than a browser window, and so must finish by
+/// redirecting rather than by messaging an opener it does not have.
+export const NATIVE_PARAM = "native";
+
+/// Where the login page sends the finished session on iOS.
+///
+/// A scheme of its own, deliberately not the `openpdfedit://` the bundled
+/// web app is served from inside the app: two things claiming one scheme
+/// is a puzzle for whoever debugs it next. Registered in the iOS app's
+/// Info.plist and intercepted by ASWebAuthenticationSession, so the
+/// redirect never leaves the device.
+export const NATIVE_AUTH_CALLBACK = "openpdfedit-auth://callback";
+
 /// The query parameter the extension uses to tell the login page where to
 /// hand the session back to. Carries the extension's own id, not a URL,
 /// so the login page can address it with `chrome.runtime.sendMessage`
@@ -255,4 +269,69 @@ export async function signInWithTelegram(initData: string): Promise<boolean> {
   // the page that there is a session now.
   getClient()?.adoptSession(session.access_token, session.refresh_token);
   return true;
+}
+
+export type RedeemResult =
+  | { ok: true; credits: number; alreadyCredited: boolean }
+  | { ok: false; kind: "unauthorized" }
+  // The server could not reach the App Store, or answered 5xx. Worth
+  // separating: the receipt is fine and the right thing to do is try
+  // again later, whereas a rejected receipt should never be retried.
+  | { ok: false; kind: "retry"; message: string }
+  | { ok: false; kind: "rejected"; message: string };
+
+/**
+ * Turns an App Store receipt into credits.
+ *
+ * The order this sits in matters more than the call itself. StoreKit hands
+ * the app a signed transaction and keeps it alive until the app says it is
+ * finished; the credits exist only once *this* returns success. So a
+ * purchase is: buy → redeem here → and only then tell StoreKit to finish.
+ * Finishing first is the mistake that costs real money — StoreKit stops
+ * re-delivering a finished transaction, so a redemption that never landed
+ * leaves the customer charged with nothing to retry from.
+ *
+ * Safe to call twice with the same receipt. The server keys the settlement
+ * on Apple's transaction id, so a retry after a dropped response replies
+ * `already_processed` rather than crediting again — which is why a network
+ * failure here is a retry and not a lost purchase.
+ */
+export async function redeemAppleReceipt(
+  accessToken: string | undefined,
+  signedTransaction: string,
+): Promise<RedeemResult> {
+  if (!accessToken) return { ok: false, kind: "unauthorized" };
+  try {
+    const res = await fetch(`${OPENAPPS_BASE_URL}/v1/payments/apple/redeem`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({ signed_transaction: signedTransaction }),
+    });
+    const body = (await res.json().catch(() => ({}))) as {
+      credits?: number;
+      status?: string;
+      error?: string;
+    };
+    if (res.ok && typeof body.credits === "number") {
+      return {
+        ok: true,
+        credits: body.credits,
+        alreadyCredited: body.status === "already_processed",
+      };
+    }
+    if (res.status === 401 || res.status === 403) return { ok: false, kind: "unauthorized" };
+    if (res.status >= 500) {
+      return { ok: false, kind: "retry", message: body.error ?? `server error (${res.status})` };
+    }
+    return {
+      ok: false,
+      kind: "rejected",
+      message: body.error ?? `the App Store receipt was refused (${res.status})`,
+    };
+  } catch {
+    return { ok: false, kind: "retry", message: "network error" };
+  }
 }

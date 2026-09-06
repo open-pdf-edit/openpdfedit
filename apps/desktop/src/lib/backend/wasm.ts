@@ -987,6 +987,22 @@ function uniquePickKey(name: string, existing: Map<string, FileTarget>): string 
 
 const PDF_TYPES = [{ description: "PDF", accept: { "application/pdf": [".pdf"] } }];
 
+/** Registers a file this app was handed rather than one the user picked,
+ * and returns the key `openDocument` will accept for it.
+ *
+ * The iOS shell is the caller: a PDF opened from Files or a share sheet
+ * arrives as bytes, with no picker involved and no handle to write back
+ * through. That is precisely the `{ kind: "file" }` target Safari's own
+ * `<input type=file>` fallback already produces, so this needs no new
+ * plumbing — only a way in. Saving such a document produces a copy, which
+ * is the truth on iOS regardless.
+ */
+export function offerExternalFile(file: File): string {
+  const key = uniquePickKey(file.name, pendingOpenPicks);
+  pendingOpenPicks.set(key, { kind: "file", file, name: file.name });
+  return key;
+}
+
 /** Builds `WasmSessionHandle.mergeDocuments`'s `sourcesBuffer` argument:
  * a flat concatenation of `[u32 length, little-endian][that many
  * bytes]` records, one per source, with no trailing padding — the JS-side

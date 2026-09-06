@@ -109,6 +109,34 @@ jobs:
       - run: npm run build
         working-directory: apps/desktop
 
+  # The iOS shell. Needs macOS for Xcode, and needs the web app built
+  # first, because the app bundles it — apps/ios/www is generated, not
+  # committed, and the tests that serve it from the app bundle would
+  # otherwise have nothing to serve.
+  ios:
+    name: ios
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/desktop/package-lock.json
+      - run: npm ci
+        working-directory: apps/desktop
+      - name: Build the web app and copy it into the app bundle
+        run: bash apps/ios/scripts/sync-web.sh --build
+      # The script picks a simulator rather than naming one: a runner has
+      # whatever runtime its image shipped with, and a hard-coded device
+      # name is a build that breaks the next time the image is updated.
+      - name: Test
+        run: bash apps/ios/scripts/test.sh
+
   # The rule deny.toml has described as a release gate since before this
   # workflow existed: no AGPL/GPL/LGPL anywhere in the dependency graph,
   # in either direction, because a copyleft dependency would contaminate
