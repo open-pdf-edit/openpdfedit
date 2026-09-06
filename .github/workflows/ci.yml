@@ -129,6 +129,13 @@ jobs:
           cache-dependency-path: apps/desktop/package-lock.json
       - run: npm ci
         working-directory: apps/desktop
+      # A prebuilt binary rather than `cargo install`, which takes minutes.
+      # The version must match the `wasm-bindgen` crate exactly — the JS
+      # glue and the runtime are generated as a pair — so this tracks
+      # Cargo.toml's pin and build-wasm.sh refuses a mismatch.
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: wasm-bindgen-cli@0.2.126
       - name: Build the web app and copy it into the app bundle
         run: bash apps/ios/scripts/sync-web.sh --build
       # The script picks a simulator rather than naming one: a runner has
