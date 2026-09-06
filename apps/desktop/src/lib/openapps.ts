@@ -30,7 +30,22 @@ export const OPENAPPS_BASE_URL = "https://auth.openpdfedit.com";
 /// The user token this app carries can read a balance and an entitlement
 /// on its own, but it can never spend — only this service can, which is
 /// why the unlock route lives here and the entitlement check does not.
-export const OPENAPPS_GATEWAY_URL = "https://gateway.openapps.network";
+///
+/// A CNAME to gateway.openapps.network, for the same reason
+/// auth.openpdfedit.com exists above — same box, same service, same
+/// certificate, and only the name the user is shown changes.
+///
+/// This one was masked later than the auth host, and it was the wrong way
+/// round: the auth host is a URL someone may glance at during sign-in,
+/// while the gateway host is the one a browser interrupts them to ask
+/// about. "OpenPdfEdit wants to communicate with gateway.openapps.network"
+/// reads like the app is talking to a stranger's server, because it looks
+/// exactly like that. Mask both, or the effort spent on the first is
+/// mostly wasted.
+///
+/// The old hostname stays in nginx's server_name, so an install that
+/// already granted permission to it keeps working.
+export const OPENAPPS_GATEWAY_URL = "https://gateway.openpdfedit.com";
 
 /// The key the SDK's default browser store keeps the session under. Named
 /// here so the sign-in popup and the window that opened it can agree on
