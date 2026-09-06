@@ -165,6 +165,34 @@ export async function initBackend(): Promise<Backend> {
   if (import.meta.env.VITE_BACKEND === "wasm") {
     const mod = await import("./wasm");
     backend = mod.wasmBackend as Backend;
+    acceptExternalFile = mod.offerExternalFile;
   }
   return backend;
+}
+
+/** Set by `initBackend` in the wasm branch only. */
+let acceptExternalFile: ((file: File) => string) | null = null;
+
+/**
+ * Registers a document this app was *handed* — not one the user picked —
+ * and returns the path `backend.openDocument` will accept for it.
+ *
+ * The iOS shell is the only caller: a PDF opened from Files or a share
+ * sheet arrives as bytes with no picker involved. Reached through here
+ * rather than by importing `wasm.ts` because that module is dynamically
+ * imported on purpose — a static import would put the whole WebAssembly
+ * backend into the desktop bundle, which is the thing `initBackend`'s
+ * literal-specifier dance exists to prevent.
+ *
+ * Throws in a build with no wasm backend, which is a programming error
+ * rather than a condition to handle: nothing but the iOS shell calls it,
+ * and the iOS shell only ever runs the wasm build.
+ */
+export function offerExternalFile(file: File): string {
+  if (!acceptExternalFile) {
+    throw new Error(
+      "offerExternalFile: this build has no wasm backend — only the iOS shell hands documents in",
+    );
+  }
+  return acceptExternalFile(file);
 }

@@ -44,3 +44,9 @@ testdata/corpus/*
 # openscreenshot's equivalent). This line, anchored to this .gitignore's
 # own directory (openpdfedit/), is what actually excludes it here.
 apps/extension/src/wasm-gen/
+
+# The iOS app's payload: a copy of apps/webapp/dist, produced by
+# apps/ios/scripts/sync-web.sh. ~85 MB of build output, and a second copy
+# of files this repository already builds.
+apps/ios/www/
+apps/ios/.build/

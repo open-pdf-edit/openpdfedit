@@ -1,0 +1,46 @@
+{
+  "identifier" : "openpdfedit-local",
+  "nonRenewingSubscriptions" : [],
+  "products" : [
+    {
+      "displayPrice" : "4.99",
+      "familyShareable" : false,
+      "internalID" : "1000000001",
+      "localizations" : [
+        {
+          "description" : "1,000 credits for OpenPdfEdit. Credits unlock the Supporter tools and never expire.",
+          "displayName" : "1,000 Credits",
+          "locale" : "en_US"
+        }
+      ],
+      "productID" : "credits_1000",
+      "referenceName" : "1,000 Credits",
+      "type" : "Consumable"
+    },
+    {
+      "displayPrice" : "19.99",
+      "familyShareable" : false,
+      "internalID" : "1000000002",
+      "localizations" : [
+        {
+          "description" : "5,000 credits for OpenPdfEdit. Credits unlock the Supporter tools and never expire.",
+          "displayName" : "5,000 Credits",
+          "locale" : "en_US"
+        }
+      ],
+      "productID" : "credits_5000",
+      "referenceName" : "5,000 Credits",
+      "type" : "Consumable"
+    }
+  ],
+  "settings" : {
+    "_applicationInternalID" : "0",
+    "_developerTeamID" : "0",
+    "_lastSynchronizedDate" : 0
+  },
+  "subscriptionGroups" : [],
+  "version" : {
+    "major" : 4,
+    "minor" : 0
+  }
+}

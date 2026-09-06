@@ -1,11 +1,15 @@
-# Publishing to Edge Add-ons and the Microsoft Store
+# Publishing to the stores
 
-Two products, two submissions, one Partner Center account:
+Three products, three storefronts:
 
 | | What is submitted | Package | Where it comes from |
 |---|---|---|---|
 | **Edge Add-ons** | the browser extension | `openpdfedit-dist.zip` | `cd apps/extension && npm run package` |
 | **Microsoft Store** | the desktop app | `OpenPdfEdit_<version>_x64.msix` | the `msix` workflow, or `scripts/build-msix.ps1` |
+| **App Store** | the iOS app | `OpenPdfEdit.ipa` | Xcode Organizer, from `apps/ios` |
+
+Edge and the Microsoft Store share one Partner Center account; the App
+Store needs a separate Apple Developer membership.
 
 Register once at
 <https://partner.microsoft.com/dashboard>. The Edge program is free to
@@ -209,6 +213,65 @@ Reviews typically take a few days.
 
 ---
 
+---
+
+## App Store — the iOS app
+
+The app is documented in full in `apps/ios/README.md`, including how to
+build, test and buy credits with no developer account at all. What
+belongs here is the submission itself.
+
+### What Apple will look for
+
+Two guidelines decide this submission, and both were designed for.
+
+**4.2, minimum functionality.** A repackaged website is rejected. This
+app bundles the entire editor — PDFium and the Rust core, compiled to
+WebAssembly — so it works in aeroplane mode, and it registers as a PDF
+editor so "Open in OpenPdfEdit" appears in Files, Mail and every share
+sheet. Say both in the review notes; a reviewer who only taps around the
+first screen sees something that looks like a web view.
+
+**3.1.1, in-app purchase.** Credits are digital content used in the app,
+so they must be sold through the App Store. Inside the shell the account
+panel swaps the card checkout for a StoreKit one — this is enforced in
+code, not by convention, and asserted by a test (`inside the shell,
+credits are sold through the App Store and not by card`). Nothing in the
+app links out to a payment page.
+
+The related trap is 3.1.3(b): an account created elsewhere may be used in
+the app, and the app may not *tell* anyone where to create one. The
+sign-in sheet is fine. A "sign up on our website" link is not.
+
+### Order of operations
+
+1. **Buy the membership** ($99/yr). Everything below needs it; nothing in
+   `apps/ios/README.md` does.
+2. **Register the bundle id** `com.openpdfedit.app`, and set
+   `DEVELOPMENT_TEAM` in the Xcode project.
+3. **Create the two in-app purchases** in App Store Connect, both
+   **Consumable**: `credits_1000` and `credits_5000`. The ids must match
+   `Store.productIdentifiers` and the `app_iap_products` rows on the
+   server. The server decides what a pack is *worth*; App Store Connect
+   decides what it *costs*.
+4. **Configure the server** — `docs/PRODUCTION.md` §3 (the app's origin)
+   and §3b (the Apple rail, and the Server Notifications URL). Do this
+   before the first sandbox purchase, not after: without the origin, an
+   account cannot be reached from the app at all.
+5. **Archive and upload** from Xcode's Organizer.
+6. **Sandbox-test a real purchase** through TestFlight before submitting.
+   This is the first moment the whole chain runs end to end — StoreKit,
+   the receipt, the server's verifier, the ledger — and the first moment
+   Apple's real certificate chain is parsed by anything of ours.
+
+### What is not automated
+
+Nothing about the App Store, deliberately. `xcodebuild archive` plus
+`altool` is a well-trodden path, but it needs an App Store Connect API
+key and a signing identity in CI, and neither exists yet. It is worth
+doing once releases are frequent enough for the Organizer to be
+annoying — not before the first one has ever been made.
+
 ## Version numbers
 
 One command sets all five places the version is written:
@@ -233,6 +296,12 @@ extension is not on Chrome yet either, and adding a second untested
 publish path before the first submission has ever been made would be
 building on a guess. Worth doing straight after the Chrome listing goes
 live, reusing the shape of `publish-edge.sh`.
+
+**App Store automation.** See above — same reasoning, different account.
+
+**Google Play.** The backend rail is built and tested (`docs/PRODUCTION.md`
+§3c), but there is no Android app yet. The iOS shell is the pattern it
+will follow.
 
 **Microsoft Store submission automation.** The Store's submission API
 needs an Azure AD directory associated with the Partner Center account —

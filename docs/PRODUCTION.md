@@ -258,6 +258,28 @@ OPENAPPS_SERVER_ALLOWED_ORIGINS=<what is already there>,chrome-extension://<publ
 
 The gateway needs the same treatment for the unlock — see §4.
 
+### The iOS app's origin
+
+The same problem, one origin further. The iOS app serves the bundled web
+app from `openpdfedit://localhost` — a custom scheme with `localhost` as
+its host, chosen so the page is a secure context (it needs
+`crypto.subtle`) and so it has a *stable* origin that can be allowlisted.
+An embedded HTTP server would give a real origin too, and a different one
+on every launch.
+
+```sh
+OPENAPPS_SERVER_ALLOWED_ORIGINS=<what is already there>,openpdfedit://localhost
+```
+
+Unlike the extension's, this one never changes: it is not derived from a
+build or an install, so it is the same string in development, in
+TestFlight and on the App Store. Add it once.
+
+The symptom of forgetting it is identical to the extension's — sign-in
+completes and every call after it fails — with one difference worth
+knowing: on iOS the sign-in itself happens in Safari, outside the app,
+so it will look even more convincingly successful before anything breaks.
+
 ---
 
 ## 3b. Apple in-app purchase (only once there is an iOS app)
@@ -309,6 +331,69 @@ credits, and the loss shows up only as a discrepancy nobody is watching.
 Nothing else is needed. Redemption is verified offline from the
 certificate chain in the receipt, so there is no App Store Server API key
 to manage for the purchase path.
+
+---
+
+## 3c. Google Play in-app purchase (only once there is an Android app)
+
+The same shape as Apple's, with one structural difference: Play has no
+offline receipt. What the Play Billing library hands the app is a JSON
+blob and an RSA signature over SHA-1, a hash with practical chosen-prefix
+collisions since 2019 — so the server does not check it, and asks the
+Play Developer API instead. That is authoritative, and it means this rail
+needs credentials where Apple's needs none.
+
+**Get a service account.** In the Google Cloud project linked to the Play
+Console: create a service account, download its JSON key, enable the
+**Google Play Android Developer API**, then in the Play Console under
+Users and permissions invite that service account and grant it **View
+financial data** on the app. All three are required and the failure is
+silent in different ways: without the API enabled every lookup answers
+403, without the permission it answers 401, and both are reported as
+`Unavailable` rather than as a bad receipt — deliberately, because
+telling a client its valid purchase was refused makes it throw away a
+receipt the customer paid for.
+
+```toml
+[google_iap]
+environment = "production"
+# Either inline, or a path to the key file for a deployment that mounts
+# secrets as files.
+service_account_file = "/run/secrets/play-service-account.json"
+# A shared secret Play's Pub/Sub push must present as ?token=. Optional:
+# every notification is re-checked against Google before anything is
+# clawed back, so a forged push cannot reverse a ledger entry either way.
+push_secret = "<something long and random>"
+```
+
+Or by environment, which is what a container wants:
+`OPENAPPS_GOOGLE_IAP_SERVICE_ACCOUNT_JSON`,
+`OPENAPPS_GOOGLE_IAP_ENVIRONMENT`, `OPENAPPS_GOOGLE_IAP_PUSH_SECRET`.
+
+**Map the products**, the same way:
+
+```sql
+INSERT INTO app_iap_products
+  (platform, product_id, app_id, bundle_id, credits, usd_price, created_at)
+VALUES
+  ('google', 'credits_1000', 'openpdfedit', 'com.openpdfedit.app', 1000, 500, unixepoch()),
+  ('google', 'credits_5000', 'openpdfedit', 'com.openpdfedit.app', 5000, 2000, unixepoch());
+```
+
+`bundle_id` holds the Android package name here.
+
+**Point Play at the notification endpoint.** Create a Pub/Sub topic, give
+`google-play-developer-notifications@system.gserviceaccount.com` the
+Publisher role on it, add a push subscription to
+`https://auth.openpdfedit.com/v1/webhooks/google?token=<push_secret>`,
+then in the Play Console under Monetisation setup name the topic and turn
+on **voided purchase notifications**. Without that last checkbox refunds
+are never clawed back.
+
+There is no separate consume step to configure: the server consumes each
+purchase after granting the credits. That matters more on Play than it
+looks — an unacknowledged consumable is auto-refunded after three days,
+which would otherwise return the money and leave the credits.
 
 ---
 

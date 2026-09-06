@@ -4,12 +4,19 @@
 #   ./scripts/set-version.sh 0.1.7
 #   ./scripts/set-version.sh            # print the current version(s)
 #
-# The version lives in five files that nothing keeps in sync, and the
+# The version lives in five JSON files plus the Xcode project, and
+# nothing keeps them in sync. The
 # consequence only shows up at a store: every storefront rejects a
 # version number it has already accepted and none of them release one
 # back, so a mismatch between the extension manifest and the desktop
 # bundle costs a whole review cycle to discover. Editing five files by
 # hand is how they drift; this is the one place that writes them.
+#
+# The iOS app is the odd one out twice over: its version is a build
+# setting rather than a JSON key, and it also carries a build number that
+# App Store Connect requires to be unique *within* a version — two uploads
+# of 0.1.10 need build 1 and build 2. So MARKETING_VERSION is set from
+# here and CURRENT_PROJECT_VERSION is left alone, to be bumped per upload.
 #
 # The Cargo workspace version is deliberately not touched. That numbers
 # the library crates, which are versioned against each other rather than
@@ -26,10 +33,14 @@ FILES=(
   apps/desktop/src-tauri/tauri.conf.json
 )
 
+IOS_PROJECT=apps/ios/OpenPdfEdit.xcodeproj/project.pbxproj
+
 current() { sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$1" | head -1; }
+ios_current() { sed -n 's/.*MARKETING_VERSION = \([^;]*\);.*/\1/p' "$IOS_PROJECT" | head -1; }
 
 if [ $# -eq 0 ]; then
   for f in "${FILES[@]}"; do printf '%-46s %s\n' "$f" "$(current "$f")"; done
+  printf '%-46s %s\n' "$IOS_PROJECT" "$(ios_current)"
   exit 0
 fi
 
@@ -50,6 +61,12 @@ for f in "${FILES[@]}"; do
   perl -0pi -e 's/"version"(\s*:\s*)"[^"]*"/"version"${1}"'"$VERSION"'"/' "$f"
   printf '%-46s %s\n' "$f" "$(current "$f")"
 done
+
+# Every build configuration in the project, app and test target alike: an
+# archive uploaded from the wrong one would carry a version nobody set,
+# and there is no reason for the test bundle to disagree.
+perl -pi -e 's/MARKETING_VERSION = [^;]*;/MARKETING_VERSION = '"$VERSION"';/' "$IOS_PROJECT"
+printf '%-46s %s\n' "$IOS_PROJECT" "$(ios_current)"
 
 # The marketing site carries the version a sixth time, in the JSON-LD
 # that answer engines read. That block is generated rather than edited,

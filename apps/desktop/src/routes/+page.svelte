@@ -1,5 +1,12 @@
 <script lang="ts">
-  import { backend, backendKind, isBrowserExtension, isPasswordRequired } from "$lib/backend";
+  import {
+    backend,
+    backendKind,
+    isBrowserExtension,
+    isPasswordRequired,
+    offerExternalFile,
+  } from "$lib/backend";
+  import { nativeShell } from "$lib/native";
   import type {
     AnnotationSummaryDto,
     CompareReportDto,
@@ -1197,6 +1204,32 @@
       destructive: true,
     });
   }
+
+  // A PDF handed over by another app — "Open in OpenPdfEdit" from Files,
+  // Mail or a share sheet. Only the iOS shell ever emits this; everywhere
+  // else `nativeShell()` is null and this effect does nothing.
+  //
+  // `ready()` is what releases a document that arrived before the page
+  // existed. On a cold start iOS delivers the URL within milliseconds of
+  // launch, long before this effect runs, so the shell holds it until told
+  // there is somewhere to put it. Without the call, "Open in OpenPdfEdit"
+  // would work only when the app was already running, which is the case
+  // nobody thinks to test.
+  $effect(() => {
+    const shell = nativeShell();
+    if (!shell) return;
+
+    const stop = shell.on("document", async (detail) => {
+      try {
+        const file = await shell.readDocument(detail);
+        await openInNewTab(offerExternalFile(file));
+      } catch (e) {
+        error = `Couldn't open ${detail.name}: ${formatError(e)}`;
+      }
+    });
+    void shell.ready();
+    return stop;
+  });
 
   // The window manager asks us before closing; decide here, then tell
   // the backend to finish the close.
