@@ -91,7 +91,7 @@ simulator with no account and no money. The tests use it through
 transactions are signed, and `BridgeTests` asserts the receipt is the
 same JWS shape the server verifies.
 
-`scripts/test.sh` pins an **iOS 17** simulator. The StoreKit test service
+`scripts/test.sh` prefers an **iOS 17** simulator. The StoreKit test service
 in the iOS 26.5 runtime accepts a configuration and then answers product
 requests from the real Media API anyway, so every purchase test sees an
 empty catalogue — visible in `storekitd`'s own log, which shows the
@@ -99,6 +99,13 @@ configuration saved and the request going out to the network regardless.
 This is the simulator's test harness, not StoreKit: the app is
 unaffected, and the same tests pass on iOS 17, which is also the
 deployment target.
+
+Where no iOS 17 runtime exists — a CI runner has whatever its image
+shipped with — the eight purchase tests skip themselves and the job
+prints a warning saying so. The skip condition is "a catalogue that
+definitely contains products yielded none", which nothing in this app can
+cause, so it cannot hide a regression here. It does mean CI covers 23 of
+the 31, and the purchase rules are a local gate.
 
 ## Before the first submission
 
