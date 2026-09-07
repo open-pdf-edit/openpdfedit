@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- The App Store, not ad-hoc or enterprise. Apple renamed this value
+	     from "app-store" in Xcode 15; the old name still works but warns. -->
+	<key>method</key>
+	<string>app-store-connect</string>
+
+	<!-- Filled in by scripts/archive.sh from the project's
+	     DEVELOPMENT_TEAM, so there is one place to set it. -->
+	<key>teamID</key>
+	<string>__TEAM_ID__</string>
+
+	<key>signingStyle</key>
+	<string>automatic</string>
+
+	<!-- Let Apple thin the binary per device. It matters here: the bundle
+	     carries a WebAssembly build of PDFium and the Rust core, so the
+	     download is larger than a typical utility and every megabyte
+	     Apple can drop is one a customer does not wait for. -->
+	<key>stripSwiftSymbols</key>
+	<true/>
+	<key>uploadSymbols</key>
+	<true/>
+
+	<!-- Upload is a separate, explicit step in archive.sh. Doing it here
+	     would mean an accidental `--export` sent a build to App Store
+	     Connect, and a build number cannot be reused once accepted. -->
+	<key>destination</key>
+	<string>export</string>
+</dict>
+</plist>
