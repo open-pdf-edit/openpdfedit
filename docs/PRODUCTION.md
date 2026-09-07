@@ -1,22 +1,31 @@
 # Running openpdfedit.com in production
 
-Four hostnames, one server (`104.36.65.54`), and one thing that is not
-this server at all:
+Five hostnames, all on one server (`104.36.65.54`):
 
 | host | what it is | served by |
 |---|---|---|
 | `openpdfedit.com` | the marketing site | static files from `site/` |
 | `www.openpdfedit.com` | redirect to the above | nginx |
 | `app.openpdfedit.com` | the web app | static files from `apps/webapp/dist/` |
-| `auth.openpdfedit.com` | sign-in | reverse proxy to openapps-server on `:8080` |
-| `gateway.openapps.network` | the credit charge for the watermark unlock | already running; nothing to add |
+| `auth.openpdfedit.com` | sign-in and credits | reverse proxy to openapps-server on `:8080` |
+| `gateway.openpdfedit.com` | the credit charge for the watermark unlock | reverse proxy to the gateway |
 
-`auth.openpdfedit.com` is a second name for the machine that already
-answers as `accounts.openapps.network` — same process, same database,
-same accounts. Sessions are bearer tokens rather than cookies, so
+Two of those are second names for services that already answer under
+`openapps.network`: `auth` for `accounts.openapps.network`, and
+`gateway` for `gateway.openapps.network`. Same processes, same database,
+same accounts — sessions are bearer tokens rather than cookies, so
 nothing about identity is scoped to a hostname and a second name changes
-nothing functionally. It exists so signing in doesn't show a stranger's
-domain to someone who has only seen "OpenPdfEdit".
+nothing functionally. They exist so that signing in, and paying, do not
+show a stranger's domain to someone who has only ever seen
+"OpenPdfEdit".
+
+That aliasing is worth holding in mind whenever something is
+allowlisted. The clients ship the `openpdfedit.com` names — that is what
+is in the built extension and the built web app — so those are the names
+to test against. `curl`ing the `openapps.network` name instead reaches
+the same process and can give a different answer, because CORS
+allowlists and TLS certificates are both keyed on the name, not the
+process.
 
 Everything below marked **you** needs your server or your registrar.
 Everything else is already in this repository.
@@ -235,9 +244,24 @@ not reach the server. Check your connection."
 
 That is not the same failure as the one above, and it looks nothing like
 it: the session really does arrive, the panel really does render, and
-only the balance and entitlement calls die. Diagnose it by asking the
-server directly, which shows the missing header without a browser in the
-way:
+only the balance and entitlement calls die.
+
+**This has already cost one store review.** Edge certification rejected
+0.1.10 under policy 1.1.3 with exactly this: sign in with Google,
+"Notice that the extension displays an error message." The package was
+fine — it was byte-identical to the tree it was built from — and no
+resubmission of a new build would have changed anything. The origin was
+missing from the server.
+
+Check it before answering any certification report:
+
+```sh
+./scripts/check-extension-origin.sh <published extension id>
+```
+
+That asks both servers, prints OK or BLOCKED for each, and tells you
+what to add where. It reads the servers rather than the config, so a
+pass is the same thing the reviewer's browser will see. By hand it is:
 
 ```sh
 curl -s -i -X OPTIONS https://auth.openpdfedit.com/v1/credits/entitlement \
@@ -247,16 +271,26 @@ curl -s -i -X OPTIONS https://auth.openpdfedit.com/v1/credits/entitlement \
 
 No output means the origin is not on the list.
 
-**The id is not stable across builds.** An unpacked extension takes its
-id from the absolute path it was loaded from, so a developer copy and
-the published one differ. Both need listing: the published id, from the
-store dashboard once the listing exists, and whichever dev id is in use.
+**The id is not stable across builds, and the dev id is the one you
+already have.** An unpacked extension takes its id from the absolute
+path it was loaded from, so a developer copy and the published one
+differ — which is why this passes every local test and fails for a
+reviewer. Both need listing.
+
+The published id is in Partner Center under Microsoft Edge → OpenPdfEdit
+→ Extension overview. It is 32 lower-case letters and Microsoft assigns
+it at first submission, so it is available before the extension is ever
+public. It is *not* the Product ID that certification reports quote —
+that is a uuid, and it is a different identifier.
 
 ```sh
 OPENAPPS_SERVER_ALLOWED_ORIGINS=<what is already there>,chrome-extension://<published id>,chrome-extension://<dev id>
 ```
 
-The gateway needs the same treatment for the unlock — see §4.
+The gateway needs the same treatment for the unlock — see §4. Both, not
+either: the extension signs in against one server and buys the unlock
+from the other, so allowlisting one leaves half the panel broken and
+looks like a different bug.
 
 ### The iOS app's origin
 
