@@ -56,6 +56,20 @@ Everything below is written around that split.
 5. Submit. Edge's review is typically slower than Chrome's; days rather
    than hours.
 
+**Before submitting, allowlist the extension's origin.** Partner Center
+assigns the id at first submission, so it is available *before* the
+extension is public — Microsoft Edge → OpenPdfEdit → Extension overview,
+32 lower-case letters. Then:
+
+```bash
+./scripts/check-extension-origin.sh <that id>
+```
+
+Do not skip this. It is the one thing that cannot be found by testing
+locally, because a local unpacked extension has a different id, and it
+is the first thing a reviewer trips over. See "How 0.1.10 was rejected"
+below.
+
 The declaration in `STORE.md` draws a line that matters and should not
 be smoothed over: **document processing is local without exception, and
 the account panel is a real network surface.** Both halves are true, and
@@ -115,6 +129,38 @@ export EDGE_PRODUCT_ID=… EDGE_CLIENT_ID=… EDGE_API_KEY=…
 
 The script refuses to upload a zip built before the current commit,
 which is the failure this whole class of tooling exists to prevent.
+
+### How 0.1.10 was rejected
+
+Worth reading before answering any certification report, because the
+instinct it corrects — rebuild and resubmit — costs a full review cycle
+and fixes nothing.
+
+Edge certification failed 0.1.10 under **1.1.3 Distinct Function &
+Value**, with the repro: open a PDF, Sign in, continue with Google, sign
+in, *"Notice that the extension displays an error message: 'Could not
+reach the server. Check your connection'"*.
+
+The package was not the problem. It was byte-identical to `dist/` at the
+commit it was built from, and every one of the extension's own functions
+worked. What failed was that `chrome-extension://<published id>` was on
+neither server's CORS allowlist, so the reviewer's copy could sign in —
+that happens on the web app's origin — and then failed on every call
+afterwards. The developer copy has a different id, and that one *was*
+allowlisted, which is why it had never been seen.
+
+The fix is two environment variables on two servers and a restart. No
+new package, no new version number. `scripts/check-extension-origin.sh`
+proves it before you reply; `docs/PRODUCTION.md` §3 has the detail.
+
+Two things generalise from this:
+
+- **A rejection naming a broken function is not always a code defect.**
+  Check the server the function talks to, from the identity the reviewer
+  has, before touching the package.
+- **Anything keyed on an install-specific id cannot be tested locally.**
+  The extension's origin is the only such thing here, which is why it
+  gets its own script rather than a line in a checklist.
 
 ---
 
