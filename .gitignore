@@ -50,3 +50,4 @@ apps/extension/src/wasm-gen/
 # of files this repository already builds.
 apps/ios/www/
 apps/ios/.build/
+apps/extension/dist-idtest/
