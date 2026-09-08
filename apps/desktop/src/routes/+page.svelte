@@ -7,6 +7,7 @@
     offerExternalFile,
   } from "$lib/backend";
   import { nativeShell } from "$lib/native";
+  import { handoffSender, receiveHandoff } from "$lib/handoff";
   import { collectOutstanding } from "$lib/iap";
   import type {
     AnnotationSummaryDto,
@@ -1233,6 +1234,27 @@
   // there is somewhere to put it. Without the call, "Open in OpenPdfEdit"
   // would work only when the app was already running, which is the case
   // nobody thinks to test.
+  // The same delivery from another app in the same browser rather than from
+  // the OS — OpenCapture's "edit it in OpenPdfEdit" after a capture too long
+  // for its own editor. It lands exactly where the iOS shell's documents do,
+  // because it is the same situation: bytes, no picker, no handle behind
+  // them. Only the way in differs, and $lib/handoff.ts says why it has to.
+  //
+  // Nothing happens on a page nobody addressed: no ?handoff, no listener.
+  $effect(() => {
+    if (typeof window === "undefined") return;
+    if (!handoffSender(window.location.search)) return;
+
+    return receiveHandoff(({ name, bytes }) => {
+      // A copy of the bytes, deliberately. `bytes` came out of a message and
+      // may be a view onto a buffer this page does not own the lifetime of.
+      const file = new File([new Uint8Array(bytes)], name, { type: "application/pdf" });
+      void openInNewTab(offerExternalFile(file)).catch((e: unknown) => {
+        error = `Couldn't open ${name}: ${formatError(e)}`;
+      });
+    });
+  });
+
   $effect(() => {
     const shell = nativeShell();
     if (!shell) return;
