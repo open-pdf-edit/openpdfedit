@@ -713,6 +713,23 @@
     }
     previousTool = tool;
   });
+  /** Pick a tool from the rail.
+   *
+   * Not `activeTool = id` directly, because re-selecting the tool already
+   * active is a no-op and one tool has a panel attached to it. The
+   * Signatures panel is opened by the $effect above, which fires on the
+   * tool *changing* — so once the panel had a close button, closing it
+   * left the tool selected and the button that opened it inert. You had
+   * to pick a different tool and come back.
+   *
+   * Only the panel is reopened here, not the toast: the toast is a
+   * first-time hint, and firing it on every click of an already-active
+   * tool is noise. */
+  function selectTool(id: Tool): void {
+    if (id === activeTool && id === "signature") showSignatures = true;
+    activeTool = id;
+  }
+
   let color = $state<[number, number, number]>(PRESET_COLORS[0].value);
   let showComments = $state(false);
   let showPages = $state(false);
@@ -2860,7 +2877,7 @@
               <button
                 class="oa-rail-btn rail__tool"
                 class:oa-rail-btn--selected={activeTool === tool.id}
-                onclick={() => (activeTool = tool.id)}
+                onclick={() => selectTool(tool.id)}
                 use:tooltip={toolHint(tool.id) ?? tool.label}
                 aria-label={tool.label}
               >
