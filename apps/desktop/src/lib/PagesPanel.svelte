@@ -19,9 +19,13 @@
     onCrop: (pageIndex: number, rect: [number, number, number, number]) => void;
     onExtractSelected: (pageIndices: number[]) => void;
     onMerge: () => void;
+    /** Dismiss the panel. Every rail panel can be opened by something
+     * other than its toolbar toggle, so every one needs a way out that
+     * does not require finding that toggle. */
+    onClose: () => void;
   }
 
-  let { handle, pageSizes, busy, onRotate, onDelete, onMove, onCrop, onExtractSelected, onMerge }: Props = $props();
+  let { handle, pageSizes, busy, onRotate, onDelete, onMove, onCrop, onExtractSelected, onMerge, onClose }: Props = $props();
 
   let selected = $state<Set<number>>(new Set());
 
@@ -68,6 +72,9 @@
 <aside class="oa-panel">
   <div class="oa-panel__header">
     <span class="oa-panel__title">Pages</span>
+    <button class="oa-icon-btn oa-icon-btn--sm oa-panel__close" onclick={onClose} aria-label="Close panel">
+      <Icon name="x" size={15} />
+    </button>
   </div>
   <div class="oa-panel__body">
     <div class="actions">

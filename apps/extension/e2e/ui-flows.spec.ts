@@ -336,6 +336,19 @@ test("the real UI: open, paint, highlight, save, delete/undo/redo, merge (incl. 
   //        pick key never gets stolen) and the pick-key-as-display-name
   //        threading (so filePath and doc.file_path agree even if a
   //        suffix ever were needed for some other reason).
+  // --- A panel that opens itself must close from itself --------------------
+  // The rail's panels were toggled from the toolbar and nothing else, which
+  // is fine until a panel opens on its own — and three do. Picking the
+  // Signature tool surfaces Signatures, deliberately, "rather than making
+  // the user go find the toggle button too". The exit then required exactly
+  // that toggle, which reads as a panel you cannot close, and was reported
+  // as one.
+  await page.getByRole("button", { name: "Signature", exact: true }).click();
+  const signaturesPanel = page.locator("aside.oa-panel").filter({ hasText: "Signatures" });
+  await expect(signaturesPanel, "picking the Signature tool should surface its panel").toBeVisible();
+  await signaturesPanel.getByRole("button", { name: "Close panel" }).click();
+  await expect(signaturesPanel, "the panel's own close control should dismiss it").toBeHidden();
+
   await page.getByRole("button", { name: "Toggle pages panel" }).click();
   await queueOpenPick(page, ["b.pdf"]);
   await queueSavePick(page, null); // simulates the user cancelling Save As

@@ -1,4 +1,6 @@
 <script lang="ts">
+  import Icon from "./Icon.svelte";
+
   interface AnnotationSummary {
     subtype: string;
     rect: [number, number, number, number];
@@ -9,14 +11,21 @@
   interface Props {
     annotations: AnnotationSummary[];
     loading: boolean;
+    /** Dismiss the panel. Every rail panel can be opened by something
+     * other than its toolbar toggle, so every one needs a way out that
+     * does not require finding that toggle. */
+    onClose: () => void;
   }
 
-  let { annotations, loading }: Props = $props();
+  let { annotations, loading, onClose }: Props = $props();
 </script>
 
 <aside class="oa-panel">
   <div class="oa-panel__header">
     <span class="oa-panel__title">Comments</span>
+    <button class="oa-icon-btn oa-icon-btn--sm oa-panel__close" onclick={onClose} aria-label="Close panel">
+      <Icon name="x" size={15} />
+    </button>
   </div>
   <div class="oa-panel__body">
     {#if loading}
