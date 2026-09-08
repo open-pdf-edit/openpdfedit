@@ -9,9 +9,13 @@
      * in the document's own structure without hunting for it. */
     currentPage: number;
     onGoToPage: (pageIndex: number) => void;
+    /** Dismiss the panel. Every rail panel can be opened by something
+     * other than its toolbar toggle, so every one needs a way out that
+     * does not require finding that toggle. */
+    onClose: () => void;
   }
 
-  let { entries, loading, currentPage, onGoToPage }: Props = $props();
+  let { entries, loading, currentPage, onGoToPage, onClose }: Props = $props();
 
   /** The deepest entry at or before the current page — i.e. the section
    * the reader is actually inside. Entries with no page can't bound a
@@ -32,6 +36,9 @@
 <aside class="oa-panel">
   <div class="oa-panel__header">
     <span class="oa-panel__title">Contents</span>
+    <button class="oa-icon-btn oa-icon-btn--sm oa-panel__close" onclick={onClose} aria-label="Close panel">
+      <Icon name="x" size={15} />
+    </button>
   </div>
   <div class="oa-panel__body">
     {#if loading}

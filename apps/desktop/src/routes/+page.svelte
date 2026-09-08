@@ -2915,6 +2915,7 @@
           loading={outlineLoading}
           {currentPage}
           onGoToPage={goToPage}
+          onClose={() => (showOutline = false)}
         />
       {/if}
       {#if showSearch && showSearchResults}
@@ -2925,10 +2926,11 @@
           searched={searchRan}
           truncated={searchTruncated}
           onSelect={(index) => (searchActiveIndex = index)}
+          onClose={() => (showSearch = false)}
         />
       {/if}
       {#if showComments}
-        <CommentsPanel {annotations} loading={annotationsLoading} />
+        <CommentsPanel {annotations} loading={annotationsLoading} onClose={() => (showComments = false)} />
       {/if}
       {#if showPages}
         <PagesPanel
@@ -2941,16 +2943,23 @@
           onCrop={handleCrop}
           onExtractSelected={handleExtractSelected}
           onMerge={handleMerge}
+          onClose={() => (showPages = false)}
         />
       {/if}
       {#if showForms}
-        <FormsPanel fields={formFields} busy={formsBusy || mutationBusy} onFill={handleFillForm} />
+        <FormsPanel
+          fields={formFields}
+          busy={formsBusy || mutationBusy}
+          onFill={handleFillForm}
+          onClose={() => (showForms = false)}
+        />
       {/if}
       {#if showSignatures}
         <SignaturesPanel
           armedId={armedSignatureId}
           onArm={(id) => (armedSignatureId = id)}
           onNew={() => (showSignaturePad = true)}
+          onClose={() => (showSignatures = false)}
         />
       {/if}
     {:else}

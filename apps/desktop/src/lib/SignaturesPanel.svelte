@@ -13,9 +13,13 @@
     armedId: string | null;
     onArm: (id: string) => void;
     onNew: () => void;
+    /** Dismiss the panel. Every rail panel can be opened by something
+     * other than its toolbar toggle, so every one needs a way out that
+     * does not require finding that toggle. */
+    onClose: () => void;
   }
 
-  let { armedId, onArm, onNew }: Props = $props();
+  let { armedId, onArm, onNew, onClose }: Props = $props();
 
   const signatures = $derived(savedSignatures());
 
@@ -41,6 +45,9 @@
 <aside class="oa-panel">
   <div class="oa-panel__header">
     <span class="oa-panel__title">Signatures</span>
+    <button class="oa-icon-btn oa-icon-btn--sm oa-panel__close" onclick={onClose} aria-label="Close panel">
+      <Icon name="x" size={15} />
+    </button>
   </div>
   <div class="oa-panel__body">
     <button class="oa-btn oa-btn--secondary new-btn" onclick={onNew}>

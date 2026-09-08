@@ -261,6 +261,11 @@
   padding: 0 var(--space-3);
   border-bottom: var(--border-width) solid var(--border-hairline);
 }
+/* Pushed to the trailing edge of the header, whatever else the panel
+   puts there — Results has a hit count beside its title. */
+.oa-panel__close {
+  margin-left: auto;
+}
 .oa-panel__title {
   font: var(--type-h3);
   font-size: var(--text-sm);

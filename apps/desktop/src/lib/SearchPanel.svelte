@@ -15,9 +15,13 @@
     /** True when the backend hit its result cap. */
     truncated: boolean;
     onSelect: (index: number) => void;
+    /** Dismiss the panel. Every rail panel can be opened by something
+     * other than its toolbar toggle, so every one needs a way out that
+     * does not require finding that toggle. */
+    onClose: () => void;
   }
 
-  let { hits, activeIndex, busy, searched, truncated, onSelect }: Props = $props();
+  let { hits, activeIndex, busy, searched, truncated, onSelect, onClose }: Props = $props();
 </script>
 
 <aside class="oa-panel">
@@ -26,6 +30,9 @@
     {#if hits.length > 0}
       <span class="oa-caption">{hits.length}{truncated ? "+" : ""}</span>
     {/if}
+    <button class="oa-icon-btn oa-icon-btn--sm oa-panel__close" onclick={onClose} aria-label="Close panel">
+      <Icon name="x" size={15} />
+    </button>
   </div>
   <div class="oa-panel__body">
     {#if hits.length === 0}

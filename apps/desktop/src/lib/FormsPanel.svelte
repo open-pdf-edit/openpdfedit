@@ -12,15 +12,20 @@
   // `forms.rs`'s module doc), so the parent is expected to re-fetch this
   // panel's `fields` prop after every `onFill` call.
 
+  import Icon from "./Icon.svelte";
   import type { FormFieldDto } from "./backend/types";
 
   interface Props {
     fields: FormFieldDto[];
     busy: boolean;
     onFill: (values: Record<string, string>) => void;
+    /** Dismiss the panel. Every rail panel can be opened by something
+     * other than its toolbar toggle, so every one needs a way out that
+     * does not require finding that toggle. */
+    onClose: () => void;
   }
 
-  let { fields, busy, onFill }: Props = $props();
+  let { fields, busy, onFill, onClose }: Props = $props();
 
   const grouped = $derived.by(() => {
     const byName = new Map<string, FormFieldDto[]>();
@@ -51,6 +56,9 @@
 <aside class="oa-panel">
   <div class="oa-panel__header">
     <span class="oa-panel__title">Form fields</span>
+    <button class="oa-icon-btn oa-icon-btn--sm oa-panel__close" onclick={onClose} aria-label="Close panel">
+      <Icon name="x" size={15} />
+    </button>
   </div>
   <div class="oa-panel__body">
     {#if grouped.length === 0}
