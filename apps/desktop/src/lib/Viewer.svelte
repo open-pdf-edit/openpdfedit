@@ -336,14 +336,23 @@
   .scroll-container {
     flex: 1;
     overflow-y: auto;
-    overflow-x: hidden;
+    /* Not hidden. A page wider than the container is the ordinary case —
+       any zoom above fit-width, and any landscape or A3 document at
+       100% — and hiding the overflow does not remove the content, it
+       just puts it out of reach. Measured on an ordinary page at 381%:
+       3113px of content in a 950px container, scrollWidth correctly
+       larger than clientWidth, and no way for the reader to get at it. */
+    overflow-x: auto;
     padding: 16px 0;
     background: var(--bg-sunken);
     /* Panning stays with the browser; pinching is handled above, and
        would otherwise scale the whole interface instead of the page.
        Set here rather than on the pages because touch-action is
        intersected up the ancestor chain — the pages can only give away
-       more, never take this back. */
-    touch-action: pan-y;
+       more, never take this back.
+       Both axes: `pan-y` alone left a wide page unreachable on touch
+       even once overflow-x allowed scrolling, which is the same bug
+       arriving by a different route. */
+    touch-action: pan-x pan-y;
   }
 </style>

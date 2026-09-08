@@ -2306,12 +2306,24 @@
       else handleSave();
       return;
     }
-    if (meta && canPrint && e.key.toLowerCase() === "p") {
+    if (meta && e.key.toLowerCase() === "p") {
       // Preventing the default matters: the browser's own ⌘P would
       // print the *editor* — toolbars, panels and all — rather than the
       // document being edited.
+      //
+      // Unconditionally, and not `meta && canPrint`, which was the bug.
+      // On a build whose backend cannot print (the desktop one, today)
+      // that guard was false, so nothing was prevented and the webview
+      // printed the editor — the exact outcome the comment above says
+      // this line exists to stop. A backend that cannot print is the
+      // case that needs the interception most, not least.
       e.preventDefault();
-      handlePrint();
+      if (canPrint) handlePrint();
+      else
+        showToast("Printing isn't available in this build yet. Save a copy and print that.", {
+          tone: "warning",
+          title: "Print",
+        });
       return;
     }
     if (!meta || e.key.toLowerCase() !== "z") return;
