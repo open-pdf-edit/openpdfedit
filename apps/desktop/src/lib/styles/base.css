@@ -81,3 +81,34 @@ ol {
     transform: none;
   }
 }
+
+/* --- Printing -------------------------------------------------------
+   The editor is never what anyone means by "print". Without these rules
+   any route to the printer that isn't the app's own Print button — the
+   browser's menu, a webview's ⌘P, a frame print that falls back to its
+   embedder — puts the toolbar, the tool rail with all sixteen tool
+   names, and whatever slice of the page happens to be on screen onto
+   paper. That was reported from the field, and it is what `@media print`
+   rendered before this block existed.
+
+   The document is printed from its own bytes instead (see
+   `printBytes` in $lib/backend/wasm.ts): the browser's PDF viewer prints
+   from the vectors, where the canvases on screen hold screen-resolution
+   pixels at the current zoom and would go to paper as a blurry raster.
+
+   So this hides the application and leaves one line explaining where the
+   Print command is. A blank sheet would be worse — it reads as a bug
+   rather than as an answer. */
+@media print {
+  body > * {
+    display: none !important;
+  }
+  body::after {
+    content: "To print this document, use OpenPdfEdit's Print button — or press ⌘P / Ctrl+P with the editor focused. Printing this page would only reproduce the editor around it.";
+    display: block;
+    max-width: 34em;
+    margin: 4em auto;
+    font: var(--type-body);
+    color: var(--text-strong);
+  }
+}

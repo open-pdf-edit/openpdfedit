@@ -228,7 +228,17 @@ test("pinching zooms the document, sharply", async ({ browser }) => {
   const reserved = await page.evaluate(
     () => getComputedStyle(document.querySelector(".scroll-container")!).touchAction,
   );
-  expect(reserved, "the browser must not keep pinch for itself").toBe("pan-y");
+  // Asserted on the property that matters, not on the exact string. What
+  // breaks pinch is the browser keeping the gesture, i.e. `pinch-zoom`
+  // appearing here (or `auto`/`manipulation`, which imply it). Which pan
+  // axes are given away does not affect pinch at all — and pinning the
+  // literal "pan-y" made this fail when `pan-x` was added so that a page
+  // wider than the viewport could be reached, which was a fix, not a
+  // regression. The gesture below is what actually proves pinch works.
+  expect(reserved, "the browser must not keep pinch for itself").not.toMatch(
+    /pinch-zoom|auto|manipulation/,
+  );
+  expect(reserved, "both pan axes stay with the browser").toBe("pan-x pan-y");
 
   // The file strip's copy — the topbar's is hidden on a phone, and both
   // exist in the DOM.
