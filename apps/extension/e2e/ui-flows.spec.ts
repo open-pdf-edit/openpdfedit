@@ -349,6 +349,15 @@ test("the real UI: open, paint, highlight, save, delete/undo/redo, merge (incl. 
   await signaturesPanel.getByRole("button", { name: "Close panel" }).click();
   await expect(signaturesPanel, "the panel's own close control should dismiss it").toBeHidden();
 
+  // ...and the button that opened it must open it again. The panel is
+  // surfaced by an effect that fires on the tool *changing*, so with the
+  // tool still selected, re-clicking it was a no-op: closing the panel
+  // once made it unreachable until you picked another tool and came back.
+  await page.getByRole("button", { name: "Signature", exact: true }).click();
+  await expect(signaturesPanel, "re-picking the active tool should reopen its panel").toBeVisible();
+  await signaturesPanel.getByRole("button", { name: "Close panel" }).click();
+  await expect(signaturesPanel).toBeHidden();
+
   await page.getByRole("button", { name: "Toggle pages panel" }).click();
   await queueOpenPick(page, ["b.pdf"]);
   await queueSavePick(page, null); // simulates the user cancelling Save As
