@@ -30,6 +30,12 @@ tauri-build = { version = "2", features = [] }
 tauri = { version = "2", features = ["devtools"] }
 tauri-plugin-opener = "2"
 tauri-plugin-dialog = "2"
+# In-app updates. `process` is what lets the app relaunch itself once an
+# update is staged — without it the new version only appears the next
+# time the user happens to quit and reopen, which reads as the update
+# having done nothing.
+tauri-plugin-updater = "2"
+tauri-plugin-process = "2"
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
