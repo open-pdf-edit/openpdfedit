@@ -80,6 +80,12 @@ jobs:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          # Signs the update package. Separate from the Apple identity
+          # above and required even without it: the updater refuses any
+          # package this key did not sign, which is the whole reason an
+          # app is allowed to download and run one.
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ""
         run: |
           # Drop any Apple variable that arrived empty. GitHub
           # materializes an absent secret as an empty string, and Tauri
@@ -91,11 +97,29 @@ jobs:
                      APPLE_SIGNING_IDENTITY APPLE_ID APPLE_PASSWORD APPLE_TEAM_ID; do
             [ -n "${!var}" ] || unset "$var"
           done
-          npm run tauri build -- --bundles dmg
+
+          # Not in that loop on purpose. An empty signing key is not a
+          # skippable option the way an absent Apple identity is — the
+          # build would succeed and emit an unsigned package that every
+          # installed copy then refuses, which is a broken release that
+          # looks like a working one.
+          if [ -z "$TAURI_SIGNING_PRIVATE_KEY" ]; then
+            echo "TAURI_SIGNING_PRIVATE_KEY is not set; the update package would be unsigned." >&2
+            exit 1
+          fi
+          # `app` as well as `dmg`: the updater's macOS artifact is a
+          # tarball of the .app, and asking only for the dmg produces the
+          # installer but nothing for an existing install to update from.
+          npm run tauri build -- --bundles app,dmg
       - uses: actions/upload-artifact@v4
         with:
           name: macos-dmg
           path: target/release/bundle/dmg/*.dmg
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos-updater
+          path: target/release/bundle/macos/*.app.tar.gz*
           if-no-files-found: error
 
   windows-exe:
@@ -117,11 +141,16 @@ jobs:
         run: npm ci
       - name: Build the NSIS installer (.exe)
         working-directory: apps/desktop
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ""
         run: npm run tauri build -- --bundles nsis
       - uses: actions/upload-artifact@v4
         with:
           name: windows-exe
-          path: target/release/bundle/nsis/*.exe
+          path: |
+            target/release/bundle/nsis/*.exe
+            target/release/bundle/nsis/*.sig
           if-no-files-found: error
 
   release:
@@ -135,6 +164,42 @@ jobs:
         with:
           path: artifacts
           merge-multiple: true
+      - name: Build latest.json, which is what an installed copy reads
+        run: |
+          set -euo pipefail
+          # The tag minus its leading v. The updater compares this against
+          # the running app's version, so it has to be the bare semver —
+          # "v0.1.12" never compares greater than "0.1.11".
+          VERSION="${GITHUB_REF_NAME#v}"
+          BASE="https://github.com/${GITHUB_REPOSITORY}/releases/download/${GITHUB_REF_NAME}"
+
+          mac_tar="$(ls artifacts/*.app.tar.gz 2>/dev/null | head -1 || true)"
+          win_exe="$(ls artifacts/*-setup.exe 2>/dev/null | head -1 || true)"
+
+          platforms=""
+          if [ -n "$mac_tar" ] && [ -f "${mac_tar}.sig" ]; then
+            platforms="$(printf '"darwin-aarch64":{"signature":"%s","url":"%s/%s"}' \
+              "$(cat "${mac_tar}.sig")" "$BASE" "$(basename "$mac_tar")")"
+          fi
+          if [ -n "$win_exe" ] && [ -f "${win_exe}.sig" ]; then
+            [ -n "$platforms" ] && platforms="${platforms},"
+            platforms="${platforms}$(printf '"windows-x86_64":{"signature":"%s","url":"%s/%s"}' \
+              "$(cat "${win_exe}.sig")" "$BASE" "$(basename "$win_exe")")"
+          fi
+
+          # An empty manifest is worse than none: the app would fetch it,
+          # find no platform entry, and report "up to date" forever.
+          if [ -z "$platforms" ]; then
+            echo "no signed updater artifacts found — refusing to publish an empty latest.json" >&2
+            ls -la artifacts/ >&2
+            exit 1
+          fi
+
+          printf '{"version":"%s","pub_date":"%s","platforms":{%s}}\n' \
+            "$VERSION" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$platforms" > artifacts/latest.json
+          echo "--- latest.json ---"
+          cat artifacts/latest.json
+
       - name: Create the GitHub Release with all three artifacts
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

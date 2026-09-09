@@ -31,6 +31,7 @@
   import { savedSignatures, addSignature } from "$lib/signatures.svelte";
   import DialogHost from "$lib/DialogHost.svelte";
   import AccountPanel from "$lib/AccountPanel.svelte";
+  import UpdatePanel from "$lib/UpdatePanel.svelte";
   import WatermarkPanel from "$lib/WatermarkPanel.svelte";
   import SupporterGate, { type GateState } from "$lib/SupporterGate.svelte";
   import { SUPPORTER_TOOLS_ARE_PREMIUM, supporterState, unlockSupporter } from "$lib/openapps";
@@ -2483,6 +2484,9 @@
     {/if}
     <div class="topbar__spacer"></div>
 
+    <!-- Desktop only, and it draws nothing at all elsewhere: the web app
+         and the extension are updated by reloading. -->
+    <UpdatePanel />
 
     <button
       class="oa-icon-btn oa-icon-btn--sm account-btn"
