@@ -1,6 +1,6 @@
 import { expect, test, devices } from "@playwright/test";
 
-const ORIGIN = "http://localhost:8099";
+import { ORIGIN } from "./origin";
 
 /**
  * Installability: the manifest, the icons, and the offer.

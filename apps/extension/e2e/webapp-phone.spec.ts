@@ -5,7 +5,7 @@ import { TEXT_PDF_BASE64 } from "./pdf-fixtures";
 // suite binds 127.0.0.1:8099 on the same machine, and Chromium resolves
 // "localhost" to IPv4, so the tests silently drove a different product
 // and timed out looking for a topbar that was never going to be there.
-const ORIGIN = process.env.WEBAPP_ORIGIN ?? "http://localhost:8099";
+import { ORIGIN } from "./origin";
 
 /**
  * The phone layout, and the promise that it changes nothing on a desktop.

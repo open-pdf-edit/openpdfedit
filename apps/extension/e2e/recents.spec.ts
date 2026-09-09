@@ -7,7 +7,7 @@
 import { expect, test } from "./fixtures";
 import { TEXT_PDF_BASE64 } from "./pdf-fixtures";
 
-const ORIGIN = "http://localhost:8099";
+import { ORIGIN } from "./origin";
 const KEY = "openpdfedit.recents";
 
 /** Seeds the list the way a backend would, then reloads so the landing
