@@ -1,7 +1,11 @@
 import { expect, test, devices } from "@playwright/test";
 import { TEXT_PDF_BASE64 } from "./pdf-fixtures";
 
-const ORIGIN = "http://localhost:8099";
+// Overridable because port 8099 is not ours alone: another app in this
+// suite binds 127.0.0.1:8099 on the same machine, and Chromium resolves
+// "localhost" to IPv4, so the tests silently drove a different product
+// and timed out looking for a topbar that was never going to be there.
+const ORIGIN = process.env.WEBAPP_ORIGIN ?? "http://localhost:8099";
 
 /**
  * The phone layout, and the promise that it changes nothing on a desktop.
@@ -525,3 +529,4 @@ test("iPhone 13: the phone names its controls and can reach all of them", async 
 
   await ctx.close();
 });
+
