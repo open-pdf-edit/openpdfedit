@@ -671,9 +671,44 @@ impl Engine for PdfiumEngine {
                     page_count,
                 })?;
 
-        let render_config = PdfRenderConfig::new()
-            .set_target_width(target_width as i32)
-            .set_maximum_height(target_width as i32 * 4);
+        // A budget on the whole bitmap, not on its height.
+        //
+        // The cap this replaces was `maximum_height = target_width * 4`, which
+        // is a statement about shape rather than about cost: anything taller
+        // than 4:1 was rescaled to fit it, and came back *narrower than asked
+        // for*, to be stretched back up by the canvas that painted it. A
+        // full-page screenshot is routinely 12:1, so one arrived a third of
+        // its requested width — the reason such a PDF looked blurry here
+        // while the file itself was sharp. Nothing downstream could tell,
+        // because a smaller bitmap is not an error.
+        //
+        // What actually needs bounding is the allocation, so that is what is
+        // bounded. 64 Mpx is 256 MB of RGBA, and the caller copies it once
+        // more on its way to JS, so call it 512 MB at the peak. Against the
+        // old cap's own worst case — 31 Mpx at a 2800px target — that is
+        // twice the ceiling, in exchange for pages that render at the size
+        // they were asked to.
+        //
+        // Past the budget the whole render shrinks in proportion, which keeps
+        // the aspect ratio this trait promises and degrades evenly rather
+        // than collapsing one axis. Reaching it takes a page over about 8:1
+        // rendered at a 2800px target — deep zoom on a very long capture. The
+        // way to never shrink at all is to render only the band on screen,
+        // which is a change to this signature and to every caller, not a
+        // constant.
+        const MAX_RENDER_PIXELS: f32 = 64_000_000.0;
+        let page_width_pt = page.width().value;
+        let page_height_pt = page.height().value;
+        let aspect = if page_width_pt > 0.0 {
+            page_height_pt / page_width_pt
+        } else {
+            1.0
+        };
+        let mut width = target_width as f32;
+        if aspect > 0.0 && width * width * aspect > MAX_RENDER_PIXELS {
+            width = (MAX_RENDER_PIXELS / aspect).sqrt();
+        }
+        let render_config = PdfRenderConfig::new().set_target_width(width.max(1.0) as i32);
 
         let bitmap = page
             .render_with_config(&render_config)
