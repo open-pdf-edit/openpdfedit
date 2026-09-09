@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { TEXT_PDF_BASE64 } from "./pdf-fixtures";
 
-const ORIGIN = "http://localhost:8099";
+import { ORIGIN } from "./origin";
 
 /**
  * A session that has been sitting in storage since yesterday.

@@ -1,12 +1,14 @@
 import { expect, test } from "@playwright/test";
 
+import { ORIGIN } from "./origin";
+
 test("sign-in opens a tab, not a sized popup", async ({ page, context }) => {
   // A sized popup is what broke wallet and Nostr signing: an extension
   // cannot reliably prompt from one, because its own approval window
   // takes focus and the provider treats the request as abandoned.
   // Asserted on the window features, since the difference is invisible
   // in a screenshot and easy to reintroduce by tidying the call.
-  await page.goto("http://localhost:8099/");
+  await page.goto(ORIGIN);
   await page.evaluate(() => {
     (window as unknown as Record<string, unknown>).__opened = null;
     (window as unknown as Record<string, unknown>).__called = false;
