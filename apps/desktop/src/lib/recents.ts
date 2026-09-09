@@ -8,10 +8,19 @@
  * ## What is kept, and where
  *
  * A name, a timestamp, and an id — in this browser's `localStorage`,
- * on this machine, and nowhere else. No document content, not a byte;
- * the id is a key the backend can use to find the file again, not a
- * copy of it. Clearing it is one click, and it is the only record this
- * app keeps of what you have opened.
+ * on this machine, and nowhere else. The id is a key the backend uses
+ * to find the file again. Clearing it is one click.
+ *
+ * What that key points at depends on the browser, and one of the two
+ * answers involves a copy:
+ *
+ * - With the File System Access API the key is a `FileSystemFileHandle`
+ *   in IndexedDB — a reference to the user's own file, no content.
+ * - Without it the key names a copy of the document in the Origin
+ *   Private File System, because there is nothing else that survives
+ *   the page. The copy is per-origin private storage: invisible to the
+ *   file system, to other sites, and to us — it still never leaves the
+ *   machine — but it is a copy, and `Clear` is what deletes it.
  *
  * ## Only what can actually be reopened
  *
@@ -24,11 +33,14 @@
  * - A browser with the File System Access API keeps the file handle in
  *   IndexedDB and asks permission before reading it again. That is
  *   Chrome and Edge.
- * - A browser without it — Firefox and Safari today — opens through a
- *   plain file input, which yields a `File` that cannot outlive the
- *   page. There is nothing to remember, so nothing is recorded and the
- *   list simply stays empty, rather than filling with rows that reopen
- *   a picker and pretend that was the point.
+ * - A browser without it — Firefox and Safari, neither of which plans
+ *   to ship the pickers — opens through a plain file input, which
+ *   yields a `File` that cannot outlive the page. Those browsers keep a
+ *   copy in the Origin Private File System instead, so the row reopens
+ *   the document rather than reopening a picker and pretending that was
+ *   the point. A row is recorded only once that copy is written; if the
+ *   browser has no OPFS, or refuses on quota, nothing is recorded and
+ *   the list stays empty, which is where this feature started.
  */
 
 /** One remembered document. `id` is opaque to the UI — only the backend

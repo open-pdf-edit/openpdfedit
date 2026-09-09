@@ -50,6 +50,14 @@ async function openWideDocument(page: import("@playwright/test").Page, extension
   });
 }
 
+// The first document opened after a fresh build pays for compiling
+// PDFium and the Rust core from a cold cache — measured at 32s against
+// 5s once warm, which straddles Playwright's 30s default and made these
+// fail only ever on the run right after `npm run build`. `test.slow()`
+// triples the budget rather than papering over a real hang: a genuine
+// stall still fails, just not at the one moment the engine is cold.
+test.slow();
+
 test("a page wider than the viewport can be scrolled to", async ({ page, extensionId }) => {
   await openWideDocument(page, extensionId);
 

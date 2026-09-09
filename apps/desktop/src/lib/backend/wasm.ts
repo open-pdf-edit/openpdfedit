@@ -24,6 +24,7 @@
 // it already resolves this file correctly in both build directions
 // (verified in Task 7); nothing here needs it to change.
 
+import { base } from "$app/paths";
 import { clearRecents, forgetRecent, listRecents, rememberRecent } from "$lib/recents";
 import type {
   AddAnnotationRequest,
@@ -113,8 +114,14 @@ import type {
 // this module's init sequence) — they only resolve for real once this
 // app's build output is merged into `apps/extension/dist/` by
 // `build-spa.sh` and loaded as the unpacked extension.
-const PDFIUM_SCRIPT_PATH = "/pdfium.js";
-const WASM_GLUE_MODULE_PATH = "/wasm-gen/openpdfedit_wasm.js";
+// These are absolute from the host root, and the web build is not at a
+// host root: it is served from openpdfedit.com/app, so `base` is "/app"
+// there and "" for the desktop app and the extension. Prepending it is not
+// optional -- these are fetched at runtime, when someone opens a PDF, so a
+// missing prefix does not break the page load that a smoke test sees. It
+// breaks the first document anybody opens.
+const PDFIUM_SCRIPT_PATH = `${base}/pdfium.js`;
+const WASM_GLUE_MODULE_PATH = `${base}/wasm-gen/openpdfedit_wasm.js`;
 
 // --- Ambient ammunition the installed TypeScript's `lib.dom.d.ts` is
 // missing (confirmed the same gap `apps/extension/editor.ts` found and
@@ -887,26 +894,64 @@ async function printBytes(bytes: Uint8Array): Promise<void> {
  * Cancellation can't be observed directly — `<input type=file>` fires no
  * event for it — so this settles on whichever comes first: a `change`
  * carrying files, or the window regaining focus without any. */
+/** How long to wait for `change` after the picker closes, on a browser
+ * with no `cancel` event to tell us it was dismissed.
+ *
+ * This used to be 500ms and that is what made the app unusable on an
+ * iPhone: a PDF chosen from iCloud Drive is not on the device yet, so it
+ * downloads before `change` fires, and anything slower than half a
+ * second was discarded as a cancellation. The user tapped Open, picked
+ * their file, and the app did nothing at all.
+ *
+ * The cost of being wrong in each direction is not symmetric. Too short
+ * drops a file the user chose; too long leaves a promise pending after a
+ * real cancellation, which nothing is waiting on — `pickAndOpen` simply
+ * never resolves and the next tap starts a fresh pick. So this is
+ * generous on purpose. */
+const INPUT_PICK_GRACE_MS = 60_000;
+
 function pickFilesViaInput(multiple: boolean): Promise<File[]> {
   return new Promise((resolve) => {
     const input = document.createElement("input");
     input.type = "file";
     input.accept = "application/pdf,.pdf";
     input.multiple = multiple;
+    // In the document, not detached: Safari on iOS does not reliably
+    // open the picker for an input that was never in the DOM. Off-screen
+    // rather than `display: none`, which some engines also treat as
+    // unclickable.
+    input.style.cssText = "position:fixed;left:-9999px;width:1px;height:1px;opacity:0;";
+
     let settled = false;
+    let graceTimer: ReturnType<typeof setTimeout> | undefined;
     const finish = (files: File[]) => {
       if (settled) return;
       settled = true;
+      clearTimeout(graceTimer);
       window.removeEventListener("focus", onFocus);
+      input.remove();
       resolve(files);
     };
-    const onFocus = () => {
-      setTimeout(() => {
-        if (!input.files?.length) finish([]);
-      }, 500);
-    };
+
     input.addEventListener("change", () => finish(Array.from(input.files ?? [])));
-    window.addEventListener("focus", onFocus);
+
+    // The picker was dismissed without choosing. Supported since Safari
+    // 16.4, Chrome 113 and Firefox 109, and it says exactly what the
+    // focus heuristic below can only guess at.
+    const hasCancelEvent = "oncancel" in input;
+    if (hasCancelEvent) input.addEventListener("cancel", () => finish([]));
+
+    // The fallback, for browsers without it. Focus returning means the
+    // picker closed, either way — so wait, rather than deciding.
+    const onFocus = () => {
+      if (settled || graceTimer !== undefined) return;
+      graceTimer = setTimeout(() => {
+        if (!input.files?.length) finish([]);
+      }, INPUT_PICK_GRACE_MS);
+    };
+    if (!hasCancelEvent) window.addEventListener("focus", onFocus);
+
+    document.body.append(input);
     input.click();
   });
 }
@@ -1284,6 +1329,97 @@ async function takeRecentHandle(key: string): Promise<FileSystemFileHandle | nul
   return handle;
 }
 
+/* --- Recents without a file handle -----------------------------------
+ *
+ * Firefox and Safari have no `showOpenFilePicker`, and no plan to ship
+ * one, so a document opened there arrives as a `File` from an
+ * `<input>` — a snapshot that cannot outlive the page. There is no
+ * handle to keep, which is why those browsers had no Recent list at
+ * all: every row would have reopened a picker.
+ *
+ * The Origin Private File System is the one thing they do have, so the
+ * bytes are copied into it and the row reopens from that copy. Three
+ * consequences worth stating rather than discovering:
+ *
+ * - The app now holds a copy of each remembered document. It never
+ *   leaves the machine — OPFS is per-origin private storage, invisible
+ *   to the file system and to every other site — but it is a copy where
+ *   Chrome keeps only a handle. `Clear` deletes them.
+ * - At most `LIMIT` copies exist, because eviction is driven by the
+ *   same list: `rememberRecent` returns whatever fell off the end and
+ *   those copies are removed with it.
+ * - Reopening a copy yields a `file` target, not a `handle`, so Save
+ *   correctly becomes "Download a copy" — writing back to the original
+ *   was never possible in these browsers anyway.
+ *
+ * Every operation degrades to today's behaviour rather than throwing:
+ * a browser with no OPFS, or one that refuses the write on quota,
+ * records nothing and shows no row, which is where this started.
+ */
+const RECENTS_DIR = "recents";
+
+function opfsAvailable(): boolean {
+  return typeof navigator !== "undefined" && typeof navigator.storage?.getDirectory === "function";
+}
+
+/** The copies directory, or null if this browser has no OPFS. `create`
+ * is false for reads so a first-run read does not leave an empty
+ * directory behind. */
+async function recentsDir(create: boolean): Promise<FileSystemDirectoryHandle | null> {
+  if (!opfsAvailable()) return null;
+  try {
+    const root = await navigator.storage.getDirectory();
+    return await root.getDirectoryHandle(RECENTS_DIR, { create });
+  } catch {
+    return null;
+  }
+}
+
+/** Recent ids are file names, which may contain characters OPFS refuses
+ * (a slash, most obviously). Encoding is reversible and keeps one id
+ * mapping to exactly one copy. */
+function copyName(key: string): string {
+  return encodeURIComponent(key);
+}
+
+/** True only if the copy is actually on disk — the caller must not
+ * record a row it cannot reopen. */
+async function putRecentCopy(key: string, bytes: Uint8Array): Promise<boolean> {
+  const dir = await recentsDir(true);
+  if (!dir) return false;
+  try {
+    const file = await dir.getFileHandle(copyName(key), { create: true });
+    const writable = await file.createWritable();
+    await writable.write(bytes as BufferSource);
+    await writable.close();
+    return true;
+  } catch {
+    // No `createWritable` (older Safari), or the quota said no.
+    await dropRecentCopy(key);
+    return false;
+  }
+}
+
+async function takeRecentCopy(key: string): Promise<File | null> {
+  const dir = await recentsDir(false);
+  if (!dir) return null;
+  try {
+    return await (await dir.getFileHandle(copyName(key))).getFile();
+  } catch {
+    return null;
+  }
+}
+
+async function dropRecentCopy(key: string): Promise<void> {
+  const dir = await recentsDir(false);
+  if (!dir) return;
+  try {
+    await dir.removeEntry(copyName(key));
+  } catch {
+    // Already gone, which is the state the caller wanted.
+  }
+}
+
 async function dropRecentHandle(key: string): Promise<void> {
   try {
     const db = await openRecentsDb();
@@ -1307,11 +1443,21 @@ async function dropRecentHandle(key: string): Promise<void> {
  * store below, and it keeps the IndexedDB keys and the localStorage
  * ids in step without a second identifier to generate and match. */
 async function rememberOpened(target: FileTarget): Promise<void> {
-  if (target.kind !== "handle") return;
   try {
-    await putRecentHandle(target.name, target.handle);
+    if (target.kind === "handle") {
+      await putRecentHandle(target.name, target.handle);
+    } else if (target.kind === "file") {
+      // No handle to keep, so keep the bytes — see the OPFS block above.
+      // Recorded only once the copy is actually written: a row that
+      // cannot be reopened is the thing this whole path exists to avoid.
+      const bytes = new Uint8Array(await target.file.arrayBuffer());
+      if (!(await putRecentCopy(target.name, bytes))) return;
+    } else {
+      return;
+    }
     for (const stale of rememberRecent(target.name, target.name, Date.now())) {
       await dropRecentHandle(stale);
+      await dropRecentCopy(stale);
     }
   } catch {
     // Storage refused. The document is open; the list is a convenience.
@@ -1803,6 +1949,14 @@ export const wasmBackend: Backend = {
   async openRecent(id) {
     const handle = await takeRecentHandle(id).catch(() => null);
     if (!handle) {
+      // No handle: either this is Firefox or Safari, where a copy was
+      // kept instead, or the handle store lost it. A copy needs no
+      // permission prompt — it is this origin's own storage — so it
+      // opens straight away.
+      const copy = await takeRecentCopy(id).catch(() => null);
+      if (copy) {
+        return await openFromTarget(id, { kind: "file", file: copy, name: id });
+      }
       forgetRecent(id);
       return null;
     }
@@ -1836,12 +1990,19 @@ export const wasmBackend: Backend = {
   async forgetRecent(id) {
     forgetRecent(id);
     await dropRecentHandle(id);
+    await dropRecentCopy(id);
   },
 
   async clearRecents() {
     const ids = listRecents().map((entry) => entry.id);
     clearRecents();
-    for (const id of ids) await dropRecentHandle(id);
+    // Both stores, and before returning rather than in the background:
+    // "Clear" is the control that promises the copies are gone, so it
+    // has to have actually removed them by the time it resolves.
+    for (const id of ids) {
+      await dropRecentHandle(id);
+      await dropRecentCopy(id);
+    }
   },
 
   async flattenDocument(request) {
