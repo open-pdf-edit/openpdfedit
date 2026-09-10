@@ -5,10 +5,22 @@ Five hostnames, all on one server (`104.36.65.54`):
 | host | what it is | served by |
 |---|---|---|
 | `openpdfedit.com` | the marketing site | static files from `site/` |
-| `www.openpdfedit.com` | redirect to the above | nginx |
-| `app.openpdfedit.com` | the web app | static files from `apps/webapp/dist/` |
+| `openpdfedit.com/app/` | the web app | static files from `apps/webapp/dist/` |
+| `www.openpdfedit.com` | redirect to the apex | nginx |
+| `app.openpdfedit.com` | redirect to `openpdfedit.com/app/` | nginx |
 | `auth.openpdfedit.com` | sign-in and credits | reverse proxy to openapps-server on `:8080` |
 | `gateway.openpdfedit.com` | the credit charge for the watermark unlock | reverse proxy to the gateway |
+
+The app moved off its own subdomain on 9 September 2026: it is the SvelteKit
+build shared with the desktop app and cannot share a page with the marketing
+copy, but it can share a hostname, so it lives at a path and the old subdomain
+301s to it. **Anything hardcoded against `app.openpdfedit.com` has to be
+updated, not left to the redirect** — a redirect crosses an origin, and a
+browser extension's host permission and content-script `matches` name the
+origin the tab *lands* on. That is precisely how the OpenCapture PDF handoff
+broke, silently, the same day (opencapture APP-37's sibling fix); it now points
+at `openpdfedit.com/app/` and has a scheduled check that fails if these URLs
+ever start redirecting again.
 
 Two of those are second names for services that already answer under
 `openapps.network`: `auth` for `accounts.openapps.network`, and
@@ -531,10 +543,11 @@ number to remember to bump.
 ```sh
 curl -sI https://openpdfedit.com            | head -1   # 200
 curl -sI https://www.openpdfedit.com        | head -1   # 301
-curl -sI https://app.openpdfedit.com        | head -1   # 200
-curl -sI https://app.openpdfedit.com/pdfium.wasm | grep -i content-type   # application/wasm
+curl -sI https://openpdfedit.com/app/       | head -1   # 200
+curl -sI https://app.openpdfedit.com        | head -1   # 301 -> openpdfedit.com/app/
+curl -sI https://openpdfedit.com/app/pdfium.wasm | grep -i content-type   # application/wasm
 curl -s  https://auth.openpdfedit.com/healthz                             # ok
-curl -sI https://app.openpdfedit.com/login  | head -1   # 200, not 404
+curl -sI https://openpdfedit.com/app/login  | head -1   # 200, not 404
 ```
 
 That last one is the SPA fallback. If it 404s, `try_files` is missing and
@@ -542,7 +555,7 @@ sign-in will break on the redirect back from Google.
 
 Then, in a browser:
 
-1. Open `https://app.openpdfedit.com` and edit a PDF. No account needed.
+1. Open `https://openpdfedit.com/app/` and edit a PDF. No account needed.
 2. Account → **Sign in**. A popup opens on `auth.openpdfedit.com`.
    Complete it; the popup closes and the main window shows you signed in
    without reloading.

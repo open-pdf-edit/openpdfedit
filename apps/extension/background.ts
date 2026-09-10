@@ -18,7 +18,7 @@ chrome.action.onClicked.addListener(() => {
  * Signing in cannot happen inside the extension: these pages are served
  * from `chrome-extension://`, which has no server, so the OAuth redirect
  * has nowhere to land. The editor opens the web app's own login page at
- * `https://app.openpdfedit.com/login` instead, and that page hands the
+ * `https://openpdfedit.com/app/login` instead, and that page hands the
  * session back — once it has one — to the extension id it was given.
  *
  * This worker is the destination, because a page cannot message another
@@ -31,7 +31,10 @@ chrome.action.onClicked.addListener(() => {
  * edit should not be able to widen who can supply one without the check
  * changing too.
  */
-const WEBAPP_ORIGIN = "https://app.openpdfedit.com";
+// The web app moved to the apex; app.openpdfedit.com only redirects.
+// This is matched against `sender.origin`, so it has to be the origin the
+// login page really runs on.
+const WEBAPP_ORIGIN = "https://openpdfedit.com";
 const SIGNIN_DONE_MESSAGE = "openpdfedit-signin-done";
 
 chrome.runtime.onMessageExternal.addListener((message, sender, sendResponse) => {

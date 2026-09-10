@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { base } from "$app/paths";
+
   // Lucide glyph rendered as a CSS mask so it inherits `currentColor`,
   // matching the OpenApps design system's `Icon` component. The SVGs are
   // vendored into static/icons/ (not fetched from the jsDelivr CDN the
@@ -16,13 +18,20 @@
   }
 
   let { name, size = 16, spin = false }: Props = $props();
+
+  // The mask URL is built at runtime, so it does not go through the
+  // compiler's asset rewriting the way `src="..."` would -- it has to
+  // prepend `base` itself. Empty for the desktop app and the extension,
+  // "/app" for the web build, which is served from a path rather than the
+  // root of its host. Without this every icon 404s there, and a CSS mask
+  // that 404s is not an error anyone sees: the glyph is simply invisible.
 </script>
 
 <span
   class="oa-icon"
   class:oa-icon--spin={spin}
   aria-hidden="true"
-  style="width: {size}px; height: {size}px; -webkit-mask-image: url('/icons/{name}.svg'); mask-image: url('/icons/{name}.svg');"
+  style="width: {size}px; height: {size}px; -webkit-mask-image: url('{base}/icons/{name}.svg'); mask-image: url('{base}/icons/{name}.svg');"
 ></span>
 
 <style>
