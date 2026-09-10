@@ -8,11 +8,15 @@
   // needs it.
   import Icon from "./Icon.svelte";
   import { tooltip } from "./tooltip";
-  import { LOCALES, getLocale, setLocale, t } from "./i18n/index.svelte";
+  import { LOCALES, DEFAULT_LOCALE, getLocale, setLocale, t } from "./i18n/index.svelte";
 
   let open = $state(false);
   let root = $state<HTMLElement | null>(null);
   const current = $derived(getLocale());
+  const short = $derived(
+    LOCALES.find((l) => l.code === current)?.short ??
+      LOCALES.find((l) => l.code === DEFAULT_LOCALE)!.short,
+  );
 
   function choose(code: string): void {
     setLocale(code);
@@ -48,6 +52,11 @@
     aria-haspopup="menu"
   >
     <Icon name="languages" size={15} />
+    <!-- Visible text, not just an aria-label: a phone has no pointer to
+         hover a tooltip with, so every topbar control has to say what it
+         is on the screen. Showing the *current* language rather than the
+         word "Language" makes the same characters do both jobs. -->
+    <span class="topbar__label">{short}</span>
   </button>
 
   {#if open}
@@ -71,6 +80,25 @@
 </div>
 
 <style>
+  /* The same rule +page.svelte applies to every other topbar label, and
+     repeated here because Svelte scopes styles per component: this
+     control lives in its own file, so the topbar's own `.topbar__label`
+     never reaches it. Without this the button renders as a bare icon on
+     a phone, where there is no pointer to hover a tooltip with — which
+     the phone suite asserts against, and caught. Breakpoint kept
+     identical to the topbar's; if that moves, this moves with it. */
+  .topbar__label {
+    display: none;
+  }
+  @media (max-width: 720px) {
+    .topbar__label {
+      display: block;
+      font-size: 9px;
+      line-height: 1.1;
+      color: inherit;
+    }
+  }
+
   .lang {
     position: relative;
     display: flex;

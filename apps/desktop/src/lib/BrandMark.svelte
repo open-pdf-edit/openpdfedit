@@ -7,7 +7,6 @@
   // OpenPdfEdit (--app-pdfedit). One implementation, reading the
   // --logo-* tokens, so re-pointing them re-skins every surface at once.
   import Icon from "./Icon.svelte";
-  import { t } from "./i18n/index.svelte";
 
   interface Props {
     variant?: "wordmark" | "monogram" | "lockup";
@@ -20,7 +19,7 @@
   const wordSize = $derived(variant === "lockup" ? size * 0.56 : size);
 </script>
 
-<span class="oa-brandmark" role="img" aria-label={t("OpenPdfEdit")}>
+<span class="oa-brandmark" role="img" aria-label="OpenPdfEdit">
   {#if variant !== "wordmark"}
     <span class="tile" style="width: {tileSize}px; height: {tileSize}px;">
       <Icon name="file-pen" size={Math.round(tileSize * 0.55)} />
@@ -28,7 +27,7 @@
   {/if}
   {#if variant !== "monogram"}
     <span class="word" style="font-size: {wordSize}px;">
-      <span class="prefix">{t("Open")}</span>PdfEdit<span class="dot">.</span>
+      <span class="prefix">Open</span>PdfEdit<span class="dot">.</span>
     </span>
   {/if}
 </span>
