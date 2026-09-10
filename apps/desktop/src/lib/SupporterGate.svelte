@@ -10,6 +10,7 @@
   // therefore can't cost a second 1000 credits — the entitlement check
   // on the next sign-in finds it already redeemed.
   import Icon from "./Icon.svelte";
+  import { t } from "./i18n/index.svelte";
   import { SUPPORTER_COST } from "./openapps";
 
   /** What the gate is currently showing. `hidden` is the resting state —
@@ -60,7 +61,7 @@
     class="oa-dialog-scrim"
     role="dialog"
     aria-modal="true"
-    aria-label="Supporter feature"
+    aria-label={t("Supporter feature")}
     tabindex="-1"
     onkeydown={onKeydown}
   >
@@ -70,19 +71,18 @@
           <h2 class="oa-dialog__title">{title}</h2>
           <p class="oa-dialog__subtitle">A Supporter feature — {price} credits, once, for both Supporter tools.</p>
         </div>
-        <button class="oa-icon-btn oa-icon-btn--sm" onclick={onClose} aria-label="Close">
+        <button class="oa-icon-btn oa-icon-btn--sm" onclick={onClose} aria-label={t("Close")}>
           <Icon name="x" size={15} />
         </button>
       </div>
 
       <div class="oa-dialog__body gate-body">
         {#if state.kind === "checking"}
-          <p class="gate-message">Checking your account…</p>
+          <p class="gate-message">{t("Checking your account\u2026")}</p>
         {:else if state.kind === "signed-out"}
           <p class="gate-message">
             Sign in to unlock {title}. One {price}-credit purchase covers the watermark
-            <em>and</em> OCR, on every device you sign in on.
-          </p>
+            <em>and</em>{t("OCR, on every device you sign in on.")}</p>
         {:else if state.kind === "locked"}
           <p class="gate-message">
             {tool === "ocr"
@@ -92,7 +92,7 @@
             and not per document.
           </p>
         {:else if state.kind === "unlocking"}
-          <p class="gate-message">Unlocking…</p>
+          <p class="gate-message">{t("Unlocking\u2026")}</p>
         {:else if state.kind === "insufficient"}
           <p class="gate-message">
             You have {state.have.toLocaleString()}
@@ -108,18 +108,16 @@
           {state.kind === "unlocking" ? "Close" : "Not now"}
         </button>
         {#if state.kind === "signed-out"}
-          <button class="oa-btn oa-btn--primary" onclick={onAccount}>Sign in</button>
+          <button class="oa-btn oa-btn--primary" onclick={onAccount}>{t("Sign in")}</button>
         {:else if state.kind === "locked"}
           <button class="oa-btn oa-btn--primary" onclick={onUnlock}>Unlock for {price} credits</button>
         {:else if state.kind === "insufficient"}
-          <button class="oa-btn oa-btn--primary" onclick={onAccount}>Buy credits</button>
+          <button class="oa-btn oa-btn--primary" onclick={onAccount}>{t("Buy credits")}</button>
         {:else if state.kind === "error"}
-          <button class="oa-btn oa-btn--primary" onclick={onRetry}>Try again</button>
+          <button class="oa-btn oa-btn--primary" onclick={onRetry}>{t("Try again")}</button>
         {:else if state.kind === "unlocking"}
           <button class="oa-btn oa-btn--primary" disabled>
-            <Icon name="loader-circle" size={14} spin={true} />
-            Unlocking
-          </button>
+            <Icon name="loader-circle" size={14} spin={true} />{t("Unlocking")}</button>
         {/if}
       </div>
     </div>

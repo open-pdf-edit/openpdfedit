@@ -13,6 +13,7 @@
   // panel's `fields` prop after every `onFill` call.
 
   import Icon from "./Icon.svelte";
+  import { t } from "./i18n/index.svelte";
   import type { FormFieldDto } from "./backend/types";
 
   interface Props {
@@ -55,14 +56,14 @@
 
 <aside class="oa-panel">
   <div class="oa-panel__header">
-    <span class="oa-panel__title">Form fields</span>
-    <button class="oa-icon-btn oa-icon-btn--sm oa-panel__close" onclick={onClose} aria-label="Close panel">
+    <span class="oa-panel__title">{t("Form fields")}</span>
+    <button class="oa-icon-btn oa-icon-btn--sm oa-panel__close" onclick={onClose} aria-label={t("Close panel")}>
       <Icon name="x" size={15} />
     </button>
   </div>
   <div class="oa-panel__body">
     {#if grouped.length === 0}
-      <p class="oa-empty">This document has no fillable form fields.</p>
+      <p class="oa-empty">{t("This document has no fillable form fields.")}</p>
     {:else}
       <ul class="oa-list">
         {#each grouped as [name, widgets] (name)}

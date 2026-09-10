@@ -5,6 +5,7 @@
   // tiles a repeating cell across whole pages, this one puts a single
   // label in a margin and changes it page to page.
   import Icon from "./Icon.svelte";
+  import { t } from "./i18n/index.svelte";
   import type { NumberPagesChoices } from "./backend/types";
 
   interface Props {
@@ -110,14 +111,14 @@
     class="oa-dialog-scrim"
     role="dialog"
     aria-modal="true"
-    aria-label="Page numbers"
+    aria-label={t("Page numbers")}
     tabindex="-1"
     onkeydown={onKeydown}
   >
     <div class="oa-dialog">
       <div class="oa-dialog__header">
-        <h2 class="oa-dialog__title">Number pages</h2>
-        <button class="oa-icon-btn oa-icon-btn--sm" onclick={onClose} aria-label="Close">
+        <h2 class="oa-dialog__title">{t("Number pages")}</h2>
+        <button class="oa-icon-btn oa-icon-btn--sm" onclick={onClose} aria-label={t("Close")}>
           <Icon name="x" size={15} />
         </button>
       </div>
@@ -139,19 +140,19 @@
 
         <div class="row">
           <label class="field">
-            <span class="field__label">Prefix</span>
+            <span class="field__label">{t("Prefix")}</span>
             <input class="oa-input" bind:value={prefix} spellcheck="false" placeholder={mode === "bates" ? "ACME-" : ""} />
           </label>
           <label class="field narrow">
-            <span class="field__label">Start at</span>
+            <span class="field__label">{t("Start at")}</span>
             <input class="oa-input" type="number" min="0" bind:value={startAt} />
           </label>
           <label class="field narrow">
-            <span class="field__label">Digits</span>
+            <span class="field__label">{t("Digits")}</span>
             <input class="oa-input" type="number" min="0" max="20" bind:value={digits} />
           </label>
           <label class="field">
-            <span class="field__label">Suffix</span>
+            <span class="field__label">{t("Suffix")}</span>
             <input class="oa-input" bind:value={suffix} spellcheck="false" placeholder={mode === "pageNumbers" ? ` of ${pageCount}` : ""} />
           </label>
         </div>
@@ -160,7 +161,7 @@
 
         <div class="row">
           <label class="field">
-            <span class="field__label">Position</span>
+            <span class="field__label">{t("Position")}</span>
             <select class="oa-input" bind:value={anchor}>
               {#each ANCHORS as a (a.id)}
                 <option value={a.id}>{a.label}</option>
@@ -168,25 +169,25 @@
             </select>
           </label>
           <label class="field">
-            <span class="field__label">Font</span>
+            <span class="field__label">{t("Font")}</span>
             <select class="oa-input" bind:value={font}>
-              <option value="helvetica">Helvetica</option>
-              <option value="helveticaBold">Helvetica Bold</option>
-              <option value="timesRoman">Times</option>
-              <option value="timesBold">Times Bold</option>
-              <option value="courier">Courier</option>
+              <option value="helvetica">{t("Helvetica")}</option>
+              <option value="helveticaBold">{t("Helvetica Bold")}</option>
+              <option value="timesRoman">{t("Times")}</option>
+              <option value="timesBold">{t("Times Bold")}</option>
+              <option value="courier">{t("Courier")}</option>
             </select>
           </label>
           <label class="field narrow">
-            <span class="field__label">Size</span>
+            <span class="field__label">{t("Size")}</span>
             <input class="oa-input" type="number" min="4" max="96" bind:value={fontSize} />
           </label>
           <label class="field narrow">
-            <span class="field__label">Margin</span>
+            <span class="field__label">{t("Margin")}</span>
             <input class="oa-input" type="number" min="0" max="200" bind:value={margin} />
           </label>
           <label class="field colour">
-            <span class="field__label">Colour</span>
+            <span class="field__label">{t("Colour")}</span>
             <input class="oa-input colour-input" type="color" bind:value={colorHex} />
           </label>
         </div>
@@ -198,7 +199,7 @@
       </div>
 
       <div class="oa-dialog__footer">
-        <button class="oa-btn oa-btn--secondary" onclick={onClose}>Cancel</button>
+        <button class="oa-btn oa-btn--secondary" onclick={onClose}>{t("Cancel")}</button>
         <button class="oa-btn oa-btn--primary" onclick={submit} disabled={!canApply}>
           <Icon name="hash" size={15} spin={busy} />
           {busy ? "Numbering…" : `Number all ${pageCount} pages`}

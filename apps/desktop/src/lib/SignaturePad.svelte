@@ -6,6 +6,7 @@
   // placing it later both go through code this app has already tested,
   // not a new drawing engine.
   import Icon from "./Icon.svelte";
+  import { t } from "./i18n/index.svelte";
 
   interface Props {
     onSave: (name: string, strokes: [number, number][][], aspect: number) => void;
@@ -114,13 +115,13 @@
 </script>
 
 <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-<div class="oa-dialog-scrim" role="dialog" aria-modal="true" aria-label="Draw your signature" tabindex="-1" onkeydown={onKeydown}>
+<div class="oa-dialog-scrim" role="dialog" aria-modal="true" aria-label={t("Draw your signature")} tabindex="-1" onkeydown={onKeydown}>
   <div class="oa-dialog pad-dialog">
     <div class="oa-dialog__header">
       <div class="oa-dialog__header-text">
-        <h2 class="oa-dialog__title">Draw your signature</h2>
+        <h2 class="oa-dialog__title">{t("Draw your signature")}</h2>
       </div>
-      <button class="oa-icon-btn oa-icon-btn--sm" onclick={onCancel} aria-label="Close">
+      <button class="oa-icon-btn oa-icon-btn--sm" onclick={onCancel} aria-label={t("Close")}>
         <Icon name="x" size={15} />
       </button>
     </div>
@@ -138,17 +139,15 @@
       ></canvas>
 
       <div class="pad-row">
-        <input class="oa-input" type="text" placeholder="Name this signature (optional)" bind:value={name} maxlength={60} />
+        <input class="oa-input" type="text" placeholder={t("Name this signature (optional)")} bind:value={name} maxlength={60} />
         <button class="oa-btn oa-btn--secondary" onclick={clear} disabled={isEmpty}>
-          <Icon name="eraser" size={15} />
-          Clear
-        </button>
+          <Icon name="eraser" size={15} />{t("Clear")}</button>
       </div>
     </div>
 
     <div class="oa-dialog__footer">
-      <button class="oa-btn oa-btn--secondary" onclick={onCancel}>Cancel</button>
-      <button class="oa-btn oa-btn--primary" onclick={save} disabled={isEmpty}>Save signature</button>
+      <button class="oa-btn oa-btn--secondary" onclick={onCancel}>{t("Cancel")}</button>
+      <button class="oa-btn oa-btn--primary" onclick={save} disabled={isEmpty}>{t("Save signature")}</button>
     </div>
   </div>
 </div>

@@ -23,6 +23,7 @@
   // "Restore purchases" button, because someone whose payment went through
   // should not have to know that word.
   import { collect } from "$lib/iap";
+  import { t } from "./i18n/index.svelte";
   import { nativeShell, type NativeProduct, type NativePurchase } from "$lib/native";
   import { showToast } from "$lib/toast.svelte";
 
@@ -116,9 +117,9 @@
 
 {#if shell}
   <section class="iap">
-    <h3 class="iap__title">Buy credits</h3>
+    <h3 class="iap__title">{t("Buy credits")}</h3>
     {#if loading}
-      <p class="iap__note">Loading…</p>
+      <p class="iap__note">{t("Loading\u2026")}</p>
     {:else if products.length === 0}
       <p class="iap__note">
         Credit packs are unavailable right now. Check your connection and reopen the app.

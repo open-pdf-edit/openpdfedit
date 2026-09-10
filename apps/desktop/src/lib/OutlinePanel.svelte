@@ -1,5 +1,6 @@
 <script lang="ts">
   import Icon from "./Icon.svelte";
+  import { t } from "./i18n/index.svelte";
   import type { OutlineEntryDto } from "./backend";
 
   interface Props {
@@ -35,16 +36,16 @@
 
 <aside class="oa-panel">
   <div class="oa-panel__header">
-    <span class="oa-panel__title">Contents</span>
-    <button class="oa-icon-btn oa-icon-btn--sm oa-panel__close" onclick={onClose} aria-label="Close panel">
+    <span class="oa-panel__title">{t("Contents")}</span>
+    <button class="oa-icon-btn oa-icon-btn--sm oa-panel__close" onclick={onClose} aria-label={t("Close panel")}>
       <Icon name="x" size={15} />
     </button>
   </div>
   <div class="oa-panel__body">
     {#if loading}
-      <p class="oa-empty">Loading…</p>
+      <p class="oa-empty">{t("Loading\u2026")}</p>
     {:else if entries.length === 0}
-      <p class="oa-empty">This document has no bookmarks.</p>
+      <p class="oa-empty">{t("This document has no bookmarks.")}</p>
     {:else}
       <ul class="oa-list tight">
         {#each entries as entry, i (i)}

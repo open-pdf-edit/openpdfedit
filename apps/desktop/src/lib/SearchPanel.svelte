@@ -1,5 +1,6 @@
 <script lang="ts">
   import Icon from "./Icon.svelte";
+  import { t } from "./i18n/index.svelte";
   import type { SearchHitDto } from "./backend";
 
   interface Props {
@@ -26,11 +27,11 @@
 
 <aside class="oa-panel">
   <div class="oa-panel__header">
-    <span class="oa-panel__title">Results</span>
+    <span class="oa-panel__title">{t("Results")}</span>
     {#if hits.length > 0}
       <span class="oa-caption">{hits.length}{truncated ? "+" : ""}</span>
     {/if}
-    <button class="oa-icon-btn oa-icon-btn--sm oa-panel__close" onclick={onClose} aria-label="Close panel">
+    <button class="oa-icon-btn oa-icon-btn--sm oa-panel__close" onclick={onClose} aria-label={t("Close panel")}>
       <Icon name="x" size={15} />
     </button>
   </div>
@@ -64,7 +65,7 @@
     {/if}
   </div>
   {#if busy && hits.length > 0}
-    <div class="oa-caption footer"><Icon name="loader-circle" size={12} spin={true} /> Searching…</div>
+    <div class="oa-caption footer"><Icon name="loader-circle" size={12} spin={true} />{t("Searching\u2026")}</div>
   {/if}
 </aside>
 

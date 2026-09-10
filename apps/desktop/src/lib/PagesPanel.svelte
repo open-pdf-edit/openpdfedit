@@ -1,5 +1,6 @@
 <script lang="ts">
   import { showAlert, showConfirm, showPrompt } from "./dialog.svelte";
+  import { t } from "./i18n/index.svelte";
   import PageThumb from "./PageThumb.svelte";
   import Icon from "./Icon.svelte";
   import { tooltip } from "./tooltip";
@@ -71,17 +72,15 @@
 
 <aside class="oa-panel">
   <div class="oa-panel__header">
-    <span class="oa-panel__title">Pages</span>
-    <button class="oa-icon-btn oa-icon-btn--sm oa-panel__close" onclick={onClose} aria-label="Close panel">
+    <span class="oa-panel__title">{t("Pages")}</span>
+    <button class="oa-icon-btn oa-icon-btn--sm oa-panel__close" onclick={onClose} aria-label={t("Close panel")}>
       <Icon name="x" size={15} />
     </button>
   </div>
   <div class="oa-panel__body">
     <div class="actions">
       <button class="oa-btn oa-btn--secondary" onclick={onMerge} disabled={busy}>
-        <Icon name="combine" size={15} />
-        Merge PDFs…
-      </button>
+        <Icon name="combine" size={15} />{t("Merge PDFs\u2026")}</button>
       <button class="oa-btn oa-btn--secondary" onclick={extractSelected} disabled={busy || selected.size === 0}>
         <Icon name="file-output" size={15} />
         Extract selected ({selected.size})
@@ -98,27 +97,27 @@
           <div class="row-body">
             <span class="oa-caption page-number">p.{i + 1}</span>
             <div class="row-actions">
-              <button class="oa-icon-btn oa-icon-btn--sm" onclick={() => onMove(i, "Up")} disabled={busy || i === 0} aria-label="Move up" use:tooltip={"Move up"}>
+              <button class="oa-icon-btn oa-icon-btn--sm" onclick={() => onMove(i, "Up")} disabled={busy || i === 0} aria-label={t("Move up")} use:tooltip={t("Move up")}>
                 <Icon name="chevron-up" size={14} />
               </button>
-              <button class="oa-icon-btn oa-icon-btn--sm" onclick={() => onMove(i, "Down")} disabled={busy || i === pageSizes.length - 1} aria-label="Move down" use:tooltip={"Move down"}>
+              <button class="oa-icon-btn oa-icon-btn--sm" onclick={() => onMove(i, "Down")} disabled={busy || i === pageSizes.length - 1} aria-label={t("Move down")} use:tooltip={t("Move down")}>
                 <Icon name="chevron-down" size={14} />
               </button>
-              <button class="oa-icon-btn oa-icon-btn--sm icon-flip" onclick={() => onRotate(i, -90)} disabled={busy} aria-label="Rotate left" use:tooltip={"Rotate left"}>
+              <button class="oa-icon-btn oa-icon-btn--sm icon-flip" onclick={() => onRotate(i, -90)} disabled={busy} aria-label={t("Rotate left")} use:tooltip={t("Rotate left")}>
                 <Icon name="rotate-cw" size={14} />
               </button>
-              <button class="oa-icon-btn oa-icon-btn--sm" onclick={() => onRotate(i, 90)} disabled={busy} aria-label="Rotate right" use:tooltip={"Rotate right"}>
+              <button class="oa-icon-btn oa-icon-btn--sm" onclick={() => onRotate(i, 90)} disabled={busy} aria-label={t("Rotate right")} use:tooltip={t("Rotate right")}>
                 <Icon name="rotate-cw" size={14} />
               </button>
-              <button class="oa-icon-btn oa-icon-btn--sm" onclick={() => promptCrop(i, size)} disabled={busy} aria-label="Crop" use:tooltip={"Crop"}>
+              <button class="oa-icon-btn oa-icon-btn--sm" onclick={() => promptCrop(i, size)} disabled={busy} aria-label={t("Crop")} use:tooltip={t("Crop")}>
                 <Icon name="crop" size={14} />
               </button>
               <button
                 class="oa-icon-btn oa-icon-btn--sm danger"
                 onclick={() => confirmDelete(i)}
                 disabled={busy || pageSizes.length <= 1}
-                aria-label="Delete page"
-                use:tooltip={"Delete page"}
+                aria-label={t("Delete page")}
+                use:tooltip={t("Delete page")}
               >
                 <Icon name="trash-2" size={14} />
               </button>

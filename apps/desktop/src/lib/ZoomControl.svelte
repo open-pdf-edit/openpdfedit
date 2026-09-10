@@ -9,6 +9,7 @@
   // to keep in step. Duplicating the markup instead would mean two
   // places to fix when the control changes.
   import Icon from "./Icon.svelte";
+  import { t } from "./i18n/index.svelte";
   import { tooltip } from "./tooltip";
 
   interface Props {
@@ -27,18 +28,18 @@
   class="oa-icon-btn oa-icon-btn--sm zoom-step"
   onclick={onZoomOut}
   disabled={!canZoomOut}
-  aria-label="Zoom out"
+  aria-label={t("Zoom out")}
 >
   <Icon name="zoom-out" size={15} />
 </button>
-<button class="zoom-level oa-mono" onclick={onReset} use:tooltip={"Reset zoom"}
+<button class="zoom-level oa-mono" onclick={onReset} use:tooltip={t("Reset zoom")}
   >{Math.round(zoom * 100)}%</button
 >
 <button
   class="oa-icon-btn oa-icon-btn--sm zoom-step"
   onclick={onZoomIn}
   disabled={!canZoomIn}
-  aria-label="Zoom in"
+  aria-label={t("Zoom in")}
 >
   <Icon name="zoom-in" size={15} />
 </button>
