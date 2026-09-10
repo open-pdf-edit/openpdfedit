@@ -5,6 +5,7 @@
   // handled by PdfPage.svelte/+page.svelte, the same shape addTextField/
   // addCheckbox already use.
   import { savedSignatures, removeSignature, type SavedSignature } from "./signatures.svelte";
+  import { t } from "./i18n/index.svelte";
   import { showConfirm } from "./dialog.svelte";
   import Icon from "./Icon.svelte";
   import { tooltip } from "./tooltip";
@@ -44,16 +45,14 @@
 
 <aside class="oa-panel">
   <div class="oa-panel__header">
-    <span class="oa-panel__title">Signatures</span>
-    <button class="oa-icon-btn oa-icon-btn--sm oa-panel__close" onclick={onClose} aria-label="Close panel">
+    <span class="oa-panel__title">{t("Signatures")}</span>
+    <button class="oa-icon-btn oa-icon-btn--sm oa-panel__close" onclick={onClose} aria-label={t("Close panel")}>
       <Icon name="x" size={15} />
     </button>
   </div>
   <div class="oa-panel__body">
     <button class="oa-btn oa-btn--secondary new-btn" onclick={onNew}>
-      <Icon name="plus" size={15} />
-      New signature
-    </button>
+      <Icon name="plus" size={15} />{t("New signature")}</button>
 
     {#if signatures.length === 0}
       <p class="oa-empty">
@@ -67,7 +66,7 @@
               class="preview-btn"
               onclick={() => onArm(sig.id)}
               aria-label={`Use signature "${sig.name}"`}
-              use:tooltip={"Use this signature — then drag on the page to place it"}
+              use:tooltip={t("Use this signature \u2014 then drag on the page to place it")}
             >
               <svg class="preview" viewBox={previewViewBox(sig)} preserveAspectRatio="xMidYMid meet">
                 <path d={previewPath(sig)} fill="none" stroke="#020202" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" />
@@ -79,7 +78,7 @@
                 <span class="oa-tag armed-tag">selected</span>
               {/if}
             </div>
-            <button class="oa-icon-btn oa-icon-btn--sm danger" onclick={() => confirmRemove(sig)} aria-label="Delete signature" use:tooltip={"Delete signature"}>
+            <button class="oa-icon-btn oa-icon-btn--sm danger" onclick={() => confirmRemove(sig)} aria-label={t("Delete signature")} use:tooltip={t("Delete signature")}>
               <Icon name="trash-2" size={14} />
             </button>
           </li>

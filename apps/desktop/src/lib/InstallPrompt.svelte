@@ -8,6 +8,7 @@
   // is a sentence describing where the button is. Anything that looked
   // like an install button there would be a button that cannot install.
   import { backendKind } from "$lib/backend";
+  import { t } from "./i18n/index.svelte";
   import Icon from "./Icon.svelte";
 
   /** The event Chromium hands over so a page can ask later, at a moment
@@ -122,10 +123,8 @@
   <div class="install">
     {#if deferred}
       <button class="oa-btn oa-btn--secondary" onclick={install} disabled={installing}>
-        <Icon name="plus" size={14} />
-        Install as an app
-      </button>
-      <span class="install__why">Opens in its own window and works offline.</span>
+        <Icon name="plus" size={14} />{t("Install as an app")}</button>
+      <span class="install__why">{t("Opens in its own window and works offline.")}</span>
     {:else}
       <!-- Safari has no install API, so this is a sentence, not a
            button. Describing the steps is the only thing that can
@@ -137,10 +136,10 @@
              text between the tags its own item, so the phrase and the
              full stop were laid out with gaps between them and wrapped
              onto separate lines on a narrow screen. -->
-        <span>Add to your home screen: tap Share, then <strong>Add to Home Screen</strong>.</span>
+        <span>Add to your home screen: tap Share, then <strong>{t("Add to Home Screen")}</strong>.</span>
       </span>
     {/if}
-    <button class="install__dismiss" onclick={() => (dismissed = true)} aria-label="Dismiss">
+    <button class="install__dismiss" onclick={() => (dismissed = true)} aria-label={t("Dismiss")}>
       <Icon name="x" size={13} />
     </button>
   </div>

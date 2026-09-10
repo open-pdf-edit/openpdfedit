@@ -2,6 +2,7 @@
   // Renders whatever toast.svelte.ts currently has active. Mounted once
   // at the app root, same pattern as DialogHost — see that file's header.
   import { activeToast, dismissToast, type ToastTone } from "./toast.svelte";
+  import { t } from "./i18n/index.svelte";
   import Icon from "./Icon.svelte";
 
   const toast = $derived(activeToast());
@@ -28,7 +29,7 @@
         {#if toast.title}<span class="toast__title">{toast.title}</span>{/if}
         <span class="toast__message">{toast.message}</span>
       </div>
-      <button class="oa-icon-btn oa-icon-btn--sm" onclick={dismissToast} aria-label="Dismiss">
+      <button class="oa-icon-btn oa-icon-btn--sm" onclick={dismissToast} aria-label={t("Dismiss")}>
         <Icon name="x" size={15} />
       </button>
     </div>

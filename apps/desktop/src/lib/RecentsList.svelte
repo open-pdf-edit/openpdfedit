@@ -11,6 +11,7 @@
   // The layout differs between the two, and that is the caller's job:
   // this draws the rows, and `--recents-width` sizes them.
   import Icon from "./Icon.svelte";
+  import { t } from "./i18n/index.svelte";
   import { describeWhen, type RecentDocument } from "./recents";
   import { tooltip } from "./tooltip";
 
@@ -33,8 +34,8 @@
 
 <div class="recents">
   <div class="recents__head">
-    <span class="recents__title">Recent</span>
-    <button class="recents__clear" onclick={onClear}>Clear</button>
+    <span class="recents__title">{t("Recent")}</span>
+    <button class="recents__clear" onclick={onClear}>{t("Clear")}</button>
   </div>
   {#each entries as entry (entry.id)}
     <div class="recent">
@@ -50,7 +51,7 @@
       <button
         class="recent__forget"
         onclick={() => onForget(entry.id)}
-        use:tooltip={"Remove from this list"}
+        use:tooltip={t("Remove from this list")}
         aria-label={`Remove ${entry.name} from the recent list`}
       >
         <Icon name="x" size={13} />

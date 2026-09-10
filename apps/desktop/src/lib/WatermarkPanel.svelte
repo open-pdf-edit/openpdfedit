@@ -13,6 +13,7 @@
   // reaches the Rust side — and capped to 512px on its longest side to
   // bound the payload that crosses the IPC/wasm boundary.
   import Icon from "./Icon.svelte";
+  import { t } from "./i18n/index.svelte";
   import type { WatermarkChoices } from "./backend/types";
 
   interface Props {
@@ -216,17 +217,17 @@
     class="oa-dialog-scrim"
     role="dialog"
     aria-modal="true"
-    aria-label="Watermark"
+    aria-label={t("Watermark")}
     tabindex="-1"
     onkeydown={onKeydown}
   >
     <div class="oa-dialog watermark-dialog">
       <div class="oa-dialog__header">
         <div class="oa-dialog__header-text">
-          <h2 class="oa-dialog__title">Watermark</h2>
+          <h2 class="oa-dialog__title">{t("Watermark")}</h2>
           <p class="oa-dialog__subtitle">Tiled across every page, baked into the document on Apply. Undo works as usual.</p>
         </div>
-        <button class="oa-icon-btn oa-icon-btn--sm" onclick={onClose} aria-label="Close">
+        <button class="oa-icon-btn oa-icon-btn--sm" onclick={onClose} aria-label={t("Close")}>
           <Icon name="x" size={15} />
         </button>
       </div>
@@ -234,25 +235,25 @@
         <canvas bind:this={previewEl} width="360" height="200" class="watermark-preview"></canvas>
 
         <label class="oa-field">
-          <span class="oa-field__label">Text</span>
-          <input class="oa-input" type="text" bind:value={text} placeholder="CONFIDENTIAL" maxlength="64" />
+          <span class="oa-field__label">{t("Text")}</span>
+          <input class="oa-input" type="text" bind:value={text} placeholder={t("CONFIDENTIAL")} maxlength="64" />
         </label>
 
         <div class="watermark-row">
           <label class="oa-field">
-            <span class="oa-field__label">Location</span>
+            <span class="oa-field__label">{t("Location")}</span>
             <select class="oa-input" bind:value={location}>
-              <option value="full">Whole page</option>
-              <option value="top">Top edge</option>
-              <option value="bottom">Bottom edge</option>
-              <option value="top-bottom">Top and bottom</option>
+              <option value="full">{t("Whole page")}</option>
+              <option value="top">{t("Top edge")}</option>
+              <option value="bottom">{t("Bottom edge")}</option>
+              <option value="top-bottom">{t("Top and bottom")}</option>
             </select>
           </label>
           <label class="oa-field">
-            <span class="oa-field__label">Angle</span>
+            <span class="oa-field__label">{t("Angle")}</span>
             <select class="oa-input" bind:value={orientationDeg}>
               <option value={45}>45° diagonal</option>
-              <option value={0}>Horizontal</option>
+              <option value={0}>{t("Horizontal")}</option>
             </select>
           </label>
         </div>
@@ -280,18 +281,16 @@
           </button>
           {#if logoBitmap}
             <span class="watermark-logo-name">{logoName}</span>
-            <button class="oa-icon-btn oa-icon-btn--sm" onclick={removeLogo} aria-label="Remove logo">
+            <button class="oa-icon-btn oa-icon-btn--sm" onclick={removeLogo} aria-label={t("Remove logo")}>
               <Icon name="x" size={13} />
             </button>
           {/if}
         </div>
       </div>
       <div class="oa-dialog__footer">
-        <button class="oa-btn oa-btn--secondary" onclick={onClose} disabled={busy}>Cancel</button>
+        <button class="oa-btn oa-btn--secondary" onclick={onClose} disabled={busy}>{t("Cancel")}</button>
         <button class="oa-btn oa-btn--primary" onclick={apply} disabled={!canApply || busy}>
-          <Icon name="stamp" size={14} spin={busy} />
-          Apply to all pages
-        </button>
+          <Icon name="stamp" size={14} spin={busy} />{t("Apply to all pages")}</button>
       </div>
     </div>
   </div>
