@@ -3,6 +3,7 @@
   // once, at the app root — see that module's header for why these exist
   // at all (native window.prompt/confirm do not function in this webview).
   import { activeDialog, resolveDialog } from "./dialog.svelte";
+  import { t } from "./i18n/index.svelte";
   import Icon from "./Icon.svelte";
 
   const dialog = $derived(activeDialog());
@@ -56,7 +57,7 @@
         <div class="oa-dialog__header-text">
           <h2 class="oa-dialog__title">{dialog.title}</h2>
         </div>
-        <button class="oa-icon-btn oa-icon-btn--sm" onclick={cancel} aria-label="Close">
+        <button class="oa-icon-btn oa-icon-btn--sm" onclick={cancel} aria-label={t("Close")}>
           <Icon name="x" size={15} />
         </button>
       </div>
@@ -90,7 +91,7 @@
 
       <div class="oa-dialog__footer">
         {#if dialog.kind !== "alert"}
-          <button class="oa-btn oa-btn--secondary" onclick={cancel}>Cancel</button>
+          <button class="oa-btn oa-btn--secondary" onclick={cancel}>{t("Cancel")}</button>
         {/if}
         <button class="oa-btn" class:oa-btn--danger={dialog.destructive} class:oa-btn--primary={!dialog.destructive} onclick={confirm}>
           {dialog.confirmLabel}

@@ -1,5 +1,6 @@
 <script lang="ts">
   import Icon from "./Icon.svelte";
+  import { t } from "./i18n/index.svelte";
 
   interface AnnotationSummary {
     subtype: string;
@@ -22,16 +23,16 @@
 
 <aside class="oa-panel">
   <div class="oa-panel__header">
-    <span class="oa-panel__title">Comments</span>
-    <button class="oa-icon-btn oa-icon-btn--sm oa-panel__close" onclick={onClose} aria-label="Close panel">
+    <span class="oa-panel__title">{t("Comments")}</span>
+    <button class="oa-icon-btn oa-icon-btn--sm oa-panel__close" onclick={onClose} aria-label={t("Close panel")}>
       <Icon name="x" size={15} />
     </button>
   </div>
   <div class="oa-panel__body">
     {#if loading}
-      <p class="oa-empty">Loading…</p>
+      <p class="oa-empty">{t("Loading\u2026")}</p>
     {:else if annotations.length === 0}
-      <p class="oa-empty">No annotations yet. Pick a markup tool and drag on the page.</p>
+      <p class="oa-empty">{t("No annotations yet. Pick a markup tool and drag on the page.")}</p>
     {:else}
       <ul class="oa-list">
         {#each annotations as a, i (i)}

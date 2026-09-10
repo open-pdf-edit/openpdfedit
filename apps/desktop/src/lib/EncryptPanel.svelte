@@ -4,6 +4,7 @@
   // place would immediately require the password to render the document
   // still on screen.
   import Icon from "./Icon.svelte";
+  import { t } from "./i18n/index.svelte";
   import type { EncryptChoices } from "./backend/types";
 
   interface Props {
@@ -73,21 +74,21 @@
     class="oa-dialog-scrim"
     role="dialog"
     aria-modal="true"
-    aria-label="Protect with a password"
+    aria-label={t("Protect with a password")}
     tabindex="-1"
     onkeydown={onKeydown}
   >
     <div class="oa-dialog">
       <div class="oa-dialog__header">
-        <h2 class="oa-dialog__title">Protect with a password</h2>
-        <button class="oa-icon-btn oa-icon-btn--sm" onclick={onClose} aria-label="Close">
+        <h2 class="oa-dialog__title">{t("Protect with a password")}</h2>
+        <button class="oa-icon-btn oa-icon-btn--sm" onclick={onClose} aria-label={t("Close")}>
           <Icon name="x" size={15} />
         </button>
       </div>
 
       <div class="oa-dialog__body">
         <label class="field">
-          <span class="field__label">Password</span>
+          <span class="field__label">{t("Password")}</span>
           <input
             class="oa-input"
             type={reveal ? "text" : "password"}
@@ -98,7 +99,7 @@
         </label>
 
         <label class="field">
-          <span class="field__label">Confirm password</span>
+          <span class="field__label">{t("Confirm password")}</span>
           <input
             class="oa-input"
             class:input--invalid={mismatch}
@@ -111,11 +112,9 @@
 
         <div class="meta">
           <label class="checkbox">
-            <input type="checkbox" bind:checked={reveal} />
-            Show password
-          </label>
+            <input type="checkbox" bind:checked={reveal} />{t("Show password")}</label>
           {#if mismatch}
-            <span class="mismatch">The passwords don't match.</span>
+            <span class="mismatch">{t("The passwords don't match.")}</span>
           {:else if strength}
             <span class="strength strength--{strength.tone}">{strength.label}</span>
           {/if}
@@ -128,12 +127,10 @@
         </p>
 
         <label class="checkbox separate">
-          <input type="checkbox" bind:checked={useSeparateOwner} />
-          Use a separate owner password for full permissions
-        </label>
+          <input type="checkbox" bind:checked={useSeparateOwner} />{t("Use a separate owner password for full permissions")}</label>
         {#if useSeparateOwner}
           <label class="field">
-            <span class="field__label">Owner password</span>
+            <span class="field__label">{t("Owner password")}</span>
             <input
               class="oa-input"
               type={reveal ? "text" : "password"}
@@ -145,11 +142,11 @@
         {/if}
 
         <fieldset class="field">
-          <legend class="field__label">Allow the recipient to</legend>
-          <label class="checkbox"><input type="checkbox" bind:checked={allowPrint} /> Print</label>
-          <label class="checkbox"><input type="checkbox" bind:checked={allowCopy} /> Copy text</label>
-          <label class="checkbox"><input type="checkbox" bind:checked={allowModify} /> Change the document</label>
-          <label class="checkbox"><input type="checkbox" bind:checked={allowAnnotate} /> Comment and fill in forms</label>
+          <legend class="field__label">{t("Allow the recipient to")}</legend>
+          <label class="checkbox"><input type="checkbox" bind:checked={allowPrint} />{t("Print")}</label>
+          <label class="checkbox"><input type="checkbox" bind:checked={allowCopy} />{t("Copy text")}</label>
+          <label class="checkbox"><input type="checkbox" bind:checked={allowModify} />{t("Change the document")}</label>
+          <label class="checkbox"><input type="checkbox" bind:checked={allowAnnotate} />{t("Comment and fill in forms")}</label>
         </fieldset>
         <p class="note">
           These are honoured by convention: readers are asked to respect them, nothing enforces
@@ -159,7 +156,7 @@
       </div>
 
       <div class="oa-dialog__footer">
-        <button class="oa-btn oa-btn--secondary" onclick={onClose}>Cancel</button>
+        <button class="oa-btn oa-btn--secondary" onclick={onClose}>{t("Cancel")}</button>
         <button class="oa-btn oa-btn--primary" onclick={submit} disabled={!canApply}>
           <Icon name="key" size={15} spin={busy} />
           {busy ? "Encrypting…" : "Save protected copy…"}

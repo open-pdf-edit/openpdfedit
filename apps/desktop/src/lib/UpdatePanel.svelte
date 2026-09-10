@@ -11,6 +11,7 @@
   // and extension bundles, where the module throws on load rather than
   // politely reporting itself unavailable.
   import Icon from "./Icon.svelte";
+  import { t } from "./i18n/index.svelte";
   import { tooltip } from "./tooltip";
   import { backendKind } from "./backend";
 
@@ -132,8 +133,8 @@
       class="oa-icon-btn oa-icon-btn--sm"
       class:oa-icon-btn--selected={open}
       onclick={toggle}
-      use:tooltip={"Check for updates"}
-      aria-label="Check for updates"
+      use:tooltip={t("Check for updates")}
+      aria-label={t("Check for updates")}
       aria-expanded={open}
     >
       <Icon name={busy ? "loader-circle" : "rotate-cw"} size={15} spin={busy} />
@@ -143,33 +144,28 @@
     {#if open}
       <div class="update__menu">
         {#if phase.kind === "checking"}
-          <p class="update__line">Checking for updates…</p>
+          <p class="update__line">{t("Checking for updates\u2026")}</p>
         {:else if phase.kind === "current"}
           <p class="update__line">
-            <Icon name="circle-check" size={15} /> You're on the latest version.
-          </p>
+            <Icon name="circle-check" size={15} />{t("You're on the latest version.")}</p>
         {:else if phase.kind === "available"}
           <p class="update__title">Version {phase.version} is available</p>
           {#if phase.notes}<p class="update__notes">{phase.notes}</p>{/if}
-          <button class="oa-btn oa-btn--primary" onclick={install}>Update and restart</button>
+          <button class="oa-btn oa-btn--primary" onclick={install}>{t("Update and restart")}</button>
         {:else if phase.kind === "downloading"}
           <p class="update__line">
             {phase.percent === null ? "Downloading…" : `Downloading… ${phase.percent}%`}
           </p>
         {:else if phase.kind === "ready"}
-          <p class="update__line">Restarting…</p>
+          <p class="update__line">{t("Restarting\u2026")}</p>
         {:else if phase.kind === "error"}
           <p class="update__line">
             <Icon name="triangle-alert" size={15} />
             {phase.message}
           </p>
-          <button class="oa-btn oa-btn--secondary" onclick={() => void check(true)}>
-            Try again
-          </button>
+          <button class="oa-btn oa-btn--secondary" onclick={() => void check(true)}>{t("Try again")}</button>
         {:else}
-          <button class="oa-btn oa-btn--secondary" onclick={() => void check(true)}>
-            Check for updates
-          </button>
+          <button class="oa-btn oa-btn--secondary" onclick={() => void check(true)}>{t("Check for updates")}</button>
         {/if}
       </div>
     {/if}

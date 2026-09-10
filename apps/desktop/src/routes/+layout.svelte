@@ -1,4 +1,10 @@
 <script lang="ts">
+  // Once, as early as anything renders: the stored choice if there is
+  // one, else what the browser asks for. Not at module scope — this
+  // module is also imported where there is no `window`.
+  import { initLocale } from "$lib/i18n/index.svelte";
+  initLocale();
+
   import "../app.css";
   // Registers <openapps-login>/<openapps-account>/<openapps-credits>/
   // <openapps-buy> as custom elements and configures the one client they

@@ -32,6 +32,8 @@
   import DialogHost from "$lib/DialogHost.svelte";
   import AccountPanel from "$lib/AccountPanel.svelte";
   import UpdatePanel from "$lib/UpdatePanel.svelte";
+  import LanguagePicker from "$lib/LanguagePicker.svelte";
+  import { t } from "$lib/i18n/index.svelte";
   import WatermarkPanel from "$lib/WatermarkPanel.svelte";
   import SupporterGate, { type GateState } from "$lib/SupporterGate.svelte";
   import { SUPPORTER_TOOLS_ARE_PREMIUM, supporterState, unlockSupporter } from "$lib/openapps";
@@ -2384,11 +2386,11 @@
     <button
       class="oa-btn oa-btn--ghost topbar__open"
       onclick={pickAndOpen}
-      aria-label="Open PDF…"
+      aria-label={t("Open PDF\u2026")}
     >
       <Icon name="folder-open" size={15} />
-      <span class="topbar__open-wide">Open PDF…</span>
-      <span class="topbar__label">Open</span>
+      <span class="topbar__open-wide">{t("Open PDF\u2026")}</span>
+      <span class="topbar__label">{t("Open")}</span>
     </button>
 
     <!-- The same list the start screen shows, reachable with a document
@@ -2402,12 +2404,12 @@
           class="oa-icon-btn oa-icon-btn--sm"
           class:oa-icon-btn--selected={historyOpen}
           onclick={toggleHistory}
-          use:tooltip={"Recent documents"}
-          aria-label="Recent documents"
+          use:tooltip={t("Recent documents")}
+          aria-label={t("Recent documents")}
           aria-expanded={historyOpen}
         >
           <Icon name="clock" size={15} />
-          <span class="topbar__label">Recent</span>
+          <span class="topbar__label">{t("Recent")}</span>
         </button>
         {#if historyOpen}
           <div class="history__menu">
@@ -2438,15 +2440,15 @@
           aria-label={savesByDownloading ? "Download a copy" : "Save"}
         >
           <Icon name="save" size={15} spin={saveBusy} />
-          <span class="topbar__label">Save</span>
+          <span class="topbar__label">{t("Save")}</span>
         </button>
-        <button class="oa-icon-btn oa-icon-btn--sm" onclick={handleUndo} disabled={!doc.can_undo || undoRedoBusy || mutationBusy} use:tooltip={"Undo (⌘Z)"} aria-label="Undo">
+        <button class="oa-icon-btn oa-icon-btn--sm" onclick={handleUndo} disabled={!doc.can_undo || undoRedoBusy || mutationBusy} use:tooltip={t("Undo (\u2318Z)")} aria-label={t("Undo")}>
           <Icon name="undo-2" size={15} />
-          <span class="topbar__label">Undo</span>
+          <span class="topbar__label">{t("Undo")}</span>
         </button>
-        <button class="oa-icon-btn oa-icon-btn--sm" onclick={handleRedo} disabled={!doc.can_redo || undoRedoBusy || mutationBusy} use:tooltip={"Redo (⌘⇧Z)"} aria-label="Redo">
+        <button class="oa-icon-btn oa-icon-btn--sm" onclick={handleRedo} disabled={!doc.can_redo || undoRedoBusy || mutationBusy} use:tooltip={t("Redo (\u2318\u21e7Z)")} aria-label={t("Redo")}>
           <Icon name="redo-2" size={15} />
-          <span class="topbar__label">Redo</span>
+          <span class="topbar__label">{t("Redo")}</span>
         </button>
       </div>
 
@@ -2475,14 +2477,16 @@
         class="topbar__more oa-icon-btn oa-icon-btn--sm"
         class:oa-icon-btn--selected={moreOpen}
         onclick={() => (moreOpen = !moreOpen)}
-        aria-label="More tools"
+        aria-label={t("More tools")}
         aria-expanded={moreOpen}
       >
         <Icon name="layout-panel-left" size={15} />
-        <span class="topbar__label">Tools</span>
+        <span class="topbar__label">{t("Tools")}</span>
       </button>
     {/if}
     <div class="topbar__spacer"></div>
+
+    <LanguagePicker />
 
     <!-- Desktop only, and it draws nothing at all elsewhere: the web app
          and the extension are updated by reloading. -->
@@ -2496,91 +2500,91 @@
       aria-label={signedIn ? "Account — signed in" : "Account"}
     >
       <Icon name="circle-user" size={15} />
-      <span class="topbar__label">Account</span>
+      <span class="topbar__label">{t("Account")}</span>
     </button>
   </header>
 
     {#if doc}
       <div class="tools topbar__group--overflow" class:is-open={moreOpen}>
         <div class="tools__section">
-          <p class="tools__heading">Panels</p>
+          <p class="tools__heading">{t("Panels")}</p>
           <div class="tools__group">
             <button
               class="oa-icon-btn oa-icon-btn--sm"
               class:oa-icon-btn--selected={showComments}
               onclick={() => (showComments = !showComments)}
-              use:tooltip={"Comments"}
-              aria-label="Toggle comments panel"
+              use:tooltip={t("Comments")}
+              aria-label={t("Toggle comments panel")}
             >
               <Icon name="message-square" size={15} />
-            <span class="tools__label">Comments</span>
+            <span class="tools__label">{t("Comments")}</span>
             </button>
             <button
               class="oa-icon-btn oa-icon-btn--sm"
               class:oa-icon-btn--selected={showSearch}
               onclick={() => (showSearch ? closeSearch() : openSearch())}
-              use:tooltip={"Find in document (⌘F)"}
-              aria-label="Find in document"
+              use:tooltip={t("Find in document (\u2318F)")}
+              aria-label={t("Find in document")}
             >
               <Icon name="search" size={15} />
-            <span class="tools__label">Find</span>
+            <span class="tools__label">{t("Find")}</span>
             </button>
             <button
               class="oa-icon-btn oa-icon-btn--sm"
               class:oa-icon-btn--selected={showOutline}
               onclick={() => (showOutline = !showOutline)}
               use:tooltip={outline.length > 0 ? "Contents" : "Contents — this document has no bookmarks"}
-              aria-label="Toggle contents panel"
+              aria-label={t("Toggle contents panel")}
             >
               <Icon name="list-tree" size={15} />
-            <span class="tools__label">Contents</span>
+            <span class="tools__label">{t("Contents")}</span>
             </button>
             <button
               class="oa-icon-btn oa-icon-btn--sm"
               class:oa-icon-btn--selected={showPages}
               onclick={() => (showPages = !showPages)}
-              use:tooltip={"Pages"}
-              aria-label="Toggle pages panel"
+              use:tooltip={t("Pages")}
+              aria-label={t("Toggle pages panel")}
             >
               <Icon name="layout-panel-left" size={15} />
-            <span class="tools__label">Pages</span>
+            <span class="tools__label">{t("Pages")}</span>
             </button>
             {#if formFields.length > 0}
               <button
                 class="oa-icon-btn oa-icon-btn--sm"
                 class:oa-icon-btn--selected={showForms}
                 onclick={() => (showForms = !showForms)}
-                use:tooltip={"Form fields"}
-                aria-label="Toggle form fields panel"
+                use:tooltip={t("Form fields")}
+                aria-label={t("Toggle form fields panel")}
               >
                 <Icon name="list-checks" size={15} />
-              <span class="tools__label">Form fields</span>
+              <span class="tools__label">{t("Form fields")}</span>
               </button>
             {/if}
             <button
               class="oa-icon-btn oa-icon-btn--sm"
               class:oa-icon-btn--selected={showSignatures}
               onclick={() => (showSignatures = !showSignatures)}
-              use:tooltip={"Saved signatures — draw one, then drag it onto the page"}
-              aria-label="Toggle signatures panel"
+              use:tooltip={t("Saved signatures \u2014 draw one, then drag it onto the page")}
+              aria-label={t("Toggle signatures panel")}
             >
               <Icon name="signature" size={15} />
-            <span class="tools__label">Signatures</span>
+            <span class="tools__label">{t("Signatures")}</span>
             </button>
           </div>
         </div>
         <div class="tools__section">
-          <p class="tools__heading">Document</p>
+          <p class="tools__heading">{t("Document")}</p>
           <div class="tools__group">
             <button
               class="oa-icon-btn oa-icon-btn--sm"
               class:oa-icon-btn--selected={showNumbering}
               onclick={() => (showNumbering = !showNumbering)}
-              use:tooltip={"Add page numbers or Bates numbering"}
-              aria-label="Number pages"
+              use:tooltip={t("Add page numbers or Bates numbering")}
+              aria-label={t("Number pages")}
             >
               <Icon name="hash" size={15} />
-            <span class="tools__label">Page numbers</span>
+            <span class="tools__label">{t("Page numbers")}</span>
             </button>
             <!-- Not in the extension. The recogniser and its language
                  data are about 70 MB and are not packaged there, so this
@@ -2595,10 +2599,10 @@
                   use:tooltip={backendKind === "wasm"
                     ? "Make a scanned document searchable — the first run downloads the recogniser (about 3 MB), then works offline"
                     : "Make a scanned document searchable (requires tesseract installed locally)"}
-                  aria-label="OCR document"
+                  aria-label={t("OCR document")}
                 >
                   <Icon name="scan-text" size={15} spin={ocrBusy} />
-                  <span class="tools__label">OCR</span>
+                  <span class="tools__label">{t("OCR")}</span>
                 </button>
             {/if}
               <button
@@ -2606,106 +2610,106 @@
                 class:oa-icon-btn--selected={showWatermark}
                 onclick={handleWatermarkClick}
                 disabled={mutationBusy}
-                use:tooltip={"Watermark — tile text or a logo across every page"}
-                aria-label="Watermark document"
+                use:tooltip={t("Watermark \u2014 tile text or a logo across every page")}
+                aria-label={t("Watermark document")}
               >
               <Icon name="stamp" size={15} />
-              <span class="tools__label">Watermark</span>
+              <span class="tools__label">{t("Watermark")}</span>
             </button>
             <button
               class="oa-icon-btn oa-icon-btn--sm"
               onclick={handleFlatten}
               disabled={flattenBusy || mutationBusy}
-              use:tooltip={"Flatten — bake markup into the page so it can't be edited or removed"}
-              aria-label="Flatten"
+              use:tooltip={t("Flatten \u2014 bake markup into the page so it can't be edited or removed")}
+              aria-label={t("Flatten")}
             >
               <Icon name="layers" size={15} spin={flattenBusy} />
-            <span class="tools__label">Flatten</span>
+            <span class="tools__label">{t("Flatten")}</span>
             </button>
             <button
               class="oa-icon-btn oa-icon-btn--sm"
               onclick={handleCompareDocument}
               disabled={compareBusy}
-              use:tooltip={"Compare the open document against another PDF (text and rendered-pixel differences)"}
-              aria-label="Compare documents"
+              use:tooltip={t("Compare the open document against another PDF (text and rendered-pixel differences)")}
+              aria-label={t("Compare documents")}
             >
               <Icon name="git-compare" size={15} spin={compareBusy} />
-            <span class="tools__label">Compare</span>
+            <span class="tools__label">{t("Compare")}</span>
             </button>
           </div>
         </div>
         <div class="tools__section">
-          <p class="tools__heading">Markup</p>
+          <p class="tools__heading">{t("Markup")}</p>
           <div class="tools__group">
             <button
               class="oa-icon-btn oa-icon-btn--sm"
               onclick={handleRemoveMarkup}
               disabled={unmarkBusy || mutationBusy}
-              use:tooltip={"Remove markup — delete annotations, and pen layers already flattened into the page"}
-              aria-label="Remove markup"
+              use:tooltip={t("Remove markup \u2014 delete annotations, and pen layers already flattened into the page")}
+              aria-label={t("Remove markup")}
             >
               <Icon name="eraser" size={15} spin={unmarkBusy} />
-            <span class="tools__label">Remove markup</span>
+            <span class="tools__label">{t("Remove markup")}</span>
             </button>
             <button
               class="oa-icon-btn oa-icon-btn--sm"
               onclick={handleExportMarkdown}
               disabled={markdownBusy}
-              use:tooltip={"Convert the document's text to Markdown — save it as a file, or into an Obsidian vault"}
-              aria-label="Export as Markdown"
+              use:tooltip={t("Convert the document's text to Markdown \u2014 save it as a file, or into an Obsidian vault")}
+              aria-label={t("Export as Markdown")}
             >
               <Icon name="file-code" size={15} spin={markdownBusy} />
-              <span class="tools__label">Markdown</span>
+              <span class="tools__label">{t("Markdown")}</span>
             </button>
             <button
               class="oa-icon-btn oa-icon-btn--sm"
               onclick={handleExportText}
               disabled={textBusy}
-              use:tooltip={"Extract the document's text to a plain .txt file — no formatting, just the words"}
-              aria-label="Export as plain text"
+              use:tooltip={t("Extract the document's text to a plain .txt file \u2014 no formatting, just the words")}
+              aria-label={t("Export as plain text")}
             >
               <Icon name="file-text" size={15} spin={textBusy} />
-              <span class="tools__label">Text</span>
+              <span class="tools__label">{t("Text")}</span>
             </button>
           </div>
         </div>
         <div class="tools__section">
-          <p class="tools__heading">Save & protect</p>
+          <p class="tools__heading">{t("Save & protect")}</p>
           <div class="tools__group">
-            <button class="oa-icon-btn oa-icon-btn--sm" onclick={handleSaveAs} disabled={saveBusy || mutationBusy} use:tooltip={"Save a copy (⌘⇧S)"} aria-label="Save as">
+            <button class="oa-icon-btn oa-icon-btn--sm" onclick={handleSaveAs} disabled={saveBusy || mutationBusy} use:tooltip={t("Save a copy (\u2318\u21e7S)")} aria-label={t("Save as")}>
               <Icon name="copy" size={15} />
-            <span class="tools__label">Save a copy</span>
+            <span class="tools__label">{t("Save a copy")}</span>
             </button>
             {#if canPrint}
-              <button class="oa-icon-btn oa-icon-btn--sm" onclick={handlePrint} disabled={printBusy || mutationBusy} use:tooltip={"Print (⌘P)"} aria-label="Print">
+              <button class="oa-icon-btn oa-icon-btn--sm" onclick={handlePrint} disabled={printBusy || mutationBusy} use:tooltip={t("Print (\u2318P)")} aria-label={t("Print")}>
                 <Icon name="printer" size={15} spin={printBusy} />
-              <span class="tools__label">Print</span>
+              <span class="tools__label">{t("Print")}</span>
               </button>
             {/if}
             <button
               class="oa-icon-btn oa-icon-btn--sm"
               onclick={handleCompressDocument}
               disabled={compressBusy}
-              use:tooltip={"Save a compressed copy — full rewrite, sheds edit history and unused data"}
-              aria-label="Save a compressed copy"
+              use:tooltip={t("Save a compressed copy \u2014 full rewrite, sheds edit history and unused data")}
+              aria-label={t("Save a compressed copy")}
             >
               <Icon name="file-archive" size={15} spin={compressBusy} />
-            <span class="tools__label">Compress</span>
+            <span class="tools__label">{t("Compress")}</span>
             </button>
             <button
               class="oa-icon-btn oa-icon-btn--sm"
               class:oa-icon-btn--selected={showEncrypt}
               onclick={() => (showEncrypt = !showEncrypt)}
-              use:tooltip={"Save a password-protected copy"}
-              aria-label="Protect with a password"
+              use:tooltip={t("Save a password-protected copy")}
+              aria-label={t("Protect with a password")}
             >
               <Icon name="key" size={15} />
-            <span class="tools__label">Password</span>
+            <span class="tools__label">{t("Password")}</span>
             </button>
           </div>
         </div>
         {#if signatures.length > 0}
-          <button class="oa-badge oa-badge--warning topbar__pill-btn" onclick={showSignatureDetails} use:tooltip={"Signature info is structural only — not cryptographically verified"}>
+          <button class="oa-badge oa-badge--warning topbar__pill-btn" onclick={showSignatureDetails} use:tooltip={t("Signature info is structural only \u2014 not cryptographically verified")}>
             <Icon name="shield-alert" size={13} />
             {signatures.length} signature{signatures.length === 1 ? "" : "s"}
           </button>
@@ -2759,9 +2763,9 @@
           }
         }}
         type="text"
-        placeholder="Find in document"
+        placeholder={t("Find in document")}
         spellcheck="false"
-        aria-label="Find in document"
+        aria-label={t("Find in document")}
       />
 
       <span class="find-bar__count oa-mono">
@@ -2778,8 +2782,8 @@
         class="oa-icon-btn oa-icon-btn--sm"
         onclick={() => stepSearch(-1)}
         disabled={searchHits.length === 0}
-        use:tooltip={"Previous match (⇧Enter)"}
-        aria-label="Previous match"
+        use:tooltip={t("Previous match (\u21e7Enter)")}
+        aria-label={t("Previous match")}
       >
         <Icon name="chevron-up" size={15} />
       </button>
@@ -2787,8 +2791,8 @@
         class="oa-icon-btn oa-icon-btn--sm"
         onclick={() => stepSearch(1)}
         disabled={searchHits.length === 0}
-        use:tooltip={"Next match (Enter)"}
-        aria-label="Next match"
+        use:tooltip={t("Next match (Enter)")}
+        aria-label={t("Next match")}
       >
         <Icon name="chevron-down" size={15} />
       </button>
@@ -2800,7 +2804,7 @@
           searchMatchCase = !searchMatchCase;
           runSearch();
         }}
-        use:tooltip={"Match case"}
+        use:tooltip={t("Match case")}
         aria-pressed={searchMatchCase}
       >
         Aa
@@ -2812,7 +2816,7 @@
           searchWholeWord = !searchWholeWord;
           runSearch();
         }}
-        use:tooltip={"Whole word"}
+        use:tooltip={t("Whole word")}
         aria-pressed={searchWholeWord}
       >
         ab|
@@ -2824,12 +2828,12 @@
         class="oa-icon-btn oa-icon-btn--sm"
         class:oa-icon-btn--selected={showSearchResults}
         onclick={() => (showSearchResults = !showSearchResults)}
-        use:tooltip={"Show all results"}
-        aria-label="Toggle results list"
+        use:tooltip={t("Show all results")}
+        aria-label={t("Toggle results list")}
       >
         <Icon name="list-tree" size={15} />
       </button>
-      <button class="oa-icon-btn oa-icon-btn--sm" onclick={closeSearch} use:tooltip={"Close (Esc)"} aria-label="Close find bar">
+      <button class="oa-icon-btn oa-icon-btn--sm" onclick={closeSearch} use:tooltip={t("Close (Esc)")} aria-label={t("Close find bar")}>
         <Icon name="x" size={15} />
       </button>
     </div>
@@ -2850,9 +2854,9 @@
             use:tooltip={tab.filePath}
           >
             <span class="tab__name">{tab.filePath.split(/[/\\]/).pop()}</span>
-            {#if tab.doc.is_dirty}<span class="tab__dirty" aria-label="Unsaved changes">●</span>{/if}
+            {#if tab.doc.is_dirty}<span class="tab__dirty" aria-label={t("Unsaved changes")}>●</span>{/if}
           </button>
-          <button class="tab__close" onclick={() => closeTab(i)} aria-label="Close tab">
+          <button class="tab__close" onclick={() => closeTab(i)} aria-label={t("Close tab")}>
             <Icon name="x" size={12} />
           </button>
         </div>
@@ -2864,7 +2868,7 @@
     <div class="path-bar">
       <Icon name="file-pen" size={12} />
       <span class="path-bar__text">{filePath}</span>
-      {#if doc?.is_dirty}<span class="oa-tag path-bar__dirty">Unsaved</span>{/if}
+      {#if doc?.is_dirty}<span class="oa-tag path-bar__dirty">{t("Unsaved")}</span>{/if}
       {#if doc}
         <!-- Phone only. On a desktop these live in the topbar, where
              there is room for them; on a phone there is not, and this
@@ -2909,18 +2913,18 @@
                rules in it, is a strip of unexplained icons. The name is
                what makes scrolling past "Draw" to reach "Edit content"
                a thing anyone would do on purpose. -->
-          <p class="rail__heading">{group.name}</p>
+          <p class="rail__heading">{t(group.name)}</p>
           <div class="rail__group" class:rail__group--later={g > 0}>
             {#each group.tools as tool (tool.id)}
               <button
                 class="oa-rail-btn rail__tool"
                 class:oa-rail-btn--selected={activeTool === tool.id}
                 onclick={() => selectTool(tool.id)}
-                use:tooltip={toolHint(tool.id) ?? tool.label}
-                aria-label={tool.label}
+                use:tooltip={t(toolHint(tool.id) ?? tool.label)}
+                aria-label={t(tool.label)}
               >
                 <Icon name={tool.icon} size={18} />
-                <span class="rail__label">{tool.label}</span>
+                <span class="rail__label">{t(tool.label)}</span>
               </button>
             {/each}
           </div>
@@ -3020,11 +3024,9 @@
     {:else}
       <div class="empty-state">
         <BrandMark variant="monogram" size={40} />
-        <p>Open a PDF to get started.</p>
+        <p>{t("Open a PDF to get started.")}</p>
         <button class="oa-btn oa-btn--primary" onclick={pickAndOpen}>
-          <Icon name="folder-open" size={15} />
-          Open PDF…
-        </button>
+          <Icon name="folder-open" size={15} />{t("Open PDF\u2026")}</button>
 
         <!-- The file you want next is usually one you had open
              recently, and the picker made you go and find it again.
