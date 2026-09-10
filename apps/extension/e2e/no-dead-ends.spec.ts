@@ -22,7 +22,25 @@ import { join } from "node:path";
 
 import { expect, test } from "./fixtures";
 
-const WEBAPP_ORIGIN = "https://app.openpdfedit.com";
+// Read from the app's own module, not repeated here. This assertion
+// exists to catch the manifest and the constant drifting apart, and a
+// second copy of the origin in the test cannot do that — it drifted, and
+// the test failed against a correct app while the real defect (a
+// manifest still naming the old origin, so `chrome.runtime` was never
+// injected into the login page and the session could not be handed back)
+// sat one line below.
+function constantFromSource(name: string): string {
+  const src = readFileSync(
+    join(process.cwd(), "..", "desktop", "src", "lib", "openapps.ts"),
+    "utf8",
+  );
+  const m = new RegExp(`export const ${name} = "([^"]+)"`).exec(src);
+  if (!m) throw new Error(`${name} not found in openapps.ts`);
+  return m[1];
+}
+
+const WEBAPP_ORIGIN = constantFromSource("WEBAPP_ORIGIN");
+const WEBAPP_LOGIN_PATH = constantFromSource("WEBAPP_LOGIN_PATH");
 
 test("sign-in leaves the extension for an origin that can serve it", async ({
   context,
@@ -54,7 +72,7 @@ test("sign-in leaves the extension for an origin that can serve it", async ({
   expect(opened!, "sign-in must not resolve against chrome-extension://").not.toContain(
     "chrome-extension://",
   );
-  expect(opened!).toContain(`${WEBAPP_ORIGIN}/login`);
+  expect(opened!).toContain(`${WEBAPP_ORIGIN}${WEBAPP_LOGIN_PATH}`);
   // The extension's own id has to ride along, or the login page has
   // nowhere to hand the finished session back to.
   expect(opened!, "no extension id for the hand-back").toContain(`ext=${extensionId}`);

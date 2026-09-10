@@ -69,7 +69,15 @@ export const SIGNIN_DONE_MESSAGE = "openpdfedit-signin-done";
 /// So the extension opens the web app's own login page, at its real
 /// origin, in a real tab. The OAuth redirect then happens entirely
 /// between `https://` origins, which is the only place it can happen.
-export const WEBAPP_ORIGIN = "https://app.openpdfedit.com";
+/// One hostname, since 2026-09-09: app.openpdfedit.com only redirects
+/// now, so the login window actually runs on the apex. This constant is
+/// compared against `event.origin`, which is an origin and never follows a
+/// redirect -- leaving the old value here does not produce a broken page,
+/// it produces a sign-in that completes and is then thrown away.
+export const WEBAPP_ORIGIN = "https://openpdfedit.com";
+
+/// ...and the editor is a path on it, not the root.
+export const WEBAPP_LOGIN_PATH = "/app/login";
 
 /// The query parameter that tells the login page it is being shown inside
 /// a native app rather than a browser window, and so must finish by

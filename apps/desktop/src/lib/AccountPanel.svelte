@@ -22,6 +22,8 @@
   // covers; it needs its own small "start login, get told when it's
   // done" abstraction designed deliberately, tracked as a follow-up for
   // whichever task builds the extension's login flow (after Task 8).
+  import { base } from "$app/paths";
+  import { t } from "./i18n/index.svelte";
   import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
   import { listen, type UnlistenFn } from "@tauri-apps/api/event";
   import { getClient, onChange, notify } from "@openapps/ui";
@@ -31,6 +33,7 @@
     extensionRuntime,
     SIGNIN_DONE_MESSAGE,
     WEBAPP_ORIGIN,
+    WEBAPP_LOGIN_PATH,
     signInWithTelegram,
   } from "$lib/openapps";
   import { isBrowserExtension } from "$lib/backend";
@@ -236,9 +239,12 @@
       // `chrome-extension://` and is not a file in the package. The
       // extension's id rides along so the login page knows where to hand
       // the session back — see `receiveExtensionSession` below.
-      let target = "/login";
+      // `base` because the web build is served from /app, not from the
+      // root of its host. A bare "/login" opened openpdfedit.com/login,
+      // which is the marketing site's 404 page.
+      let target = `${base}/login`;
       if (isBrowserExtension) {
-        const url = new URL("/login", WEBAPP_ORIGIN);
+        const url = new URL(WEBAPP_LOGIN_PATH, WEBAPP_ORIGIN);
         url.searchParams.set(OPENER_EXTENSION_PARAM, extensionRuntime()?.id ?? "");
         target = url.toString();
       }
@@ -275,16 +281,16 @@
     class="oa-dialog-scrim"
     role="dialog"
     aria-modal="true"
-    aria-label="Account"
+    aria-label={t("Account")}
     tabindex="-1"
     onkeydown={onKeydown}
   >
     <div class="oa-dialog">
       <div class="oa-dialog__header">
         <div class="oa-dialog__header-text">
-          <h2 class="oa-dialog__title">Account</h2>
+          <h2 class="oa-dialog__title">{t("Account")}</h2>
         </div>
-        <button class="oa-icon-btn oa-icon-btn--sm" onclick={onClose} aria-label="Close">
+        <button class="oa-icon-btn oa-icon-btn--sm" onclick={onClose} aria-label={t("Close")}>
           <Icon name="x" size={15} />
         </button>
       </div>
@@ -310,7 +316,7 @@
                attribute only has to be right until then. -->
           <openapps-referral
             app-id="openpdfedit"
-            invite-url="https://app.openpdfedit.com/"
+            invite-url="https://openpdfedit.com/app/"
           ></openapps-referral>
           <!-- Last, deliberately. It used to live inside
                <openapps-account>, which put it beside the balance — the
@@ -320,8 +326,8 @@
                the host decides where it goes. -->
           <openapps-signout></openapps-signout>
         {:else}
-          <p class="message">Sign in to see your credits and buy more.</p>
-          <button class="oa-btn oa-btn--primary" onclick={signIn}>Sign in</button>
+          <p class="message">{t("Sign in to see your credits and buy more.")}</p>
+          <button class="oa-btn oa-btn--primary" onclick={signIn}>{t("Sign in")}</button>
         {/if}
       </div>
     </div>

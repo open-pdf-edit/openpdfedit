@@ -25,7 +25,7 @@
   },
   "externally_connectable": {
     "matches": [
-      "https://app.openpdfedit.com/*"
+      "https://openpdfedit.com/*"
     ]
   }
 }

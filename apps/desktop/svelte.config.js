@@ -24,6 +24,21 @@ const config = {
     // entry for the same reason. Harmless on the Tauri side.
     appDir: "app",
 
+    // Where the app is served from, when that is not the root of a host.
+    //
+    // The web build sits at openpdfedit.com/app, because the apex is the
+    // marketing page and the editor cannot share a document with it. That
+    // path has to be known at *build* time: SvelteKit bakes it into every
+    // chunk URL and into the client router, so nginx cannot put the app
+    // somewhere the build did not expect. Serving a base-less build under
+    // /app/ loads every file correctly and then renders "Not found: /app/",
+    // because the router believes it is at the root.
+    //
+    // Read from the environment rather than hardcoded: this same config
+    // builds the Tauri desktop app and the Chrome extension, and both of
+    // those *are* served from their own root. Only apps/webapp sets it.
+    paths: { base: process.env.BASE_PATH ?? "" },
+
     // Pinned, because SvelteKit's default is `Date.now()` — which lands
     // in a chunk, changes its content hash, and cascades into every
     // importer's hash. Two builds of identical source would then emit
