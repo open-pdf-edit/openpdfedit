@@ -22,17 +22,23 @@ export interface LocaleDef {
   code: string;
   /** Endonym — the language's own name for itself. */
   name: string;
+  /** Two or three characters for the topbar, where the full endonym does
+   * not fit. Shown beside the globe, so the control says which language
+   * is active as well as what it does — and so it has visible text at
+   * all, which a phone requires: there is no pointer to hover a tooltip
+   * with. */
+  short: string;
 }
 
 export const LOCALES: readonly LocaleDef[] = [
-  { code: "en", name: "English" },
-  { code: "zh-Hans", name: "简体中文" },
-  { code: "zh-Hant", name: "繁體中文" },
-  { code: "ja", name: "日本語" },
-  { code: "ko", name: "한국어" },
-  { code: "de", name: "Deutsch" },
-  { code: "es", name: "Español" },
-  { code: "pt", name: "Português" },
+  { code: "en", name: "English", short: "EN" },
+  { code: "zh-Hans", name: "简体中文", short: "简" },
+  { code: "zh-Hant", name: "繁體中文", short: "繁" },
+  { code: "ja", name: "日本語", short: "日本語" },
+  { code: "ko", name: "한국어", short: "한국어" },
+  { code: "de", name: "Deutsch", short: "DE" },
+  { code: "es", name: "Español", short: "ES" },
+  { code: "pt", name: "Português", short: "PT" },
 ] as const;
 
 export const DEFAULT_LOCALE = "en";
