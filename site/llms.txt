@@ -54,7 +54,7 @@ documents).
 ## Links
 
 - [Home](https://openpdfedit.com/): what it does, every tool, and how to run it
-- [Web app](https://app.openpdfedit.com/): the editor, in a browser tab, no install
+- [Web app](https://openpdfedit.com/app/): the editor, in a browser tab, no install
 - [Privacy](https://openpdfedit.com/privacy.html): what it does and does not send
 - [Source](https://github.com/open-pdf-edit/OpenPdfEdit): GitHub
 - [Releases](https://github.com/open-pdf-edit/OpenPdfEdit/releases/latest): macOS and Windows builds

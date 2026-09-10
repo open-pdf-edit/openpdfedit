@@ -39,7 +39,12 @@ bash "$EXT_DIR/scripts/build-wasm.sh"
 log "Building the SPA against the wasm backend"
 # VITE_BACKEND=wasm is what makes backend/index.ts resolve to wasm.ts's
 # WasmBackend instead of the Tauri default — see that file's doc.
-(cd "$DESKTOP_DIR" && rm -rf build .svelte-kit && VITE_BACKEND=wasm npm run build)
+# BASE_PATH is what makes this build servable from openpdfedit.com/app.
+# SvelteKit bakes it into every chunk URL and into the client router, so it
+# cannot be applied afterwards by nginx: a base-less build under /app/ loads
+# every file and then renders "Not found: /app/". Only this build sets it --
+# the desktop app and the extension are served from their own root.
+(cd "$DESKTOP_DIR" && rm -rf build .svelte-kit && BASE_PATH=/app VITE_BACKEND=wasm npm run build)
 
 if [ ! -f "$DESKTOP_DIR/build/index.html" ]; then
   echo "build.sh: $DESKTOP_DIR/build/index.html missing — did the SPA build fail silently?" >&2

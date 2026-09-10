@@ -29,7 +29,15 @@
 // document appeared to run and produced an empty text layer.
 
 /** Where the build puts the engine, the worker and the trained data. */
-const OCR_ASSET_DIR = "/ocr";
+// These are absolute from the host root, and the web build is not at a
+// host root: it is served from openpdfedit.com/app, so `base` is "/app"
+// there and "" for the desktop app and the extension. Prepending it is not
+// optional -- these are fetched at runtime, when someone opens a PDF, so a
+// missing prefix does not break the page load that a smoke test sees. It
+// breaks the first document anybody opens.
+import { base } from "$app/paths";
+
+const OCR_ASSET_DIR = `${base}/ocr`;
 
 /** What tesseract.js calls a word, narrowed to what is used here. */
 interface RecognisedWord {
