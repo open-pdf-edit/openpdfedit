@@ -59,3 +59,24 @@ test("every offered language actually renders", async ({ page, extensionId }) =>
     ).toContainText(word);
   }
 });
+
+test("the wordmark is never translated", async ({ page, extensionId }) => {
+  // It shipped as "AbrirPdfEdit." in Portuguese. The brand mark splits
+  // the wordmark into <span class="prefix">Open</span>PdfEdit so the
+  // prefix can be muted, and "Open" is also a toolbar label — so the
+  // scripted pass that wrapped every literal wrapped this one too, and
+  // the product renamed itself in seven languages.
+  //
+  // Asserted on the rendered text rather than on the absence of a t()
+  // call: what matters is what a reader sees, and the next way this
+  // breaks will not look like the last one.
+  await page.goto(`chrome-extension://${extensionId}/index.html`);
+  for (const language of ["Português", "简体中文", "日本語"]) {
+    await page.getByRole("button", { name: /Language|语言|言語|Idioma/ }).click();
+    await page.getByRole("menuitemradio", { name: language, exact: true }).click();
+    await expect(
+      page.locator(".oa-brandmark").first(),
+      `the wordmark must stay OpenPdfEdit in ${language}`,
+    ).toHaveText("OpenPdfEdit.");
+  }
+});
