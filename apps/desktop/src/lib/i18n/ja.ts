@@ -40,6 +40,7 @@ const ja: Record<string, string> = {
   "Zoom out": "縮小",
   "Reset zoom": "ズームをリセット",
   "Select": "選択",
+  "OpenPdfEdit home": "OpenPdfEdit のホーム",
   "Mark up": "マークアップ",
   "Edit content": "コンテンツを編集",
   "Fill & sign": "入力と署名",

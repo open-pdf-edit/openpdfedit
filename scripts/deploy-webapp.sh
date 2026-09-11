@@ -1,9 +1,13 @@
 #!/usr/bin/env bash
-# Build and publish the web app (and, with --site, the marketing site).
+# Build and publish the web app to /app/.
 #
 #   ./scripts/deploy-webapp.sh              # build + deploy the web app
-#   ./scripts/deploy-webapp.sh --site       # the marketing site as well
 #   ./scripts/deploy-webapp.sh --dry-run    # show what would change
+#
+# The marketing site used to ship from here too, behind --site. It moved
+# to its own private repository (openpdfedit-website) on 11 September
+# 2026: this repository is the app, and only the app. The two still write
+# to different roots on the same host, so they remain independent.
 #
 # This exists because the two steps used to be two commands on two
 # lines. A shell runs the second whether or not the first succeeded, so
@@ -18,9 +22,8 @@ cd "$(dirname "$0")/.."
 
 HOST="${HOST:-root@104.36.65.54}"
 APP_ROOT="/var/www/openpdfedit-app"
-SITE_ROOT="/var/www/openpdfedit"
+# The apex root is not written from here any more — see --site below.
 
-WITH_SITE=""
 # Expanded below as ${RSYNC_EXTRA[@]+"${RSYNC_EXTRA[@]}"}, not the bare
 # form. macOS still ships bash 3.2, where expanding an empty array under
 # `set -u` is an unbound-variable error rather than nothing — so the
@@ -29,7 +32,11 @@ WITH_SITE=""
 RSYNC_EXTRA=()
 for arg in "$@"; do
   case "$arg" in
-    --site) WITH_SITE=1 ;;
+    --site)
+      echo "The marketing site is no longer in this repository." >&2
+      echo "It lives in openpdfedit-website (private); deploy it with" >&2
+      echo "  ../openpdfedit-website/deploy.sh" >&2
+      exit 2 ;;
     --dry-run) RSYNC_EXTRA+=(--dry-run --itemize-changes); DRY_RUN=1 ;;
     *) echo "unknown option: $arg" >&2; exit 2 ;;
   esac
@@ -61,16 +68,6 @@ log "Publishing $BUILD_ID to $HOST:$APP_ROOT"
 # nothing: those files never change, and rsync only sends what differs.
 rsync -az --delete --human-readable --stats ${RSYNC_EXTRA[@]+"${RSYNC_EXTRA[@]}"} \
   apps/webapp/dist/ "$HOST:$APP_ROOT/"
-
-if [ -n "$WITH_SITE" ]; then
-  log "Publishing the marketing site to $HOST:$SITE_ROOT"
-  # site/scripts/ generates og.png and the page's JSON-LD; the generators
-  # are source, not something to serve out of the public web root.
-  # site/README.md is for whoever edits the site, not for a visitor.
-  rsync -az --delete --human-readable \
-    --exclude 'scripts/' --exclude 'README.md' \
-    ${RSYNC_EXTRA[@]+"${RSYNC_EXTRA[@]}"} site/ "$HOST:$SITE_ROOT/"
-fi
 
 if [ -n "${DRY_RUN:-}" ]; then
   log "Dry run — nothing was changed"

@@ -2378,7 +2378,18 @@
 
 <main class="shell">
   <header class="topbar">
-    <BrandMark size={17} />
+    <!-- A link only on the web app. /app/ is a screen of openpdfedit.com,
+         and its brand mark is the only way back to the page — without it
+         the browser's back button is the whole navigation. The desktop
+         app has no site to return to, and the extension is served from
+         chrome-extension://, where "/" is a file lookup that fails. -->
+    {#if backendKind === "wasm" && !isBrowserExtension}
+      <a class="topbar__home" href="/" aria-label={t("OpenPdfEdit home")}>
+        <BrandMark size={17} />
+      </a>
+    {:else}
+      <BrandMark size={17} />
+    {/if}
 
     <!-- Two wordings, one button. "Open PDF…" is right on a desktop
          and takes half the width of a 390px topbar, which is what left
@@ -3492,6 +3503,18 @@
   /* On a desktop these names live in the tooltip. A phone has no
      hover, so the tooltip never appears and the icon is all there is —
      which is what "the icons have no labels" meant. Shown below. */
+  .topbar__home {
+    display: inline-flex;
+    align-items: center;
+    border-radius: var(--radius-sm);
+    text-decoration: none;
+    color: inherit;
+  }
+  .topbar__home:focus-visible {
+    outline: 2px solid var(--focus-ring, var(--brand));
+    outline-offset: 2px;
+  }
+
   .topbar__label {
     display: none;
   }

@@ -40,6 +40,7 @@ const pt: Record<string, string> = {
   "Zoom out": "Afastar",
   "Reset zoom": "Redefinir zoom",
   "Select": "Selecionar",
+  "OpenPdfEdit home": "Início do OpenPdfEdit",
   "Mark up": "Marcar",
   "Edit content": "Editar conteúdo",
   "Fill & sign": "Preencher e assinar",

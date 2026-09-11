@@ -158,8 +158,11 @@ cd apps/extension && npm run e2e # Playwright against the packaged build
   imports (`lit`) by walking up from the *real* file path, and only
   there does the walk-up reach `apps/desktop/node_modules`. Their
   source lives in the OpenApps monorepo.
-- `site/` is the static marketing page (no build step — open
-  `site/index.html`).
+- The marketing site is **not in this repository**. It lives in
+  `openpdfedit-website`, which is private: this repo is the app, and the
+  website — the page, the privacy policy, the SEO metadata, the deploy
+  scripts — is not part of the open-source product. The app still builds
+  from here into `/app/`, and `scripts/deploy-webapp.sh` ships it.
 - `docs/` carries the design/research notes and implementation plans the
   project was built against; `PLAN.md` is the live milestone log.
 

@@ -40,6 +40,7 @@ const ko: Record<string, string> = {
   "Zoom out": "축소",
   "Reset zoom": "확대/축소 초기화",
   "Select": "선택",
+  "OpenPdfEdit home": "OpenPdfEdit 홈",
   "Mark up": "마크업",
   "Edit content": "콘텐츠 편집",
   "Fill & sign": "작성 및 서명",
