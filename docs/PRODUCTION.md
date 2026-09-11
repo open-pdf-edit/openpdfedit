@@ -4,7 +4,7 @@ Five hostnames, all on one server (`104.36.65.54`):
 
 | host | what it is | served by |
 |---|---|---|
-| `openpdfedit.com` | the marketing site | static files from `site/` |
+| `openpdfedit.com` | the marketing site | static files from the `openpdfedit-website` repo (private) |
 | `openpdfedit.com/app/` | the web app | static files from `apps/webapp/dist/` |
 | `www.openpdfedit.com` | redirect to the apex | nginx |
 | `app.openpdfedit.com` | redirect to `openpdfedit.com/app/` | nginx |
@@ -497,10 +497,20 @@ which is the worst possible time to find out.
 From a checkout of this repository, on your machine:
 
 ```sh
-./scripts/deploy-webapp.sh           # the web app
-./scripts/deploy-webapp.sh --site    # the web app and the marketing site
+./scripts/deploy-webapp.sh           # the web app, to /app/
 ./scripts/deploy-webapp.sh --dry-run # what would change, changing nothing
 ```
+
+The marketing site at `/` ships separately, from the private
+`openpdfedit-website` repo:
+
+```sh
+../openpdfedit-website/deploy.sh     # the page and privacy.html, to /
+```
+
+The two write to different roots on the same host, so neither deploy can
+overwrite the other's. `--site` on the script above is now a usage error
+that names the new one.
 
 It builds first and stops if the build fails. That is the whole reason
 it exists: the two steps used to be two commands on two lines, and a

@@ -40,6 +40,7 @@ const zhHant: Record<string, string> = {
   "Zoom out": "縮小",
   "Reset zoom": "重設縮放",
   "Select": "選取",
+  "OpenPdfEdit home": "OpenPdfEdit 首頁",
   "Mark up": "標註",
   "Edit content": "編輯內容",
   "Fill & sign": "填寫與簽署",

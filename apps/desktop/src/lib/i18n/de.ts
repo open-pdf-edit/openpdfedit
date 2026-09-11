@@ -40,6 +40,7 @@ const de: Record<string, string> = {
   "Zoom out": "Verkleinern",
   "Reset zoom": "Zoom zurücksetzen",
   "Select": "Auswählen",
+  "OpenPdfEdit home": "OpenPdfEdit Startseite",
   "Mark up": "Markieren",
   "Edit content": "Inhalt bearbeiten",
   "Fill & sign": "Ausfüllen und unterschreiben",

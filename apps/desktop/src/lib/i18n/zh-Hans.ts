@@ -46,6 +46,7 @@ const zhHans: Record<string, string> = {
 
   // Tools
   "Select": "选择",
+  "OpenPdfEdit home": "OpenPdfEdit 首页",
   "Mark up": "标注",
   "Edit content": "编辑内容",
   "Fill & sign": "填写和签名",
