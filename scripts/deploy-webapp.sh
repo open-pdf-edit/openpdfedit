@@ -81,7 +81,17 @@ log "Checking what is actually live"
 # Fetched, not assumed. The cache name is a digest of the build, so this
 # is the one check that proves the deploy landed rather than that rsync
 # exited zero.
-LIVE="$(curl -fsS --max-time 20 https://app.openpdfedit.com/service-worker.js |
+# Both derived, never typed twice. app.openpdfedit.com was hardcoded here
+# and kept answering nothing long after the app moved to the apex under
+# /app — so this step reported a broken deploy on two consecutive good
+# ones. A check that cries wolf is worse than no check: the third time it
+# is right, nobody looks.
+ORIGIN="$(grep -o 'WEBAPP_ORIGIN = "[^"]*"' apps/desktop/src/lib/openapps.ts | cut -d'"' -f2)"
+BASE="$(grep -o 'BASE_PATH=[^ ]*' apps/webapp/scripts/build.sh | head -1 | cut -d= -f2)"
+[ -n "$ORIGIN" ] || { echo "  could not read WEBAPP_ORIGIN from openapps.ts" >&2; exit 1; }
+SW_URL="${ORIGIN}${BASE}/service-worker.js"
+echo "  asking $SW_URL"
+LIVE="$(curl -fsS --max-time 20 "$SW_URL" |
   grep -o 'openpdfedit-[0-9a-f]*' | head -1 || true)"
 if [ "$LIVE" = "$BUILD_ID" ]; then
   echo "  live: $LIVE ✓"
