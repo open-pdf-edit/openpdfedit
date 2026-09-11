@@ -5,6 +5,7 @@
 // overall shape and PLAN.md for the wasm/extension counterpart (Task 8).
 
 import { invoke } from "@tauri-apps/api/core";
+import { t } from "$lib/i18n/index.svelte";
 import { open, save } from "@tauri-apps/plugin-dialog";
 import { listen } from "@tauri-apps/api/event";
 import { TILE_ORIGIN } from "./tileOrigin";
@@ -311,7 +312,7 @@ export const tauriBackend: Backend = {
     } else {
       outputPath = await save({
         defaultPath: fileName,
-        filters: [{ name: "Plain text", extensions: ["txt"] }],
+        filters: [{ name: t("Plain text"), extensions: ["txt"] }],
       });
     }
     if (!outputPath) return { path: null, characters: 0 };
