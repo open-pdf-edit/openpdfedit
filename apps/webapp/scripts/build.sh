@@ -132,9 +132,16 @@ cp "$WEBAPP_DIR/manifest.webmanifest" "$DIST_DIR/manifest.webmanifest"
 # page, however many addresses reach it.
 log "Writing robots.txt and sitemap.xml for the app host"
 cat > "$DIST_DIR/robots.txt" <<'ROBOTS'
-# app.openpdfedit.com is the editor itself. It is one page — every path
-# here serves it — so there is one URL worth indexing and a canonical on
-# the page pointing at it.
+# The editor itself. It is one page — every path under /app/ serves it —
+# so there is one URL worth indexing and a canonical on the page naming
+# it.
+#
+# Note this file is served at /app/robots.txt, where no crawler reads it:
+# robots.txt is only honoured at an origin's root, and that one belongs
+# to the marketing site. It is kept because the rules below are still the
+# right answer if this build is ever served from a host of its own again,
+# and because a sitemap naming a redirect is the same defect as a
+# canonical naming one.
 User-agent: *
 Allow: /$
 Allow: /index.html
@@ -145,13 +152,13 @@ Disallow: /app/
 Disallow: /wasm-gen/
 Disallow: /tesseract/
 
-Sitemap: https://app.openpdfedit.com/sitemap.xml
+Sitemap: https://openpdfedit.com/app/sitemap.xml
 ROBOTS
 cat > "$DIST_DIR/sitemap.xml" <<SITEMAP
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
-    <loc>https://app.openpdfedit.com/</loc>
+    <loc>https://openpdfedit.com/app/</loc>
     <lastmod>$(date -u +%Y-%m-%d)</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
@@ -210,7 +217,10 @@ const inject = [
   // thin page gets indexed under unlimited addresses, all competing
   // with each other and with the marketing site. A self-canonical
   // collapses them back into one.
-  '<link rel="canonical" href="https://app.openpdfedit.com/">',
+  // The apex under /app, not app.openpdfedit.com: that host 301s here,
+  // and a canonical pointing at a redirect is a mixed signal the search
+  // engine resolves by picking a URL itself.
+  '<link rel="canonical" href="https://openpdfedit.com/app/">',
   // The app is the tool; openpdfedit.com is what should rank for
   // someone still deciding. Indexed so the app can be found and cited
   // directly, with a description of its own rather than whatever a

@@ -68,12 +68,22 @@ done
 perl -pi -e 's/MARKETING_VERSION = [^;]*;/MARKETING_VERSION = '"$VERSION"';/' "$IOS_PROJECT"
 printf '%-46s %s\n' "$IOS_PROJECT" "$(ios_current)"
 
-# The marketing site carries the version a sixth time, in the JSON-LD
-# that answer engines read. That block is generated rather than edited,
-# and its generator already reads apps/desktop/package.json — but the
-# generated copy on disk is what ships, and site-seo.spec.ts fails when
-# the two disagree. Leaving that regeneration to whoever bumps next is
-# how this script would come to cause the drift it exists to prevent.
-python3 site/scripts/build-jsonld.py
-printf '%-46s %s\n' "site/index.html" \
-  "$(sed -n 's/.*"softwareVersion": "\([^"]*\)".*/\1/p' site/index.html | head -1)"
+# The marketing site carries the version twice more — in the JSON-LD that
+# answer engines read, and in the footer. It is a separate repository
+# since 11 September 2026, so this reaches across to it when it is
+# checked out beside this one, and says so plainly when it is not.
+# Leaving that to whoever bumps next is how this script would come to
+# cause the drift it exists to prevent.
+SITE="$(cd "$(dirname "$0")/../../openpdfedit-website" 2>/dev/null && pwd || true)"
+if [ -n "$SITE" ] && [ -f "$SITE/index.html" ]; then
+  perl -pi -e 's{<span class="mono">v[0-9.]+</span>}{<span class="mono">v'"$VERSION"'</span>}' \
+    "$SITE/index.html" "$SITE/privacy.html"
+  python3 "$SITE/scripts/build-jsonld.py"
+  printf '%-46s %s\n' "openpdfedit-website/index.html" \
+    "$(sed -n 's/.*"softwareVersion": "\([^"]*\)".*/\1/p' "$SITE/index.html" | head -1)"
+else
+  echo
+  echo "  NOTE: openpdfedit-website is not checked out beside this repo, so the" >&2
+  echo "        site still shows the old version. Bump it there and redeploy:" >&2
+  echo "          openpdfedit-website/deploy.sh" >&2
+fi
