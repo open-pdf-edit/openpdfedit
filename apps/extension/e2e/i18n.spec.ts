@@ -75,3 +75,32 @@ test("no translation was left as its English source", () => {
     expect(untranslated, `${file} left these in English: ${untranslated.slice(0, 5)}`).toEqual([]);
   }
 });
+
+test("every label in the tool table has a translation behind it", () => {
+  // The category headers shipped untranslated — MARK UP, EDIT CONTENT and
+  // FILL & SIGN sat in English above Chinese tool names. The rail already
+  // called t() on them, so nothing was miswired; the strings had simply
+  // never been extracted into the catalogues, and t() fell back to English
+  // exactly as designed.
+  //
+  // What made it invisible to the three checks above is that they compare
+  // the catalogues against *each other*. All seven agreed perfectly — they
+  // were all missing the same three strings. Agreement is not coverage.
+  // This reads the source of truth instead: every user-visible label in
+  // the tool table must be a key somebody can translate.
+  //
+  // "Select" and "Draw" were translated only because they happen to be
+  // tool names as well as category names. That coincidence is why the gap
+  // looked like a partial translation rather than a missing one.
+  const src = readFileSync(
+    join(import.meta.dirname, "..", "..", "desktop", "src", "lib", "tools.ts"),
+    "utf8",
+  );
+  const labels = [...src.matchAll(/\b(?:name|label|hint): "([^"]+)"/g)].map((m) => m[1]);
+  expect(labels.length, "the tool table should not be empty").toBeGreaterThan(15);
+
+  const translatable = keysOf("zh-Hans.ts");
+  const untranslatable = labels.filter((l) => !translatable.has(l));
+  expect(untranslatable, "every tool and category label needs a catalogue entry").toEqual([]);
+});
+

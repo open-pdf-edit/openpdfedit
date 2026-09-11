@@ -46,6 +46,10 @@ const zhHans: Record<string, string> = {
 
   // Tools
   "Select": "选择",
+  "Mark up": "标注",
+  "Edit content": "编辑内容",
+  "Fill & sign": "填写和签名",
+  "Plain text": "纯文本",
   "Erase": "擦除",
   "Highlight": "高亮",
   "Underline": "下划线",
