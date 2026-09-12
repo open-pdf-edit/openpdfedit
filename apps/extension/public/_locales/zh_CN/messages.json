@@ -1,0 +1,8 @@
+{
+  "name": {
+    "message": "PDF编辑器、阅读器、OCR文字识别、水印、电子签名工具 - OpenPdfEdit"
+  },
+  "description": {
+    "message": "在浏览器内编辑、阅读、合并、拆分PDF并进行OCR文字识别。支持加水印、填写表单、电子签名、压缩、涂黑等功能。"
+  }
+}

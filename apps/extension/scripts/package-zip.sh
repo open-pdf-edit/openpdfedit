@@ -26,22 +26,22 @@ if [ ! -f "$DIST_DIR/manifest.json" ]; then
   exit 1
 fi
 
-# Both stores cap the manifest description at 132 characters, and
-# neither Chrome nor anything local enforces it: the extension loads
-# unpacked, the build succeeds, and the first thing to measure it is the
-# dashboard, after the upload. A v0.1.7 upload was rejected exactly this
-# way. e2e/manifest.spec.ts covers it too, but nothing makes a person
-# run the suite before uploading, and this is the step that produces the
-# thing they upload.
-DESCRIPTION_LIMIT=132
-description_length="$(
-  python3 -c 'import json,sys; print(len(json.load(open(sys.argv[1]))["description"]))' \
-    "$DIST_DIR/manifest.json" 2>/dev/null || echo 0
-)"
-if [ "$description_length" -gt "$DESCRIPTION_LIMIT" ]; then
-  echo "package-zip.sh: manifest description is $description_length characters;" >&2
-  echo "  stores reject anything over $DESCRIPTION_LIMIT. Shorten it in public/manifest.json" >&2
-  echo "  (and in STORE.md, which has to match)." >&2
+# Both stores cap the listing name at 75 characters and the description at
+# 132, and neither Chrome nor anything local enforces either: the extension
+# loads unpacked, the build succeeds, and the first thing to measure them is
+# the dashboard, after the upload. A v0.1.7 upload was rejected exactly this
+# way.
+#
+# Since the manifest was localised these strings are no longer *in* the
+# manifest -- name and description are now "__MSG_name__" and
+# "__MSG_description__", nineteen characters that fit any limit and say
+# nothing. The text a store actually measures lives in _locales/<code>/
+# messages.json, nineteen times over, and a single overlong translation
+# rejects the whole submission. So measure every catalogue, and measure the
+# ones in dist/ -- the artifact about to be zipped -- rather than the source
+# they were built from.
+if ! node "$SCRIPT_DIR/check-locales.mjs" "$DIST_DIR"; then
+  echo "package-zip.sh: listing catalogues failed their checks (see above); not packaging" >&2
   exit 1
 fi
 
