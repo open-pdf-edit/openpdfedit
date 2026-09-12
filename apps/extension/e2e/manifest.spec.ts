@@ -12,7 +12,7 @@
 // So the cost of getting this wrong is a round trip through a
 // dashboard, which is exactly the kind of feedback worth pulling back
 // into the test suite.
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { expect, test } from "./fixtures";
@@ -31,16 +31,56 @@ function manifest(): Manifest {
   ) as Manifest;
 }
 
-/** Chrome's limit, which Edge enforces at upload and Chrome does not
- * enforce at load — so a manifest can be over it for months. */
-const DESCRIPTION_LIMIT = 132;
+const LOCALES = join(EXTENSION, "public", "_locales");
 
-test("the manifest description fits what a store will accept", () => {
-  const { description } = manifest();
-  expect(
-    description.length,
-    `manifest description is ${description.length} characters; stores cap it at ${DESCRIPTION_LIMIT}`,
-  ).toBeLessThanOrEqual(DESCRIPTION_LIMIT);
+interface Catalogue {
+  name: { message: string };
+  description: { message: string };
+}
+
+function catalogue(locale: string): Catalogue {
+  return JSON.parse(
+    readFileSync(join(LOCALES, locale, "messages.json"), "utf8"),
+  ) as Catalogue;
+}
+
+function locales(): string[] {
+  return readdirSync(LOCALES).filter((d) => !d.startsWith("."));
+}
+
+/** Chrome's limits, which Edge enforces at upload and Chrome does not
+ * enforce at load — so a listing can be over them for months. */
+const DESCRIPTION_LIMIT = 132;
+const NAME_LIMIT = 75;
+
+// The manifest no longer carries either string. Both are message keys now,
+// and the text a store measures is in nineteen catalogues — where one
+// overlong translation rejects the submission just as surely as an overlong
+// English one did, and is nineteen times easier to miss. Measuring
+// manifest.description here would measure "__MSG_description__", which is
+// nineteen characters and always passes.
+test("every listing name fits what a store will accept", () => {
+  const over = locales()
+    .map((l) => ({ l, n: catalogue(l).name.message.length }))
+    .filter(({ n }) => n > NAME_LIMIT);
+  expect(over, `stores cap the listing name at ${NAME_LIMIT} characters`).toEqual([]);
+});
+
+test("every listing description fits what a store will accept", () => {
+  const over = locales()
+    .map((l) => ({ l, n: catalogue(l).description.message.length }))
+    .filter(({ n }) => n > DESCRIPTION_LIMIT);
+  expect(over, `stores cap the description at ${DESCRIPTION_LIMIT} characters`).toEqual([]);
+});
+
+test("the manifest points at the catalogues", () => {
+  const m = manifest() as Manifest & { default_locale?: string };
+  // Message keys without default_locale are a hard load error; default_locale
+  // without a folder of that name is the same. Neither shows up in a build.
+  expect(m.name).toBe("__MSG_name__");
+  expect(m.description).toBe("__MSG_description__");
+  expect(m.default_locale, "default_locale is what resolves the keys").toBe("en");
+  expect(locales()).toContain("en");
 });
 
 test("the version is a number a store will take", () => {
@@ -77,5 +117,7 @@ test("the store listing and the manifest describe the same product", () => {
     declared.length,
     "STORE.md's short description is over the store's limit too",
   ).toBeLessThanOrEqual(DESCRIPTION_LIMIT);
-  expect(manifest().description).toBe(declared);
+  // English is the one a reviewer reads beside STORE.md, and _locales/en is
+  // now where the shipped copy of it lives.
+  expect(catalogue("en").description.message).toBe(declared);
 });

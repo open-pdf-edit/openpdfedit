@@ -34,7 +34,7 @@ reachable from `app.openpdfedit.com` for that hand-back, declared as
 ### Short description (≤132 characters — both stores' own limit)
 
 ```
-Edit, merge, compare, sign, and redact PDFs right in your browser. Your documents never leave your machine.
+Edit, read, merge, redact and OCR PDFs entirely in your browser. Add watermarks, fill forms, sign, compress and more.
 ```
 
 (101 characters.)
