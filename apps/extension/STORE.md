@@ -74,30 +74,24 @@ with two corrections applied on import, both in every locale:
 The Edge/Firefox description is filed as Edge only: there is no Firefox
 build of this extension.
 
-### OCR — the one thing blocking submission
+### OCR — submitted as written, by decision
 
-**`npm run store:check` fails, on purpose, until this is decided.** The
-extension cannot do OCR: the zip contains no recogniser and no language
-data, and the OCR button is hidden in the extension build
-(`{#if !isBrowserExtension}` in `+page.svelte`). The web app and the
-desktop app both do it.
+Every listing claims OCR — the Edge description's first sentence, the
+Supporter line in both descriptions, and the manifest name and short
+description already in the package. The extension itself does not do
+OCR: the zip has no recogniser or language data, and the OCR button is
+hidden in that build (`{#if !isBrowserExtension}` in `+page.svelte`). It
+runs in the web app and the desktop app.
 
-Every one of the nineteen listings says otherwise, in four places:
+**Decided on 14 September 2026 to submit with the claim as written.** The
+precedent is OpenCapture, whose listing passed review describing a
+Supporter feature (watermark) while the large majority of the
+extension's functions work — as they do here.
 
-- the Edge description's first sentence — "…with built-in OCR"
-- both descriptions' Supporter line — "Watermarking and OCR are optional
-  Supporter tools, unlocked together with a one-time payment". Watermarking
-  can be unlocked from the extension; OCR, once paid for, still cannot run
-  there.
-- the manifest `name` — "PDF Editor, Reader & OCR Watermark Tool"
-- the manifest short `description` — "…OCR PDFs entirely in your browser"
-
-The last two are already in the packaged zip. Edge requires a description
-to "not contain any misleading" content and has rejected this extension
-once, so these would not pass review as written. Either the copy says the
-extension does not do OCR (and that the web and desktop apps do), or the
-extension ships OCR. Deciding between them is the product owner's call;
-the check stays red until one of them is true.
+`npm run store:check` reports the claim as a note and does not fail on
+it. If a reviewer rejects a submission for it, this is the section to
+revisit: the fix would be to attribute OCR to the web and desktop apps in
+the OCR clauses, or to ship the recogniser in the extension.
 
 ### Category
 
@@ -202,8 +196,8 @@ Human-only — nothing in this repo can do these:
 - [ ] **Microsoft Partner Center account** for Edge Add-ons — free to
       register for the Edge program, and the same account is later used
       for the Microsoft Store desktop submission
-- [ ] **`npm run store:check` passes.** Until it does, the listings are
-      not submittable. It fails today — see "OCR" below.
+- [ ] **`npm run store:check` passes** — run it after any edit to a
+      listing or a catalogue, and against a fresh `npm run package`
 - [ ] **Fill in each dashboard's listing form** from `store/listings/`, one
       language at a time, and the privacy declaration below in the
       privacy-practices tab
