@@ -1,0 +1,22 @@
+OpenPdfEdit, tamamen cihazınızda çalışan gizlilik odaklı bir PDF düzenleyici ve okuyucudur - PDFium ve WebAssembly'ye derlenmiş Rust ile çalışır, dosyalarınız tarayıcınızdan asla çıkmaz.
+
+ÖZELLİKLER
+
+• PDF'leri okuyun ve not ekleyin
+• Metni düzenleyin ve taşıyın
+• Görselleri yeniden konumlandırın
+• Form doldurun ve imza ekleyin
+• Hassas içerikleri kalıcı olarak karartın
+• Sayfaları birleştirin, bölün ve yeniden sıralayın
+• PDF'leri parola ile koruyun ve sıkıştırın
+• Belgeleri karşılaştırın
+• Markdown veya düz metin olarak dışa aktarın
+• Değişiklikleri geri alın ve yineleyin
+
+Tüm temel özellikler ücretsizdir ve hesap gerektirmez. Filigran ve OCR, tek seferlik ödemeyle birlikte açılan isteğe bağlı Supporter araçlarıdır - abonelik, süre veya kullanım sınırı yoktur.
+
+Chrome 103 veya daha yenisini, ya da Chromium tabanlı başka güncel bir tarayıcıyı gerektirir.
+
+Windows ve macOS için masaüstü sürümleri mevcuttur.
+
+GitHub: https://github.com/open-pdf-edit/OpenPdfEdit/

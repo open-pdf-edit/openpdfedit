@@ -1,0 +1,22 @@
+OpenPdfEdit是一款注重隐私的PDF编辑器与阅读器，所有处理都在您的设备本地完成——基于PDFium和编译为WebAssembly的Rust构建，文件绝不会离开浏览器。
+
+主要功能
+
+• 阅读并批注PDF
+• 编辑并移动文字
+• 调整图片位置
+• 填写表单并添加签名
+• 永久涂黑敏感内容
+• 合并、拆分并重新排列页面
+• 为PDF加密并压缩
+• 比较文档
+• 导出为Markdown或纯文本
+• 撤销与重做修改
+
+所有核心功能均免费，无需注册账号。水印与OCR文字识别为可选的Supporter付费功能，一次性付费即可解锁——不订阅、不限时、不限次数使用。
+
+需要Chrome 103及以上版本，或其他基于Chromium的现代浏览器。
+
+提供Windows和macOS桌面版本。
+
+GitHub: https://github.com/open-pdf-edit/OpenPdfEdit/

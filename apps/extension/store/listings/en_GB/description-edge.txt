@@ -1,0 +1,22 @@
+Turn your browser into a private PDF editor, reader and OCR tool. Organise, edit and sign PDF files locally, with a built-in text editor and search tools - no files ever leave your device.
+
+FEATURES
+
+• Read and annotate PDFs
+• Edit and move text
+• Reposition images
+• Fill in forms and add signatures
+• Permanently redact sensitive content
+• Merge, split and reorder pages
+• Password-protect and compress PDFs
+• Compare documents
+• Export to Markdown or plain text
+• Undo and redo edits
+
+All core features are free and require no account. Watermarking and OCR are optional Supporter tools, unlocked together with a one-time payment - no subscription, time limits or usage caps.
+
+Requires Edge 103 or newer, or another modern Chromium-based browser.
+
+Desktop versions are available for Windows and macOS.
+
+GitHub: https://github.com/open-pdf-edit/OpenPdfEdit/

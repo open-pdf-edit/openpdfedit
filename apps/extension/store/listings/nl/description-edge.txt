@@ -1,0 +1,22 @@
+Maak van je browser een lokale PDF-editor, PDF-lezer en OCR-tool - lees, bewerk en organiseer je PDF-bestanden zonder ze naar een server te uploaden.
+
+FUNCTIES
+
+• PDF's lezen en annoteren
+• Tekst bewerken en verplaatsen
+• Afbeeldingen verplaatsen
+• Formulieren invullen en handtekeningen toevoegen
+• Gevoelige inhoud permanent onleesbaar maken
+• Pagina's samenvoegen, splitsen en herschikken
+• PDF's beveiligen met wachtwoord en comprimeren
+• Documenten vergelijken
+• Exporteren naar Markdown of platte tekst
+• Wijzigingen ongedaan maken en opnieuw uitvoeren
+
+Alle kernfuncties zijn gratis en vereisen geen account. Watermerk en OCR zijn optionele Supporter-tools, samen ontgrendeld met een eenmalige betaling - geen abonnement, tijdslimiet of gebruikslimiet.
+
+Vereist Edge 103 of nieuwer, of een andere actuele browser op basis van Chromium.
+
+Desktopversies zijn beschikbaar voor Windows en macOS.
+
+GitHub: https://github.com/open-pdf-edit/OpenPdfEdit/

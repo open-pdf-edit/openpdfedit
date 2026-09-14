@@ -1,0 +1,22 @@
+Gör din webbläsare till en lokal PDF-redigerare, PDF-läsare och OCR-verktyg - läs, redigera och organisera dina PDF-filer utan att ladda upp dem till någon server.
+
+FUNKTIONER
+
+• Läs och kommentera PDF-filer
+• Redigera och flytta text
+• Flytta bilder
+• Fyll i formulär och lägg till signaturer
+• Dölj känsligt innehåll permanent
+• Slå ihop, dela och ordna om sidor
+• Lösenordsskydda och komprimera PDF-filer
+• Jämför dokument
+• Exportera till Markdown eller vanlig text
+• Ångra och gör om ändringar
+
+Alla kärnfunktioner är gratis och kräver inget konto. Vattenstämpel och OCR är valfria Supporter-verktyg som låses upp med en engångsbetalning - ingen prenumeration, tidsgräns eller användningsgräns.
+
+Kräver Edge 103 eller senare, eller en annan modern webbläsare baserad på Chromium.
+
+Skrivbordsversioner finns för Windows och macOS.
+
+GitHub: https://github.com/open-pdf-edit/OpenPdfEdit/

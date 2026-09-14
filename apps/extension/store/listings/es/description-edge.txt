@@ -1,0 +1,22 @@
+Convierte tu navegador en un editor de PDF, lector de PDF y herramienta de OCR local - lee, edita y organiza tus archivos PDF sin subirlos a ningún servidor.
+
+FUNCIONES
+
+• Leer y anotar PDF
+• Editar y mover texto
+• Reposicionar imágenes
+• Rellenar formularios y añadir firmas
+• Tachar contenido sensible de forma permanente
+• Fusionar, dividir y reordenar páginas
+• Proteger con contraseña y comprimir PDF
+• Comparar documentos
+• Exportar a Markdown o texto plano
+• Deshacer y rehacer cambios
+
+Todas las funciones principales son gratuitas y no requieren cuenta. La marca de agua y el OCR son herramientas Supporter opcionales, que se desbloquean con un pago único - sin suscripción, límites de tiempo ni de uso.
+
+Requiere Edge 103 o posterior, u otro navegador actual basado en Chromium.
+
+Hay versiones de escritorio disponibles para Windows y macOS.
+
+GitHub: https://github.com/open-pdf-edit/OpenPdfEdit/
