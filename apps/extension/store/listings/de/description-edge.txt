@@ -1,0 +1,22 @@
+OpenPdfEdit ist ein lokaler PDF-Editor, PDF-Reader und Texteditor mit integrierter OCR-Texterkennung - PDF-Dateien lesen, bearbeiten und organisieren, ohne sie hochzuladen.
+
+FUNKTIONEN
+
+• PDFs lesen und kommentieren
+• Text bearbeiten und verschieben
+• Bilder verschieben
+• Formulare ausfüllen und Signaturen hinzufügen
+• Sensible Inhalte dauerhaft schwärzen
+• Seiten zusammenführen, aufteilen und neu anordnen
+• PDFs mit Passwort schützen und komprimieren
+• Dokumente vergleichen
+• Export als Markdown oder Reintext
+• Änderungen rückgängig machen und wiederholen
+
+Alle Kernfunktionen sind kostenlos und erfordern kein Konto. Wasserzeichen und OCR sind optionale Supporter-Funktionen, die zusammen mit einer einmaligen Zahlung freigeschaltet werden - kein Abo, keine Zeitbegrenzung, keine Nutzungsgrenzen.
+
+Erfordert Edge 103 oder neuer, oder einen anderen aktuellen Chromium-basierten Browser.
+
+Desktop-Versionen sind für Windows und macOS verfügbar.
+
+GitHub: https://github.com/open-pdf-edit/OpenPdfEdit/

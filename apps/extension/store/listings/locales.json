@@ -1,0 +1,97 @@
+{
+  "ar": {
+    "catalogue": "public/_locales/ar",
+    "chromeWebStore": "ar",
+    "edgeAddons": "Arabic"
+  },
+  "ca": {
+    "catalogue": "public/_locales/ca",
+    "chromeWebStore": "ca",
+    "edgeAddons": "Catalan"
+  },
+  "de": {
+    "catalogue": "public/_locales/de",
+    "chromeWebStore": "de",
+    "edgeAddons": "German"
+  },
+  "en": {
+    "catalogue": "public/_locales/en",
+    "chromeWebStore": "en",
+    "edgeAddons": "English"
+  },
+  "en_GB": {
+    "catalogue": "public/_locales/en_GB",
+    "chromeWebStore": "en_GB",
+    "edgeAddons": "English (United Kingdom)"
+  },
+  "es": {
+    "catalogue": "public/_locales/es",
+    "chromeWebStore": "es",
+    "edgeAddons": "Spanish"
+  },
+  "fr": {
+    "catalogue": "public/_locales/fr",
+    "chromeWebStore": "fr",
+    "edgeAddons": "French"
+  },
+  "it": {
+    "catalogue": "public/_locales/it",
+    "chromeWebStore": "it",
+    "edgeAddons": "Italian"
+  },
+  "ja": {
+    "catalogue": "public/_locales/ja",
+    "chromeWebStore": "ja",
+    "edgeAddons": "Japanese"
+  },
+  "ko": {
+    "catalogue": "public/_locales/ko",
+    "chromeWebStore": "ko",
+    "edgeAddons": "Korean"
+  },
+  "nl": {
+    "catalogue": "public/_locales/nl",
+    "chromeWebStore": "nl",
+    "edgeAddons": "Dutch"
+  },
+  "pl": {
+    "catalogue": "public/_locales/pl",
+    "chromeWebStore": "pl",
+    "edgeAddons": "Polish"
+  },
+  "pt": {
+    "catalogue": "public/_locales/pt",
+    "chromeWebStore": "pt_BR",
+    "edgeAddons": "Portuguese (Brazil)"
+  },
+  "ru": {
+    "catalogue": "public/_locales/ru",
+    "chromeWebStore": "ru",
+    "edgeAddons": "Russian"
+  },
+  "sv": {
+    "catalogue": "public/_locales/sv",
+    "chromeWebStore": "sv",
+    "edgeAddons": "Swedish"
+  },
+  "tr": {
+    "catalogue": "public/_locales/tr",
+    "chromeWebStore": "tr",
+    "edgeAddons": "Turkish"
+  },
+  "uk": {
+    "catalogue": "public/_locales/uk",
+    "chromeWebStore": "uk",
+    "edgeAddons": "Ukrainian"
+  },
+  "zh_CN": {
+    "catalogue": "public/_locales/zh_CN",
+    "chromeWebStore": "zh_CN",
+    "edgeAddons": "Chinese (Simplified)"
+  },
+  "zh_TW": {
+    "catalogue": "public/_locales/zh_TW",
+    "chromeWebStore": "zh_TW",
+    "edgeAddons": "Chinese (Traditional)"
+  }
+}

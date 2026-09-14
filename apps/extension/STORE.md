@@ -26,7 +26,7 @@ web app resolves against its own origin and `chrome-extension://` cannot
 resolve at all. Sign-in now opens the web app's login page at its real
 origin and the finished session is handed back to the extension. Worth
 knowing when writing the privacy declaration below: the extension is
-reachable from `app.openpdfedit.com` for that hand-back, declared as
+reachable from `openpdfedit.com` for that hand-back, declared as
 `externally_connectable` — a manifest key, not a permission.
 
 ## Listing copy
@@ -39,56 +39,65 @@ Edit, read, merge, redact and OCR PDFs entirely in your browser. Add watermarks,
 
 (101 characters.)
 
-### Long description
+### Long description and search terms — nineteen languages
 
-```
-OpenPdfEdit is a full PDF editor that runs entirely inside your browser
-tab. There is no server: every PDF you open is processed by an
-in-browser WASM engine (PDFium + OpenPdfEdit's own Rust crates, compiled
-to WebAssembly) and never leaves your machine.
+In [`store/listings/`](store/listings/), one folder per catalogue in
+`public/_locales/`:
 
-What you can do:
-- View and annotate — highlight, underline, strikeout, freehand ink,
-  sticky-note comments
-- Edit text runs and move images directly on the page
-- Fill and create form fields
-- Draw and place signatures
-- Organize pages — rotate, delete, reorder, crop, extract a page range
-  into a new document
-- Redact — permanently remove sensitive content, not just paint over it
-- Merge multiple PDFs into one
-- Compare two PDFs — see both text and rendered-pixel differences
-- Undo/redo across your whole editing session
+| File | Pastes into |
+|---|---|
+| `description-chrome.txt` | Chrome Web Store → Store listing → Description, for that language |
+| `description-edge.txt` | Edge Partner Center → Store listings → Details for that language → Description |
+| `search-terms-edge.txt` | the same Edge page → Search terms, one term per line |
 
-Free, with one exception:
-- Everything in the list above is free and needs no account. Watermarking
-  is a Supporter tool: it needs a signed-in account and a one-time
-  unlock. Nothing else asks you to sign in, and nothing is time-limited,
-  watermarked, or capped.
+[`store/listings/locales.json`](store/listings/locales.json) maps each folder to
+the code or label each store's language picker uses. One of them differs:
+the package's `pt` catalogue is Brazilian Portuguese, and the Chrome Web
+Store lists only `pt_BR` and `pt_PT`, so that listing goes under `pt_BR`.
 
-One thing this extension does not do: OCR. Making a scanned PDF
-searchable needs Tesseract's engine and language data — about 70 MB —
-and packaging that into an extension is the wrong trade. OCR is
-available in the web app at app.openpdfedit.com and in the desktop app,
-both of which do it locally too.
+Neither store takes these through an API — they reach a store only by
+being pasted into a form — so **run `npm run store:check` before pasting
+any of them**. It checks coverage against the catalogues, Edge's
+documented limits (description 250–10,000 characters; at most seven
+search terms, 30 characters each, 21 words in total), and every claim
+against the packaged zip rather than the source.
 
-Privacy, by construction, not by policy:
-- 100% local PDF processing — your document is never uploaded anywhere,
-  opened and edited entirely by an in-browser WASM engine
-- An optional account panel (for credits/purchases, not editing) talks to
-  OpenApps' own account server only if and when you choose to sign in —
-  see the privacy declaration below for exactly what that does and
-  doesn't send
-- No analytics, no tracking, no telemetry — nothing about your usage is
-  ever collected
-- No remote code — everything the extension runs shipped inside the
-  extension package you installed; it does not fetch or `eval` code
-  from anywhere at runtime (this is also enforced by its Content-Security-
-  Policy, not just a claim: `script-src 'self' 'wasm-unsafe-eval'`)
+The copy is the translation team's (received as `overviews/*-242.txt`),
+with two corrections applied on import, both in every locale:
 
-Everything in the feature list above is live in this extension. OCR, as
-noted, is not.
-```
+- **The first search term, "convert document to image", was dropped.** The
+  extension has no image export — Markdown and plain text only. It was also
+  the term that took ca, en, en_GB, es and fr over Edge's 21-word limit.
+- **The Chrome description said "Requires Edge 103".** Now "Chrome 103".
+  "Edge" appeared exactly once per locale, as the browser name.
+
+The Edge/Firefox description is filed as Edge only: there is no Firefox
+build of this extension.
+
+### OCR — the one thing blocking submission
+
+**`npm run store:check` fails, on purpose, until this is decided.** The
+extension cannot do OCR: the zip contains no recogniser and no language
+data, and the OCR button is hidden in the extension build
+(`{#if !isBrowserExtension}` in `+page.svelte`). The web app and the
+desktop app both do it.
+
+Every one of the nineteen listings says otherwise, in four places:
+
+- the Edge description's first sentence — "…with built-in OCR"
+- both descriptions' Supporter line — "Watermarking and OCR are optional
+  Supporter tools, unlocked together with a one-time payment". Watermarking
+  can be unlocked from the extension; OCR, once paid for, still cannot run
+  there.
+- the manifest `name` — "PDF Editor, Reader & OCR Watermark Tool"
+- the manifest short `description` — "…OCR PDFs entirely in your browser"
+
+The last two are already in the packaged zip. Edge requires a description
+to "not contain any misleading" content and has rejected this extension
+once, so these would not pass review as written. Either the copy says the
+extension does not do OCR (and that the web and desktop apps do), or the
+extension ships OCR. Deciding between them is the product owner's call;
+the check stays red until one of them is true.
 
 ### Category
 
@@ -130,17 +139,17 @@ surface, even though the PDF editor itself is not.
   SDK client at app startup (`configure({ baseUrl: OPENAPPS_BASE_URL })`
   in `+layout.svelte`) only constructs a local client object and reads a
   local token store — it does not itself make a network request either
-  (confirmed by reading `OpenApps`'s constructor in the SDK). **If and
+  (confirmed by reading the SDK client's constructor). **If and
   only if you choose to sign in**, that panel communicates with exactly
   two hosts, both named in `apps/desktop/src/lib/openapps.ts`:
   `auth.openpdfedit.com` for the session, credit balance and the
-  Supporter entitlement check, and `gateway.openapps.network` for the
+  Supporter entitlement check, and `gateway.openpdfedit.com` for the
   one route that can actually spend credits — the Supporter unlock. No
   document content or metadata is ever
   sent to either — the PDF engine and the account client are two unconnected
   code paths that never pass document data to each other.
 - **Signing in happens on the web app, not in the extension.** Choosing
-  Sign in opens `https://app.openpdfedit.com/login` in a tab. The whole
+  Sign in opens `https://openpdfedit.com/app/login` in a tab. The whole
   sign-in exchange happens there, on that origin; when it finishes, that
   page hands the resulting session back to this extension and nothing
   else. The manifest's `externally_connectable` entry names that one
@@ -193,8 +202,11 @@ Human-only — nothing in this repo can do these:
 - [ ] **Microsoft Partner Center account** for Edge Add-ons — free to
       register for the Edge program, and the same account is later used
       for the Microsoft Store desktop submission
-- [ ] **Fill in each dashboard's listing form** with the copy above, and
-      the privacy declaration below in the privacy-practices tab
+- [ ] **`npm run store:check` passes.** Until it does, the listings are
+      not submittable. It fails today — see "OCR" below.
+- [ ] **Fill in each dashboard's listing form** from `store/listings/`, one
+      language at a time, and the privacy declaration below in the
+      privacy-practices tab
 - [ ] **Upload `openpdfedit-dist.zip`** and submit
 
 After the first submission of each, releases are automated: see

@@ -1,0 +1,22 @@
+OpenPdfEdit to edytor i czytnik PDF nastawiony na prywatność, który działa całkowicie na Twoim urządzeniu - oparty na PDFium i Ruście skompilowanym do WebAssembly, Twoje pliki nigdy nie opuszczają przeglądarki.
+
+FUNKCJE
+
+• Czytaj i komentuj pliki PDF
+• Edytuj i przesuwaj tekst
+• Przesuwaj obrazy
+• Wypełniaj formularze i dodawaj podpisy
+• Trwale zaczerniaj poufne treści
+• Scalaj, dziel i zmieniaj kolejność stron
+• Zabezpieczaj hasłem i kompresuj pliki PDF
+• Porównuj dokumenty
+• Eksportuj do Markdown lub zwykłego tekstu
+• Cofaj i ponawiaj zmiany
+
+Wszystkie podstawowe funkcje są darmowe i nie wymagają konta. Znak wodny i OCR to opcjonalne narzędzia Supporter, odblokowywane jednorazową płatnością - bez subskrypcji, limitów czasu ani użycia.
+
+Wymaga przeglądarki Chrome 103 lub nowszej, lub innej aktualnej przeglądarki opartej na Chromium.
+
+Dostępne są wersje na komputery z Windows i macOS.
+
+GitHub: https://github.com/open-pdf-edit/OpenPdfEdit/

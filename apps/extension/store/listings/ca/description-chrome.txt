@@ -1,0 +1,22 @@
+OpenPdfEdit és un editor i lector de PDF centrat en la privadesa que funciona totalment al teu dispositiu - impulsat per PDFium i Rust compilat a WebAssembly, els teus fitxers mai surten del navegador.
+
+FUNCIONS
+
+• Llegir i anotar PDF
+• Editar i moure text
+• Reposicionar imatges
+• Emplenar formularis i afegir signatures
+• Ocultar de forma permanent el contingut sensible
+• Fusionar, dividir i reordenar pàgines
+• Protegir amb contrasenya i comprimir PDF
+• Comparar documents
+• Exportar a Markdown o text pla
+• Desfer i refer canvis
+
+Totes les funcions principals són gratuïtes i no requereixen compte. La marca d'aigua i l'OCR són eines Supporter opcionals, que es desbloquegen amb un pagament únic - sense subscripció, límits de temps ni d'ús.
+
+Requereix Chrome 103 o posterior, o un altre navegador actual basat en Chromium.
+
+Hi ha versions d'escriptori disponibles per a Windows i macOS.
+
+GitHub: https://github.com/open-pdf-edit/OpenPdfEdit/
