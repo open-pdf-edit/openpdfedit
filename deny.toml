@@ -62,6 +62,18 @@ allow = [
     "OpenSSL",
 ]
 
+# Scoped to the one crate, not added to `allow` above. CDLA-Permissive-2.0
+# is a *data* licence: webpki-root-certs is Mozilla's root-certificate
+# bundle, reached through Tauri's own HTTP stack (tauri -> reqwest 0.13 ->
+# rustls-platform-verifier), which the in-app updater put in the lockfile.
+# It is permissive with no copyleft, and certificate data is exactly what
+# it was written for — but allowing it project-wide would admit it for any
+# future *code* crate as well, without anyone deciding that. Revisit if the
+# chain drops the crate.
+[[licenses.exceptions]]
+crate = "webpki-root-certs"
+allow = ["CDLA-Permissive-2.0"]
+
 [licenses.private]
 ignore = false
 
