@@ -50,6 +50,7 @@
 
   let phase = $state<Phase>({ kind: "idle" });
   let open = $state(false);
+  let root: HTMLDivElement | undefined = $state();
   /** Held between the check and the install: `downloadAndInstall` has to
    * be called on the same object the check returned. */
   let pending: PendingUpdate | null = null;
@@ -121,6 +122,29 @@
     return () => clearTimeout(timer);
   });
 
+  // Close on an outside click or Escape, like the other topbar menus.
+  //
+  // APP-29, reopened: "点击更新后弹窗不能关闭" — the popup would not close.
+  // Its only exit was clicking the same icon a second time, which nobody
+  // guesses, and on a build whose update check fails that left an error
+  // and a "Try again" button stuck over the document. Closing only hides
+  // it: a download already running carries on, and the dot keeps saying so.
+  $effect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent) => {
+      if (root && !root.contains(e.target as Node)) open = false;
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") open = false;
+    };
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  });
+
   function toggle(): void {
     open = !open;
     if (open && (phase.kind === "idle" || phase.kind === "error")) void check(true);
@@ -128,7 +152,7 @@
 </script>
 
 {#if isDesktop}
-  <div class="update">
+  <div class="update" bind:this={root}>
     <button
       class="oa-icon-btn oa-icon-btn--sm"
       class:oa-icon-btn--selected={open}

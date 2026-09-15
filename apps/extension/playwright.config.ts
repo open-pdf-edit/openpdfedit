@@ -1,6 +1,6 @@
 import { defineConfig } from "@playwright/test";
 
-import { WEBAPP_PORT } from "./e2e/origin";
+import { DESKTOP_PORT, WEBAPP_PORT } from "./e2e/origin";
 
 // Two kinds of spec live here. Most drive the extension's own
 // `chrome-extension://` pages and need nothing served. Nine drive the
@@ -19,12 +19,25 @@ export default defineConfig({
   fullyParallel: false,
   workers: 1,
   reporter: [["list"]],
-  webServer: {
-    command: `python3 ../../scripts/serve-webapp.py ${WEBAPP_PORT}`,
-    url: `http://127.0.0.1:${WEBAPP_PORT}/`,
-    reuseExistingServer: false,
-    timeout: 30_000,
-    stdout: "ignore",
-    stderr: "pipe",
-  },
+  webServer: [
+    {
+      command: `python3 ../../scripts/serve-webapp.py ${WEBAPP_PORT}`,
+      url: `http://127.0.0.1:${WEBAPP_PORT}/`,
+      reuseExistingServer: false,
+      timeout: 30_000,
+      stdout: "ignore",
+      stderr: "pipe",
+    },
+    {
+      // The desktop build's UI, for the components only it renders. Same
+      // rule as above: a port of its own, never reused.
+      command: `npx vite dev --port ${DESKTOP_PORT} --strictPort --host 127.0.0.1`,
+      cwd: "../desktop",
+      url: `http://127.0.0.1:${DESKTOP_PORT}/`,
+      reuseExistingServer: false,
+      timeout: 120_000,
+      stdout: "ignore",
+      stderr: "pipe",
+    },
+  ],
 });
