@@ -55,15 +55,14 @@ either way.
 Artifacts are attached to each
 [GitHub Release](https://github.com/open-pdf-edit/OpenPdfEdit/releases),
 built by [`release.yml`](.github/workflows/release.yml) on every `v*`
-tag. A tag with a hyphen in it (`v0.1.11-rc3`) is a release candidate —
+tag. A tag with a hyphen in it (`v1.0.1-rc1`) is a release candidate —
 the same artifacts, marked pre-release. Nothing reaches a store from a
 tag either way: both store workflows are `workflow_dispatch` only, so
 publishing is always a deliberate act.
 
 | | Latest |
 |---|---|
-| Stable | [`v0.1.10`](https://github.com/open-pdf-edit/OpenPdfEdit/releases/tag/v0.1.10) |
-| Pre-release | [`v0.1.11-rc3`](https://github.com/open-pdf-edit/OpenPdfEdit/releases/tag/v0.1.11-rc3) — the eight languages, and in-app updates |
+| Stable | [`v1.0.0`](https://github.com/open-pdf-edit/OpenPdfEdit/releases/tag/v1.0.0) — eight languages, in-app updates, and the update popup that closes |
 
 **Releases from `v0.1.11-rc2` update themselves.** The macOS and Windows
 builds check for a new version on launch and offer to install it, which
