@@ -94,6 +94,20 @@ longer needs taking.
 reports any it finds. It should now find none; one appearing again means
 a listing was written from the old text.
 
+### The 1.0.0 zip was rebuilt after the first submission attempt
+
+The extension zip attached to the `v1.0.0` release is **not** the one the
+`v1.0.0` tag built. The store review of that first package raised two
+things — a `<script>` pointing at telegram.org (remote code) and OCR in
+the copy — both fixed on `main` afterwards, and the zip in the release
+was replaced with a build of that fixed commit. Same version number,
+because the submission was still in progress and nothing had been
+accepted under 1.0.0 yet.
+
+The desktop artifacts in that release are untouched: neither fix changes
+them. If a later release needs the tag and the package to match again,
+cut the next version rather than rebuilding this one.
+
 ### Category
 
 **Productivity** (Chrome Web Store's category for document/office
