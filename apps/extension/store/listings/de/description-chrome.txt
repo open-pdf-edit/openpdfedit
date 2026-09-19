@@ -13,9 +13,9 @@ FUNKTIONEN
 • Export als Markdown oder Reintext
 • Änderungen rückgängig machen und wiederholen
 
-Alle Kernfunktionen sind kostenlos und erfordern kein Konto. Wasserzeichen und OCR sind optionale Supporter-Funktionen, die zusammen mit einer einmaligen Zahlung freigeschaltet werden - kein Abo, keine Zeitbegrenzung, keine Nutzungsgrenzen.
+Alle Kernfunktionen sind kostenlos und erfordern kein Konto. Wasserzeichen ist eine optionale Supporter-Funktion, die mit einer einmaligen Zahlung freigeschaltet wird - kein Abo, keine Zeitbegrenzung, keine Nutzungsgrenzen.
 
-Erfordert Chrome 103 oder neuer, oder einen anderen aktuellen Chromium-basierten Browser.
+Erfordert Chrome 103 oder neuer.
 
 Desktop-Versionen sind für Windows und macOS verfügbar.
 

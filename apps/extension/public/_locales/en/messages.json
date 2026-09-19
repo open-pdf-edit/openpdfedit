@@ -1,8 +1,8 @@
 {
   "name": {
-    "message": "PDF Editor, Reader & OCR Watermark Tool - OpenPdfEdit"
+    "message": "PDF Editor, Reader & Watermark Tool - OpenPdfEdit"
   },
   "description": {
-    "message": "Edit, read, merge, redact and OCR PDFs entirely in your browser. Add watermarks, fill forms, sign, compress and more."
+    "message": "Edit, read, merge and redact PDFs entirely in your browser. Add watermarks, fill forms, sign, compress and more."
   }
 }

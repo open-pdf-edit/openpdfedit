@@ -38,7 +38,7 @@ echo "build-spa.sh: building apps/extension's own background.js entry..."
 # avoids stale output from a previous plain (Tauri-flavored) build
 # landing in dist/ below.
 echo "build-spa.sh: building apps/desktop's SPA with VITE_BACKEND=wasm..."
-(cd "$DESKTOP_DIR" && rm -rf build .svelte-kit && VITE_BACKEND=wasm npm run build)
+(cd "$DESKTOP_DIR" && rm -rf build .svelte-kit && VITE_BACKEND=wasm VITE_TARGET=extension npm run build)
 
 if [ ! -f "$DESKTOP_DIR/build/index.html" ]; then
   echo "build-spa.sh: expected $DESKTOP_DIR/build/index.html to exist after the desktop build — did it fail silently?" >&2
@@ -68,6 +68,16 @@ fi
 # worth the special-casing.
 echo "build-spa.sh: copying the desktop SPA build into $DIST_DIR..."
 cp -R "$DESKTOP_DIR/build/." "$DIST_DIR/"
+
+# --- Step 3b: drop the Telegram loader, and prove nothing else reaches out --
+#
+# The SPA shell loads Telegram's Mini App script when the page is opened
+# inside Telegram. The web app needs that; the extension never can, and a
+# store review counts a <script> pointing at another origin as remote
+# code whether or not it could ever run. Removed here, before the inline
+# scripts are externalized, so it never becomes an inline-N.js.
+echo "build-spa.sh: removing the Telegram loader and checking dist/ for remote code..."
+node "$SCRIPT_DIR/drop-remote-scripts.mjs"
 
 # --- Step 4: fix the CSP trap ---------------------------------------------
 #

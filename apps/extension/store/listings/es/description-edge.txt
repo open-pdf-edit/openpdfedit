@@ -1,4 +1,4 @@
-Convierte tu navegador en un editor de PDF, lector de PDF y herramienta de OCR local - lee, edita y organiza tus archivos PDF sin subirlos a ningún servidor.
+Convierte tu navegador en un editor y lector de PDF local - lee, edita y organiza tus archivos PDF sin subirlos a ningún servidor.
 
 FUNCIONES
 
@@ -13,7 +13,7 @@ FUNCIONES
 • Exportar a Markdown o texto plano
 • Deshacer y rehacer cambios
 
-Todas las funciones principales son gratuitas y no requieren cuenta. La marca de agua y el OCR son herramientas Supporter opcionales, que se desbloquean con un pago único - sin suscripción, límites de tiempo ni de uso.
+Todas las funciones principales son gratuitas y no requieren cuenta. La marca de agua es una herramienta Supporter opcional, que se desbloquea con un pago único - sin suscripción, límites de tiempo ni de uso.
 
 Requiere Edge 103 o posterior, u otro navegador actual basado en Chromium.
 

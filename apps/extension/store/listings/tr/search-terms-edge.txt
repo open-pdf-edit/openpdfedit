@@ -1,3 +1,4 @@
+belgeyi resme dönüştür
 belgeyi online imzala
 belge birleştir böl
 dosya boyutu küçült

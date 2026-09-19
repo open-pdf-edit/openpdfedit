@@ -13,9 +13,9 @@ FUNKTIONER
 • Exportera till Markdown eller vanlig text
 • Ångra och gör om ändringar
 
-Alla kärnfunktioner är gratis och kräver inget konto. Vattenstämpel och OCR är valfria Supporter-verktyg som låses upp med en engångsbetalning - ingen prenumeration, tidsgräns eller användningsgräns.
+Alla kärnfunktioner är gratis och kräver inget konto. Vattenstämpel är ett valfritt Supporter-verktyg som låses upp med en engångsbetalning - ingen prenumeration, tidsgräns eller användningsgräns.
 
-Kräver Chrome 103 eller senare, eller en annan modern webbläsare baserad på Chromium.
+Kräver Chrome 103 eller senare.
 
 Skrivbordsversioner finns för Windows och macOS.
 

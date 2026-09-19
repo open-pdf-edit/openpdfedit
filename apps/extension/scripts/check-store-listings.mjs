@@ -90,16 +90,16 @@ for (const loc of catalogues) {
   }
 }
 
-// OCR is claimed by every listing and is not in the extension package — it
-// runs in the web and desktop apps. Submitting with the claim was decided
-// on 14 September 2026, on the precedent that OpenCapture's listing passed
-// review with a Supporter feature (watermark) described while the large
-// majority of the extension's functions work. So it is reported, not
-// failed: a count that changes means a listing changed, which is worth
-// seeing, but it is no longer a reason to stop.
+// OCR was claimed by every listing and is not in the extension package —
+// it runs in the web and desktop apps. Those claims were removed on 18
+// September 2026, before submitting, so this should now report nothing:
+// anything it does report is a listing written from the old text, and
+// worth fixing before it reaches a reviewer. Still a note rather than a
+// failure, because whether a claim is worth making is a decision for
+// STORE.md's "OCR" section, not for this script.
 if (warnings.length) {
   console.log(`\nnote  OCR is claimed in ${warnings.length} places and is not in the package`);
-  console.log("      — decided to submit as written; see STORE.md, \"OCR\"");
+  console.log("      — the listings were meant to have none; see STORE.md, \"OCR\"");
 }
 console.log(failures === 0 ? "\nall good — ready to paste" : `\n${failures} failed — not ready to submit`);
 process.exit(failures === 0 ? 0 : 1);

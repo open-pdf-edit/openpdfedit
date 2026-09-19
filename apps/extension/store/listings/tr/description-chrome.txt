@@ -13,9 +13,9 @@ OpenPdfEdit, tamamen cihazınızda çalışan gizlilik odaklı bir PDF düzenley
 • Markdown veya düz metin olarak dışa aktarın
 • Değişiklikleri geri alın ve yineleyin
 
-Tüm temel özellikler ücretsizdir ve hesap gerektirmez. Filigran ve OCR, tek seferlik ödemeyle birlikte açılan isteğe bağlı Supporter araçlarıdır - abonelik, süre veya kullanım sınırı yoktur.
+Tüm temel özellikler ücretsizdir ve hesap gerektirmez. Filigran, tek seferlik ödemeyle açılan isteğe bağlı bir Supporter aracıdır - abonelik, süre veya kullanım sınırı yoktur.
 
-Chrome 103 veya daha yenisini, ya da Chromium tabanlı başka güncel bir tarayıcıyı gerektirir.
+Chrome 103 veya daha yenisini gerektirir.
 
 Windows ve macOS için masaüstü sürümleri mevcuttur.
 

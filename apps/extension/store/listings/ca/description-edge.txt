@@ -1,4 +1,4 @@
-Converteix el teu navegador en un editor de PDF, lector de PDF i eina d'OCR local - llegeix, edita i organitza els teus fitxers PDF sense pujar-los a cap servidor.
+Converteix el teu navegador en un editor i lector de PDF local - llegeix, edita i organitza els teus fitxers PDF sense pujar-los a cap servidor.
 
 FUNCIONS
 
@@ -13,7 +13,7 @@ FUNCIONS
 • Exportar a Markdown o text pla
 • Desfer i refer canvis
 
-Totes les funcions principals són gratuïtes i no requereixen compte. La marca d'aigua i l'OCR són eines Supporter opcionals, que es desbloquegen amb un pagament únic - sense subscripció, límits de temps ni d'ús.
+Totes les funcions principals són gratuïtes i no requereixen compte. La marca d'aigua és una eina Supporter opcional, que es desbloqueja amb un pagament únic - sense subscripció, límits de temps ni d'ús.
 
 Requereix Edge 103 o posterior, o un altre navegador actual basat en Chromium.
 

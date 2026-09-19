@@ -1,6 +1,7 @@
+convertir document image
 signer document en ligne
 fusionner diviser document
-compresser un fichier
+compresser fichier
 document mot de passe
 caviarder texte sensible
-comparer deux documents
+comparer documents

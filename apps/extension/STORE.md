@@ -34,10 +34,10 @@ reachable from `openpdfedit.com` for that hand-back, declared as
 ### Short description (≤132 characters — both stores' own limit)
 
 ```
-Edit, read, merge, redact and OCR PDFs entirely in your browser. Add watermarks, fill forms, sign, compress and more.
+Edit, read, merge and redact PDFs entirely in your browser. Add watermarks, fill forms, sign, compress and more.
 ```
 
-(101 characters.)
+(111 characters.)
 
 ### Long description and search terms — nineteen languages
 
@@ -74,24 +74,25 @@ with two corrections applied on import, both in every locale:
 The Edge/Firefox description is filed as Edge only: there is no Firefox
 build of this extension.
 
-### OCR — submitted as written, by decision
+### OCR — removed from every listing
 
-Every listing claims OCR — the Edge description's first sentence, the
-Supporter line in both descriptions, and the manifest name and short
-description already in the package. The extension itself does not do
-OCR: the zip has no recogniser or language data, and the OCR button is
-hidden in that build (`{#if !isBrowserExtension}` in `+page.svelte`). It
-runs in the web app and the desktop app.
+The extension does not do OCR: the zip has no recogniser and no language
+data, and the button is hidden in that build (`{#if !isBrowserExtension}`
+in `+page.svelte`). It runs in the web app and the desktop app.
 
-**Decided on 14 September 2026 to submit with the claim as written.** The
-precedent is OpenCapture, whose listing passed review describing a
-Supporter feature (watermark) while the large majority of the
-extension's functions work — as they do here.
+The listings claimed it anyway until 18 September 2026 — the Edge
+description's first sentence, the Supporter line in both descriptions,
+and the manifest name and short description. **That decision was
+reversed before submitting**: every mention was removed from all nineteen
+catalogues and all nineteen listings, because the shortest route through
+a review is not to claim what the package cannot do. The earlier
+reasoning (OpenCapture's listing passed review describing a Supporter
+feature) is not wrong, but it is an argument for taking a risk that no
+longer needs taking.
 
-`npm run store:check` reports the claim as a note and does not fail on
-it. If a reviewer rejects a submission for it, this is the section to
-revisit: the fix would be to attribute OCR to the web and desktop apps in
-the OCR clauses, or to ship the recogniser in the extension.
+`npm run store:check` counts OCR claims against the built `dist/` and
+reports any it finds. It should now find none; one appearing again means
+a listing was written from the old text.
 
 ### Category
 

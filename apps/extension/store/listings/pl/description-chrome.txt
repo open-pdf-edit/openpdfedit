@@ -13,9 +13,9 @@ FUNKCJE
 • Eksportuj do Markdown lub zwykłego tekstu
 • Cofaj i ponawiaj zmiany
 
-Wszystkie podstawowe funkcje są darmowe i nie wymagają konta. Znak wodny i OCR to opcjonalne narzędzia Supporter, odblokowywane jednorazową płatnością - bez subskrypcji, limitów czasu ani użycia.
+Wszystkie podstawowe funkcje są darmowe i nie wymagają konta. Znak wodny to opcjonalne narzędzie Supporter, odblokowywane jednorazową płatnością - bez subskrypcji, limitów czasu ani użycia.
 
-Wymaga przeglądarki Chrome 103 lub nowszej, lub innej aktualnej przeglądarki opartej na Chromium.
+Wymaga przeglądarki Chrome 103 lub nowszej.
 
 Dostępne są wersje na komputery z Windows i macOS.
 

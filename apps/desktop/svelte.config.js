@@ -49,6 +49,26 @@ const config = {
     // digest of the build). Nothing here uses SvelteKit's own
     // version-change detection, which is what that default exists for.
     version: { name: version },
+
+    // The extension build (apps/extension/scripts/build-spa.sh) sets
+    // VITE_TARGET=extension, and $lib/telegram becomes a stub that says
+    // "not a Mini App" to everything.
+    //
+    // An extension page is opened as chrome-extension://…/index.html and
+    // can never be a Telegram Mini App: the bridge is not there, the
+    // fragment never says tgWebApp, and MV3's CSP refuses the bridge's
+    // script anyway. Left in, the code would sit inert in the package —
+    // and a store review reads the package, so inert Telegram code is a
+    // question to answer rather than one not to raise. `$lib` is
+    // SvelteKit's own alias, so this has to be set here: a Vite-level
+    // alias for the same path loses to it.
+    // Its own name, not `$lib/telegram`: `$lib` is SvelteKit's alias and a
+    // more specific one does not beat it.
+    alias: {
+      $telegram: process.env.VITE_TARGET === "extension"
+        ? "src/lib/telegram.extension.ts"
+        : "src/lib/telegram.ts",
+    },
   },
 };
 

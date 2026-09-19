@@ -1,4 +1,4 @@
-Transformez votre navigateur en éditeur PDF, lecteur PDF et outil OCR local - lisez, modifiez et organisez vos PDF sans jamais les envoyer sur un serveur.
+Transformez votre navigateur en éditeur et lecteur PDF local - lisez, modifiez et organisez vos PDF sans jamais les envoyer sur un serveur.
 
 FONCTIONNALITÉS
 
@@ -13,7 +13,7 @@ FONCTIONNALITÉS
 • Exporter en Markdown ou texte brut
 • Annuler et rétablir les modifications
 
-Toutes les fonctionnalités principales sont gratuites et ne nécessitent aucun compte. Le filigrane et l'OCR sont des outils Supporter optionnels, débloqués via un paiement unique - sans abonnement, ni limite de temps ou d'utilisation.
+Toutes les fonctionnalités principales sont gratuites et ne nécessitent aucun compte. Le filigrane est un outil Supporter optionnel, débloqué via un paiement unique - sans abonnement, ni limite de temps ou d'utilisation.
 
 Nécessite Edge 103 ou version ultérieure, ou un autre navigateur récent basé sur Chromium.
 

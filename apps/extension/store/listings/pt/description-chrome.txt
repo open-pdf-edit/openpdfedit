@@ -13,9 +13,9 @@ RECURSOS
 • Exportar para Markdown ou texto simples
 • Desfazer e refazer alterações
 
-Todos os recursos principais são gratuitos e não exigem conta. Marca d'água e OCR são ferramentas Supporter opcionais, desbloqueadas com um pagamento único - sem assinatura, limites de tempo ou de uso.
+Todos os recursos principais são gratuitos e não exigem conta. A marca d'água é uma ferramenta Supporter opcional, desbloqueada com um pagamento único - sem assinatura, limites de tempo ou de uso.
 
-Requer Chrome 103 ou mais recente, ou outro navegador atual baseado em Chromium.
+Requer Chrome 103 ou mais recente.
 
 Há versões para desktop disponíveis para Windows e macOS.
 

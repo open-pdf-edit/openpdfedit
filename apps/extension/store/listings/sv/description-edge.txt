@@ -1,4 +1,4 @@
-Gör din webbläsare till en lokal PDF-redigerare, PDF-läsare och OCR-verktyg - läs, redigera och organisera dina PDF-filer utan att ladda upp dem till någon server.
+Gör din webbläsare till en lokal PDF-redigerare och PDF-läsare - läs, redigera och organisera dina PDF-filer utan att ladda upp dem till någon server.
 
 FUNKTIONER
 
@@ -13,7 +13,7 @@ FUNKTIONER
 • Exportera till Markdown eller vanlig text
 • Ångra och gör om ändringar
 
-Alla kärnfunktioner är gratis och kräver inget konto. Vattenstämpel och OCR är valfria Supporter-verktyg som låses upp med en engångsbetalning - ingen prenumeration, tidsgräns eller användningsgräns.
+Alla kärnfunktioner är gratis och kräver inget konto. Vattenstämpel är ett valfritt Supporter-verktyg som låses upp med en engångsbetalning - ingen prenumeration, tidsgräns eller användningsgräns.
 
 Kräver Edge 103 eller senare, eller en annan modern webbläsare baserad på Chromium.
 

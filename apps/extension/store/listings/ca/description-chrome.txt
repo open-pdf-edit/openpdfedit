@@ -13,9 +13,9 @@ FUNCIONS
 • Exportar a Markdown o text pla
 • Desfer i refer canvis
 
-Totes les funcions principals són gratuïtes i no requereixen compte. La marca d'aigua i l'OCR són eines Supporter opcionals, que es desbloquegen amb un pagament únic - sense subscripció, límits de temps ni d'ús.
+Totes les funcions principals són gratuïtes i no requereixen compte. La marca d'aigua és una eina Supporter opcional, que es desbloqueja amb un pagament únic - sense subscripció, límits de temps ni d'ús.
 
-Requereix Chrome 103 o posterior, o un altre navegador actual basat en Chromium.
+Requereix Chrome 103 o posterior.
 
 Hi ha versions d'escriptori disponibles per a Windows i macOS.
 
