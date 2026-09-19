@@ -124,13 +124,11 @@ log "OCR languages: $(printf '%s ' "${TRAINED[@]##*/}" | sed 's/\.traineddata//g
 log "Adding the offline service worker"
 cp "$WEBAPP_DIR/manifest.webmanifest" "$DIST_DIR/manifest.webmanifest"
 
-# The app host needs its own crawler files. Without a robots.txt, a
-# request for /robots.txt falls through to the SPA fallback and answers
-# with the app's HTML and a 200 — which is not a robots.txt, but is also
-# not the 404 that would make a crawler assume "no rules". A sitemap
-# listing the one real URL is the other half: this host has exactly one
-# page, however many addresses reach it.
-log "Writing robots.txt and sitemap.xml for the app host"
+# The app host's own robots.txt. Without one, a request for /robots.txt
+# falls through to the SPA fallback and answers with the app's HTML and a
+# 200 — which is not a robots.txt, but is also not the 404 that would make
+# a crawler assume "no rules".
+log "Writing robots.txt for the app host"
 cat > "$DIST_DIR/robots.txt" <<'ROBOTS'
 # The editor itself. It is one page — every path under /app/ serves it —
 # so there is one URL worth indexing and a canonical on the page naming
@@ -151,20 +149,14 @@ Allow: /index.html
 Disallow: /app/
 Disallow: /wasm-gen/
 Disallow: /tesseract/
-
-Sitemap: https://openpdfedit.com/app/sitemap.xml
 ROBOTS
-cat > "$DIST_DIR/sitemap.xml" <<SITEMAP
-<?xml version="1.0" encoding="UTF-8"?>
-<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-  <url>
-    <loc>https://openpdfedit.com/app/</loc>
-    <lastmod>$(date -u +%Y-%m-%d)</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.8</priority>
-  </url>
-</urlset>
-SITEMAP
+# No sitemap of our own. /app/ is an ordinary URL on openpdfedit.com, and
+# the site's sitemap (the marketing repo's) already lists it; a second
+# file under /app/ listed the same URL with a different lastmod, and two
+# answers to "when did this change?" is how a search engine learns to
+# ignore the field for the whole site (APP-96). nginx answers 404 for
+# /app/sitemap.xml explicitly, since the SPA fallback would otherwise
+# serve the app's HTML there with a 200.
 # The install icons. Separate from static/favicon.png, which is 256px and
 # is what the manifest used to point at while claiming 512 — a size no
 # browser could verify without downloading it, and one that stops Chrome
@@ -204,11 +196,16 @@ grep -q "__BUILD_ID__" "$DIST_DIR/service-worker.js" &&
 # chrome-extension:// origin or a Tauri window is meaningless at best.
 # Post-processing keeps the shared SPA free of web-app-only concerns.
 log "Registering the service worker and web manifest in index.html"
-node - "$DIST_DIR/index.html" <<'NODE'
+node - "$DIST_DIR/index.html" "$SCRIPT_DIR" <<'NODE'
 import { readFileSync, writeFileSync } from "node:fs";
 const file = process.argv[2];
 const html = readFileSync(file, "utf8");
 if (html.includes("service-worker.js")) process.exit(0);
+// What a search engine or a link preview is told, before any script runs
+// (APP-96). The title leads with what people search for and ends with the
+// name; og/twitter tags make a shared link a card instead of a bare URL.
+const TITLE = "Free Online PDF Editor & Viewer — No Upload | OpenPdfEdit";
+const DESCRIPTION = "Edit PDFs in your browser — annotate, edit text, fill forms, redact, sign and reorganise pages. Nothing is uploaded: every page renders and every edit saves on your own machine. Free, no account, works offline.";
 const inject = [
   '<link rel="manifest" href="./manifest.webmanifest">',
   // Every path on this host answers with this same file and a 200 —
@@ -226,7 +223,13 @@ const inject = [
   // directly, with a description of its own rather than whatever a
   // crawler scrapes off an empty editor shell.
   '<meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1">',
-  '<meta name="description" content="Edit PDFs in your browser — annotate, edit text, fill forms, redact, sign and reorganise pages. Nothing is uploaded: every page renders and every edit saves on your own machine. Free, no account, works offline.">',
+  `<meta name="description" content="${DESCRIPTION}">`,
+  '<meta property="og:type" content="website">',
+  '<meta property="og:url" content="https://openpdfedit.com/app/">',
+  `<meta property="og:title" content="${TITLE}">`,
+  `<meta property="og:description" content="${DESCRIPTION}">`,
+  '<meta property="og:image" content="https://openpdfedit.com/og.png">',
+  '<meta name="twitter:card" content="summary_large_image">',
   // iOS reads none of the manifest's icons: it wants this tag, and puts
   // a white card behind anything transparent, which is why the file is
   // full-bleed rather than the artwork as drawn.
@@ -266,7 +269,51 @@ if (!html.includes("</head>")) {
   console.error("build.sh: no </head> in index.html — cannot register the service worker");
   process.exit(1);
 }
-writeFileSync(file, html.replace("</head>", inject + "\n</head>"));
+if (!/<title>[^<]*<\/title>/.test(html)) {
+  console.error("build.sh: no <title> in index.html to replace");
+  process.exit(1);
+}
+// The crawlable copy: an <h1> and ~400 words, in the HTML itself rather
+// than put there by a script — crawlers that run no JavaScript (GPTBot,
+// ClaudeBot, PerplexityBot) otherwise see an empty <div>, and Googlebot
+// queues JavaScript rendering behind everything else. Visible, not
+// hidden: the app moves it into its own empty state on start, where it
+// sits under "Open PDF" until a document is opened (see
+// $lib/landingCopy.ts). Kept in its own file so the words can be edited
+// without reading this script.
+const landing = readFileSync(new URL("../landing.html", `file://${process.argv[3]}/`), "utf8");
+if (!html.includes("</body>")) {
+  console.error("build.sh: no </body> in index.html — cannot add the page copy");
+  process.exit(1);
+}
+writeFileSync(file, html
+  .replace(/<title>[^<]*<\/title>/, `<title>${TITLE.replace(/&/g, "&amp;")}</title>`)
+  .replace("</head>", inject + "\n</head>")
+  .replace("</body>", landing + "</body>"));
+NODE
+
+# APP-96's acceptance, as part of the build rather than a checklist: each
+# of these was a live defect, and each is cheap to break again without
+# noticing — a new <title> in app.html, a copy edit that runs long.
+log "Checking what a crawler sees in index.html"
+node - "$DIST_DIR/index.html" "$DIST_DIR" <<'NODE'
+import { existsSync, readFileSync } from "node:fs";
+const [file, dist] = process.argv.slice(2);
+const html = readFileSync(file, "utf8");
+const body = html.slice(html.indexOf("<body")).replace(/<script[\s\S]*?<\/script>/g, "");
+const words = body.replace(/<[^>]*>/g, " ").replace(/&amp;/g, "&").split(/\s+/).filter(Boolean).length;
+const title = html.match(/<title>([^<]*)<\/title>/)?.[1].replace(/&amp;/g, "&") ?? "";
+const checks = [
+  [words >= 350 && words <= 450, `static body text: ${words} words (350–450)`],
+  [(html.match(/<h1[\s>]/g) ?? []).length === 1, "exactly one <h1>"],
+  [title.length > 0 && title.length <= 60, `<title> "${title}" is ${title.length} characters (≤ 60)`],
+  [["og:type", "og:url", "og:title", "og:description", "og:image"].every((p) => html.includes(`property="${p}"`)) && html.includes('name="twitter:card"'), "og and twitter tags"],
+  [!existsSync(`${dist}/sitemap.xml`), "no sitemap.xml of its own"],
+  [!/umami/i.test(html), "no analytics — privacy.html promises none"],
+];
+let failed = 0;
+for (const [ok, what] of checks) { console.log(`  ${ok ? "ok  " : "FAIL"}  ${what}`); if (!ok) failed++; }
+if (failed) process.exit(1);
 NODE
 
 log "Done"
