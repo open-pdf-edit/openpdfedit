@@ -1,6 +1,7 @@
+convertir document a imatge
 signar document online
 unir dividir document
 comprimir un fitxer
 protegir document contrasenya
 ocultar text sensible
-comparar dos documents
+comparar documents

@@ -1,4 +1,4 @@
-OpenPdfEdit ist ein lokaler PDF-Editor, PDF-Reader und Texteditor mit integrierter OCR-Texterkennung - PDF-Dateien lesen, bearbeiten und organisieren, ohne sie hochzuladen.
+OpenPdfEdit ist ein lokaler PDF-Editor, PDF-Reader und Texteditor - PDF-Dateien lesen, bearbeiten und organisieren, ohne sie hochzuladen.
 
 FUNKTIONEN
 
@@ -13,7 +13,7 @@ FUNKTIONEN
 • Export als Markdown oder Reintext
 • Änderungen rückgängig machen und wiederholen
 
-Alle Kernfunktionen sind kostenlos und erfordern kein Konto. Wasserzeichen und OCR sind optionale Supporter-Funktionen, die zusammen mit einer einmaligen Zahlung freigeschaltet werden - kein Abo, keine Zeitbegrenzung, keine Nutzungsgrenzen.
+Alle Kernfunktionen sind kostenlos und erfordern kein Konto. Wasserzeichen ist eine optionale Supporter-Funktion, die mit einer einmaligen Zahlung freigeschaltet wird - kein Abo, keine Zeitbegrenzung, keine Nutzungsgrenzen.
 
 Erfordert Edge 103 oder neuer, oder einen anderen aktuellen Chromium-basierten Browser.
 

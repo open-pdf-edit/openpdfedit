@@ -13,9 +13,9 @@ FEATURES
 • Export to Markdown or plain text
 • Undo and redo edits
 
-All core features are free and require no account. Watermarking and OCR are optional Supporter tools, unlocked together with a one-time payment - no subscription, time limits or usage caps.
+All core features are free and require no account. Watermarking is an optional Supporter tool, unlocked with a one-time payment - no subscription, time limits or usage caps.
 
-Requires Chrome 103 or newer, or another modern Chromium-based browser.
+Requires Chrome 103 or newer.
 
 Desktop versions are available for Windows and macOS.
 

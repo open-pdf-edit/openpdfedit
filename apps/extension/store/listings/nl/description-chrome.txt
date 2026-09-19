@@ -13,9 +13,9 @@ FUNCTIES
 • Exporteren naar Markdown of platte tekst
 • Wijzigingen ongedaan maken en opnieuw uitvoeren
 
-Alle kernfuncties zijn gratis en vereisen geen account. Watermerk en OCR zijn optionele Supporter-tools, samen ontgrendeld met een eenmalige betaling - geen abonnement, tijdslimiet of gebruikslimiet.
+Alle kernfuncties zijn gratis en vereisen geen account. Watermerk is een optionele Supporter-tool, ontgrendeld met een eenmalige betaling - geen abonnement, tijdslimiet of gebruikslimiet.
 
-Vereist Chrome 103 of nieuwer, of een andere actuele browser op basis van Chromium.
+Vereist Chrome 103 of nieuwer.
 
 Desktopversies zijn beschikbaar voor Windows en macOS.
 

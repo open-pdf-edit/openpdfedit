@@ -1,4 +1,4 @@
-Maak van je browser een lokale PDF-editor, PDF-lezer en OCR-tool - lees, bewerk en organiseer je PDF-bestanden zonder ze naar een server te uploaden.
+Maak van je browser een lokale PDF-editor en PDF-lezer - lees, bewerk en organiseer je PDF-bestanden zonder ze naar een server te uploaden.
 
 FUNCTIES
 
@@ -13,7 +13,7 @@ FUNCTIES
 • Exporteren naar Markdown of platte tekst
 • Wijzigingen ongedaan maken en opnieuw uitvoeren
 
-Alle kernfuncties zijn gratis en vereisen geen account. Watermerk en OCR zijn optionele Supporter-tools, samen ontgrendeld met een eenmalige betaling - geen abonnement, tijdslimiet of gebruikslimiet.
+Alle kernfuncties zijn gratis en vereisen geen account. Watermerk is een optionele Supporter-tool, ontgrendeld met een eenmalige betaling - geen abonnement, tijdslimiet of gebruikslimiet.
 
 Vereist Edge 103 of nieuwer, of een andere actuele browser op basis van Chromium.
 

@@ -13,9 +13,9 @@ FUNCIONES
 • Exportar a Markdown o texto plano
 • Deshacer y rehacer cambios
 
-Todas las funciones principales son gratuitas y no requieren cuenta. La marca de agua y el OCR son herramientas Supporter opcionales, que se desbloquean con un pago único - sin suscripción, límites de tiempo ni de uso.
+Todas las funciones principales son gratuitas y no requieren cuenta. La marca de agua es una herramienta Supporter opcional, que se desbloquea con un pago único - sin suscripción, límites de tiempo ni de uso.
 
-Requiere Chrome 103 o posterior, u otro navegador actual basado en Chromium.
+Requiere Chrome 103 o posterior.
 
 Hay versiones de escritorio disponibles para Windows y macOS.
 

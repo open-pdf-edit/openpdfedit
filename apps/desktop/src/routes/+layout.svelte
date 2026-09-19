@@ -25,7 +25,7 @@
   // Running inside Telegram changes theme, viewport and the back button, and
   // all three want to be right before the first paint rather than corrected
   // after it. A no-op in an ordinary browser — see $lib/telegram.
-  import { initTelegram } from "$lib/telegram";
+  import { initTelegram } from "$telegram";
 
   // One definition, imported — never a second literal here. See
   // $lib/openapps for what this host is and why it isn't the backend's

@@ -1,4 +1,4 @@
-Transforme seu navegador em um editor de PDF, leitor de PDF e ferramenta de OCR local - leia, edite e organize seus arquivos PDF sem enviá-los a nenhum servidor.
+Transforme seu navegador em um editor e leitor de PDF local - leia, edite e organize seus arquivos PDF sem enviá-los a nenhum servidor.
 
 RECURSOS
 
@@ -13,7 +13,7 @@ RECURSOS
 • Exportar para Markdown ou texto simples
 • Desfazer e refazer alterações
 
-Todos os recursos principais são gratuitos e não exigem conta. Marca d'água e OCR são ferramentas Supporter opcionais, desbloqueadas com um pagamento único - sem assinatura, limites de tempo ou de uso.
+Todos os recursos principais são gratuitos e não exigem conta. A marca d'água é uma ferramenta Supporter opcional, desbloqueada com um pagamento único - sem assinatura, limites de tempo ou de uso.
 
 Requer Edge 103 ou mais recente, ou outro navegador atual baseado em Chromium.
 

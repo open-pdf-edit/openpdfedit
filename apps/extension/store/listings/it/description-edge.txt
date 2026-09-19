@@ -1,4 +1,4 @@
-Trasforma il tuo browser in un editor PDF, lettore PDF e strumento OCR locale - leggi, modifica e organizza i tuoi file PDF senza caricarli su alcun server.
+Trasforma il tuo browser in un editor e lettore PDF locale - leggi, modifica e organizza i tuoi file PDF senza caricarli su alcun server.
 
 FUNZIONALITÀ
 
@@ -13,7 +13,7 @@ FUNZIONALITÀ
 • Esportare in Markdown o testo semplice
 • Annullare e ripristinare le modifiche
 
-Tutte le funzioni principali sono gratuite e non richiedono un account. Filigrana e OCR sono strumenti Supporter opzionali, sbloccati con un pagamento unico - senza abbonamento, limiti di tempo o di utilizzo.
+Tutte le funzioni principali sono gratuite e non richiedono un account. La filigrana è uno strumento Supporter opzionale, sbloccato con un pagamento unico - senza abbonamento, limiti di tempo o di utilizzo.
 
 Richiede Edge 103 o versione successiva, oppure un altro browser aggiornato basato su Chromium.
 

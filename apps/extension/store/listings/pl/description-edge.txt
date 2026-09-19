@@ -1,4 +1,4 @@
-Zamień swoją przeglądarkę w lokalny edytor PDF, czytnik PDF i narzędzie OCR - czytaj, edytuj i porządkuj pliki PDF bez wysyłania ich na żaden serwer.
+Zamień swoją przeglądarkę w lokalny edytor i czytnik PDF - czytaj, edytuj i porządkuj pliki PDF bez wysyłania ich na żaden serwer.
 
 FUNKCJE
 
@@ -13,7 +13,7 @@ FUNKCJE
 • Eksportuj do Markdown lub zwykłego tekstu
 • Cofaj i ponawiaj zmiany
 
-Wszystkie podstawowe funkcje są darmowe i nie wymagają konta. Znak wodny i OCR to opcjonalne narzędzia Supporter, odblokowywane jednorazową płatnością - bez subskrypcji, limitów czasu ani użycia.
+Wszystkie podstawowe funkcje są darmowe i nie wymagają konta. Znak wodny to opcjonalne narzędzie Supporter, odblokowywane jednorazową płatnością - bez subskrypcji, limitów czasu ani użycia.
 
 Wymaga przeglądarki Edge 103 lub nowszej, lub innej aktualnej przeglądarki opartej na Chromium.
 

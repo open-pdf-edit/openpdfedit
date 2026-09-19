@@ -39,7 +39,7 @@
   import { isBrowserExtension } from "$lib/backend";
   import { nativeShell } from "$lib/native";
   import IapPanel from "./IapPanel.svelte";
-  import { initData as telegramInitData, isTelegram } from "$lib/telegram";
+  import { initData as telegramInitData, isTelegram } from "$telegram";
   import Icon from "./Icon.svelte";
   import { showToast } from "./toast.svelte";
 

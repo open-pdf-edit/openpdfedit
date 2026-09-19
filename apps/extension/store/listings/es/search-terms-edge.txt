@@ -1,6 +1,7 @@
+convertir documento a imagen
 firmar documento online
 unir dividir documento
 comprimir un archivo
 documento con contraseña
 tachar texto sensible
-comparar dos documentos
+comparar documentos
