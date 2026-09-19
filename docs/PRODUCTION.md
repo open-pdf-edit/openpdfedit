@@ -224,6 +224,24 @@ systemctl list-timers | grep certbot
 
 ---
 
+### 2b. `/app/sitemap.xml` answers 404 — a rule on the server, not in the build
+
+Added on 19 September 2026 for APP-96, on the live server's `openpdfedit`
+block, next to `location = /app`:
+
+```nginx
+location = /app/sitemap.xml { return 404; }
+```
+
+The web build stopped publishing a sitemap of its own: `/app/` is listed
+by the site's sitemap, and a second file listing the same URL with a
+different `lastmod` teaches a search engine to ignore the field across
+the whole site. But `location ^~ /app/` ends in `try_files … /index.html`,
+so without this rule the deleted file would still answer — with the app's
+HTML and a 200. An exact-match location wins over the prefix one whatever
+their order. A backup of the file as it was is next to it on the server,
+named `*.bak-app96-*`.
+
 ## 3. Let openapps-server accept the new origins
 
 Without this, Google sign-in fails: the server validates the `return_to`

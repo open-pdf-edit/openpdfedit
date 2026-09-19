@@ -33,7 +33,8 @@
   import AccountPanel from "$lib/AccountPanel.svelte";
   import UpdatePanel from "$lib/UpdatePanel.svelte";
   import LanguagePicker from "$lib/LanguagePicker.svelte";
-  import { t } from "$lib/i18n/index.svelte";
+  import { getLocale, t } from "$lib/i18n/index.svelte";
+  import { landingCopy } from "$lib/landingCopy";
   import WatermarkPanel from "$lib/WatermarkPanel.svelte";
   import SupporterGate, { type GateState } from "$lib/SupporterGate.svelte";
   import { SUPPORTER_TOOLS_ARE_PREMIUM, supporterState, unlockSupporter } from "$lib/openapps";
@@ -3058,6 +3059,11 @@
              someone is deciding whether to keep the thing, and it is
              gone the instant a document is open. -->
         <InstallPrompt />
+
+        <!-- The web build's page copy, moved here from the HTML a crawler
+             reads (APP-96, $lib/landingCopy). Empty in the desktop app
+             and the extension, which never carry it. -->
+        <div class="landing-slot" use:landingCopy={getLocale()}></div>
       </div>
     {/if}
   </div>
@@ -3482,8 +3488,65 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    justify-content: center;
+    /* `safe`: with the web build's page copy below the button, the column
+       can be taller than the screen, and plain `center` would push its
+       top out of reach. It scrolls instead. */
+    justify-content: safe center;
     gap: var(--space-4);
+    min-height: 0;
+    overflow-y: auto;
+    padding-block: var(--space-6);
+  }
+
+  /* Scrolled, never squeezed: in a column taller than the screen, flex
+     items shrink to fit by default, and the Open PDF button was the first
+     thing to lose its height. */
+  .empty-state > :global(*) {
+    flex-shrink: 0;
+  }
+
+  /* The page copy, as a quiet column under "Open PDF": it is there for
+     the person deciding whether this is the tool they wanted, and for
+     search engines, and should not compete with the button. */
+  .landing-slot:empty {
+    display: none;
+  }
+  .landing-slot :global(.landing-copy) {
+    max-width: 62ch;
+    margin-top: var(--space-6);
+    padding-inline: var(--space-4);
+    color: var(--text-muted);
+    font: var(--type-body);
+    text-align: left;
+  }
+  .landing-slot :global(.landing-copy h1) {
+    font: var(--type-h2);
+    color: var(--text-strong);
+    text-align: center;
+    margin: 0 0 var(--space-3);
+  }
+  .landing-slot :global(.landing-copy h2) {
+    font: var(--type-h3);
+    color: var(--text-strong);
+    margin: var(--space-5) 0 var(--space-2);
+  }
+  .landing-slot :global(.landing-copy p),
+  .landing-slot :global(.landing-copy li) {
+    line-height: 1.6;
+  }
+  .landing-slot :global(.landing-copy p) {
+    margin: 0 0 var(--space-3);
+  }
+  .landing-slot :global(.landing-copy ul),
+  .landing-slot :global(.landing-copy ol) {
+    padding-left: 1.25em;
+    margin: 0;
+    display: grid;
+    gap: var(--space-1);
+  }
+  .landing-slot :global(.landing-copy strong) {
+    color: var(--text-strong);
+    font-weight: 600;
   }
 
   .empty-state p {
