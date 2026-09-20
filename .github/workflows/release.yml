@@ -54,6 +54,15 @@ jobs:
 
   macos-dmg:
     runs-on: macos-latest # arm64 (Apple Silicon)
+    # On the job, not the steps: a step's own `env` is not in scope for its
+    # own `if`, so every signing step below would skip itself.
+    env:
+      APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+      APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+      APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+      APPLE_ID: ${{ secrets.APPLE_ID }}
+      APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -66,20 +75,66 @@ jobs:
       - name: Install frontend deps
         working-directory: apps/desktop
         run: npm ci
+      # --- Developer ID signing ------------------------------------------
+      # Set the six APPLE_* repository secrets to ship a signed, notarized
+      # build. With none of them set every step here is skipped and the
+      # bundle keeps the ad-hoc identity from tauri.macos.conf.json, which
+      # is what stops macOS calling a local build "damaged".
+      - name: Import the Developer ID certificate
+        if: env.APPLE_CERTIFICATE != ''
+        run: |
+          # Our own keychain, not Tauri's: the PDFium dylib has to be signed
+          # before the bundler runs, so the identity must already be usable
+          # by then. APPLE_CERTIFICATE is deliberately not passed to the
+          # build step below, so the bundler uses this one instead of
+          # importing a second copy and swapping the search list under us.
+          keychain="$RUNNER_TEMP/signing.keychain-db"
+          password="$(uuidgen)"
+          security create-keychain -p "$password" "$keychain"
+          security set-keychain-settings -lut 21600 "$keychain"
+          security unlock-keychain -p "$password" "$keychain"
+          printf '%s' "$APPLE_CERTIFICATE" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security import "$RUNNER_TEMP/cert.p12" -k "$keychain" \
+            -P "$APPLE_CERTIFICATE_PASSWORD" -T /usr/bin/codesign -T /usr/bin/security
+          rm -f "$RUNNER_TEMP/cert.p12"
+          # Without this, codesign stops for a UI prompt no runner can answer.
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$password" "$keychain" >/dev/null
+          security list-keychains -d user -s "$keychain" $(security list-keychains -d user | tr -d '"')
+          security find-identity -v -p codesigning "$keychain"
+
+      - name: Sign PDFium, the bundle's other binary
+        if: env.APPLE_SIGNING_IDENTITY != ''
+        run: |
+          # Notarization rejects any nested Mach-O that is not signed with
+          # the same identity and the hardened runtime. libpdfium.dylib is
+          # copied into Contents/Resources by the bundler, so it is signed
+          # here, at the source, and the app's own signature then seals it.
+          codesign --force --options runtime --timestamp \
+            --sign "$APPLE_SIGNING_IDENTITY" .vendor/pdfium/lib/libpdfium.dylib
+          codesign --verify --strict --verbose=2 .vendor/pdfium/lib/libpdfium.dylib
+
+      - name: Point the bundler at the Developer ID identity
+        if: env.APPLE_SIGNING_IDENTITY != ''
+        run: |
+          # tauri.macos.conf.json pins the ad-hoc identity "-", and the
+          # config beats APPLE_SIGNING_IDENTITY in the bundler — so a build
+          # with every secret set would still ship ad-hoc signed and fail
+          # notarization. The file is rewritten here rather than made
+          # conditional, so a local build stays ad-hoc with no setup.
+          python3 - <<'PY'
+          import json, os, pathlib
+          p = pathlib.Path("apps/desktop/src-tauri/tauri.macos.conf.json")
+          conf = json.loads(p.read_text())
+          conf["bundle"]["macOS"]["signingIdentity"] = os.environ["APPLE_SIGNING_IDENTITY"]
+          p.write_text(json.dumps(conf, indent=2) + "\n")
+          print(p.read_text())
+          PY
+
       - name: Build the .dmg
         working-directory: apps/desktop
         env:
-          # Set these repository secrets to ship a Developer ID-signed,
-          # notarized build. With none of them set, the bundle falls back
-          # to the ad-hoc identity in tauri.macos.conf.json, which is
-          # what stops macOS calling the download "damaged" — see that
-          # file and the README's macOS note.
-          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
-          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          # The Apple variables come from the job's env; only the updater
+          # key is specific to this step.
           # Signs the update package. Separate from the Apple identity
           # above and required even without it: the updater refuses any
           # package this key did not sign, which is the whole reason an
@@ -93,10 +148,12 @@ jobs:
           # missing credential into a *failed* notarization rather than a
           # skipped one, breaking the release for anyone who hasn't set
           # them up.
-          for var in APPLE_CERTIFICATE APPLE_CERTIFICATE_PASSWORD \
-                     APPLE_SIGNING_IDENTITY APPLE_ID APPLE_PASSWORD APPLE_TEAM_ID; do
+          for var in APPLE_SIGNING_IDENTITY APPLE_ID APPLE_PASSWORD APPLE_TEAM_ID; do
             [ -n "${!var}" ] || unset "$var"
           done
+          # Always: the import step above already put it in a keychain the
+          # bundler can see, and a second import swaps the search list.
+          unset APPLE_CERTIFICATE APPLE_CERTIFICATE_PASSWORD
 
           # Not in that loop on purpose. An empty signing key is not a
           # skippable option the way an absent Apple identity is — the
@@ -111,6 +168,18 @@ jobs:
           # tarball of the .app, and asking only for the dmg produces the
           # installer but nothing for an existing install to update from.
           npm run tauri build -- --bundles app,dmg
+      - name: Check what was actually signed
+        if: env.APPLE_SIGNING_IDENTITY != ''
+        run: |
+          # "It built" is not "it opens on a stranger's Mac". Gatekeeper's
+          # own verdict is what these three answer.
+          app="$(find target/release/bundle/macos -maxdepth 1 -name '*.app' | head -1)"
+          dmg="$(find target/release/bundle/dmg -maxdepth 1 -name '*.dmg' | head -1)"
+          codesign --verify --deep --strict --verbose=2 "$app"
+          codesign -dv --verbose=4 "$app" 2>&1 | grep -E 'Authority|TeamIdentifier|Runtime|flags'
+          spctl --assess --type exec --verbose=4 "$app"
+          xcrun stapler validate "$dmg"
+
       - uses: actions/upload-artifact@v4
         with:
           name: macos-dmg
