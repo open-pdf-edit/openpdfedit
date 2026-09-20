@@ -49,6 +49,32 @@ test("a crawler that runs no JavaScript reads a heading and a page of text", () 
   expect(body).not.toMatch(/\b(Word|Excel|PowerPoint|JPG|PNG)\b|remove (a )?watermark|unlock/i);
 });
 
+test("the description survives a results page, and the card keeps the long one", () => {
+  // The first version of this was 212 characters and lost "Free, no
+  // account" to the ellipsis — the part that earns the click. A social
+  // card has no such limit, so og:description is deliberately longer.
+  const page = html();
+  const description = page.match(/<meta name="description" content="([^"]*)"/)?.[1] ?? "";
+  expect(description.length, `description: ${description.length} characters`).toBeLessThanOrEqual(158);
+  expect(description).toContain("Free, no account");
+  const og = page.match(/<meta property="og:description" content="([^"]*)"/)?.[1] ?? "";
+  expect(og.length).toBeGreaterThan(description.length);
+});
+
+test("a paid tool is never listed as if it were free", () => {
+  // OCR and the watermark are one purchase — both go through
+  // requireSupporter() — so a reader who taps OCR from this list walks
+  // into a paywall the copy did not mention.
+  const body = html().slice(html().indexOf("<body"));
+  for (const tool of ["OCR", "Watermark"]) {
+    const line = body.split("<li>").find((l) => l.includes(`<strong>${tool}</strong>`)) ?? "";
+    expect(line, `${tool} list entry`).toContain("Supporter");
+  }
+  // And nothing claims a split that does not exist: the app extracts the
+  // selected pages into one new file, it does not break one into many.
+  expect(body).not.toMatch(/split one into parts/i);
+});
+
 test("the title and a shared link say what the page is", () => {
   const page = html();
   const title = page.match(/<title>([^<]*)<\/title>/)?.[1].replace(/&amp;/g, "&");
