@@ -230,6 +230,275 @@ def install_profile(profile: dict) -> None:
     print(f"  PROVISIONING_PROFILE_SPECIFIER={plist['Name']}")
 
 
+
+
+# --- the listing ----------------------------------------------------------------
+
+def listing_copy() -> dict:
+    """The listing, read out of store/listing.md so there is one copy of it.
+
+    The file is written for a person to read — wrapped prose in blockquotes,
+    a fenced keyword line, a table of URLs. Everything below unwraps exactly
+    that, so editing the listing means editing the document, not this script.
+    """
+    src = (Path(__file__).resolve().parent.parent / "store" / "listing.md").read_text()
+
+    def blockquote(heading: str) -> str:
+        body = src.split(f"## {heading}", 1)[1].split("\n## ", 1)[0]
+        quoted, started = [], False
+        for line in body.splitlines():
+            if line.startswith(">"):
+                started = True
+                quoted.append("" if line.strip() == ">" else line[1:].lstrip())
+            elif started and not line.strip():
+                continue
+            elif started:
+                break
+        paragraphs, current = [], []
+        for line in quoted:
+            bullet = line.startswith(("•", "1.", "2.", "3.", "4."))
+            if not line or bullet:
+                if current:
+                    paragraphs.append((" ".join(current), False))
+                    current = []
+                if bullet:
+                    paragraphs.append((line, True))
+            else:
+                current.append(line)
+        if current:
+            paragraphs.append((" ".join(current), False))
+        # Bullets sit on consecutive lines; prose paragraphs get a blank line.
+        out = ""
+        for i, (text, bullet) in enumerate(paragraphs):
+            if i:
+                out += "\n" if bullet and paragraphs[i - 1][1] else "\n\n"
+            out += text
+        return out
+
+    return {
+        "promotionalText": blockquote("Promotional text (170 max)"),
+        "description": blockquote("Description (4000 max)"),
+        "keywords": re.search(r"## Keywords.*?```\n(.*?)\n```", src, re.S).group(1).strip(),
+        "supportUrl": "https://openpdfedit.com/support",
+        "marketingUrl": "https://openpdfedit.com",
+        "privacyPolicyUrl": "https://openpdfedit.com/privacy",
+        "subtitle": "Edit PDFs on device",
+    }
+
+
+def app_id() -> str:
+    found = call("GET", f"/apps?filter[bundleId]={BUNDLE_ID}").get("data", [])
+    if not found:
+        die(f"no app record for {BUNDLE_ID} — App Store Connect → Apps → + is the one step with no API")
+    return found[0]["id"]
+
+
+def ios_version(app: str) -> dict:
+    for v in call("GET", f"/apps/{app}/appStoreVersions?limit=20").get("data", []):
+        if v["attributes"]["platform"] == "IOS":
+            return v
+    die("no iOS version record on the app")
+
+
+def listing() -> None:
+    copy, app = listing_copy(), app_id()
+    for field, limit in (("promotionalText", 170), ("description", 4000), ("keywords", 100), ("subtitle", 30)):
+        if len(copy[field]) > limit:
+            die(f"{field} is {len(copy[field])} characters, over Apple's {limit}")
+
+    version = ios_version(app)
+    # The build's CFBundleShortVersionString decides which version record it
+    # can attach to, so the record follows the binary, not the other way.
+    if version["attributes"]["versionString"] != "1.0.0":
+        call("PATCH", f"/appStoreVersions/{version['id']}", {
+            "data": {"type": "appStoreVersions", "id": version["id"],
+                     "attributes": {"versionString": "1.0.0", "copyright": "2026 DE JIAN KOH"}},
+        })
+        print("version record → 1.0.0")
+
+    localizations = call("GET", f"/appStoreVersions/{version['id']}/appStoreVersionLocalizations").get("data", [])
+    body = {k: copy[k] for k in ("description", "keywords", "promotionalText", "supportUrl", "marketingUrl")}
+    existing = next((l for l in localizations if l["attributes"]["locale"] == "en-US"), None)
+    if existing:
+        call("PATCH", f"/appStoreVersionLocalizations/{existing['id']}",
+             {"data": {"type": "appStoreVersionLocalizations", "id": existing["id"], "attributes": body}})
+    else:
+        call("POST", "/appStoreVersionLocalizations", {
+            "data": {"type": "appStoreVersionLocalizations", "attributes": {"locale": "en-US", **body},
+                     "relationships": {"appStoreVersion": {"data": {"type": "appStoreVersions", "id": version["id"]}}}},
+        })
+    print(f"description ({len(copy['description'])} chars), keywords, promo text, both URLs")
+
+    info = call("GET", f"/apps/{app}/appInfos").get("data", [])[0]
+    for loc in call("GET", f"/appInfos/{info['id']}/appInfoLocalizations").get("data", []):
+        if loc["attributes"]["locale"] == "en-US":
+            call("PATCH", f"/appInfoLocalizations/{loc['id']}", {
+                "data": {"type": "appInfoLocalizations", "id": loc["id"],
+                         "attributes": {"subtitle": copy["subtitle"], "privacyPolicyUrl": copy["privacyPolicyUrl"]}},
+            })
+            print(f"subtitle {copy['subtitle']!r}, privacy policy url")
+    call("PATCH", f"/appInfos/{info['id']}", {
+        "data": {"type": "appInfos", "id": info["id"], "relationships": {
+            "primaryCategory": {"data": {"type": "appCategories", "id": "PRODUCTIVITY"}},
+            "secondaryCategory": {"data": {"type": "appCategories", "id": "BUSINESS"}},
+        }},
+    })
+    print("categories: Productivity, Business")
+
+    # 4+: nothing in the app generates or shows anything to rate.
+    declaration = call("GET", f"/appInfos/{info['id']}/ageRatingDeclaration").get("data")
+    if declaration:
+        call("PATCH", f"/ageRatingDeclarations/{declaration['id']}", {
+            "data": {"type": "ageRatingDeclarations", "id": declaration["id"], "attributes": {
+                "violenceCartoonOrFantasy": "NONE", "violenceRealistic": "NONE",
+                "violenceRealisticProlongedGraphicOrSadistic": "NONE",
+                "profanityOrCrudeHumor": "NONE", "matureOrSuggestiveThemes": "NONE",
+                "horrorOrFearThemes": "NONE", "medicalOrTreatmentInformation": "NONE",
+                "alcoholTobaccoOrDrugUseOrReferences": "NONE", "sexualContentOrNudity": "NONE",
+                "sexualContentGraphicAndNudity": "NONE", "gamblingSimulated": "NONE",
+                "gambling": False, "unrestrictedWebAccess": False,
+                "kidsAgeBand": None, "contests": "NONE",
+                # Apple added these and rejects the whole declaration when
+                # any is absent, naming them one refusal at a time.
+                "userGeneratedContent": False, "advertising": False,
+                "gunsOrOtherWeapons": "NONE", "healthOrWellnessTopics": False,
+                "ageAssurance": False, "lootBox": False,
+                "parentalControls": False, "messagingAndChat": False,
+            }},
+        })
+        print("age rating: 4+")
+
+    builds = [b for b in call("GET", f"/builds?filter[app]={app}&limit=20").get("data", [])
+              if b["attributes"].get("processingState") == "VALID"]
+    if builds:
+        newest = sorted(builds, key=lambda b: b["attributes"]["uploadedDate"])[-1]
+        call("PATCH", f"/appStoreVersions/{version['id']}/relationships/build",
+             {"data": {"type": "builds", "id": newest["id"]}})
+        print(f"build {newest['attributes']['version']} attached")
+    else:
+        print("no processed build to attach yet — Apple is still processing the upload")
+
+
+
+def screenshots() -> None:
+    """Upload store/screenshots to the version, one set per device size.
+
+    Apple takes a screenshot in three steps — reserve, PUT the bytes to the
+    url it hands back, then confirm with the file's MD5 — and a screenshot
+    that stops after the PUT sits in the set forever as "processing failed".
+    """
+    import hashlib
+
+    folder = Path(__file__).resolve().parent.parent / "store" / "screenshots"
+    # 6.9-inch iPhone and 13-inch iPad: the two sizes a universal app must
+    # give, and the only two these captures are made at.
+    sets = {"APP_IPHONE_67": sorted(f for f in folder.glob("*.png") if "-ipad" not in f.name),
+            "APP_IPAD_PRO_3GEN_129": sorted(folder.glob("*-ipad.png"))}
+
+    version = ios_version(app_id())
+    localization = next(l for l in call("GET", f"/appStoreVersions/{version['id']}/appStoreVersionLocalizations")["data"]
+                        if l["attributes"]["locale"] == "en-US")
+    existing = {s["attributes"]["screenshotDisplayType"]: s["id"]
+                for s in call("GET", f"/appStoreVersionLocalizations/{localization['id']}/appScreenshotSets").get("data", [])}
+
+    for display_type, files in sets.items():
+        if not files:
+            print(f"{display_type}: no files"); continue
+        set_id = existing.get(display_type)
+        if not set_id:
+            set_id = call("POST", "/appScreenshotSets", {
+                "data": {"type": "appScreenshotSets", "attributes": {"screenshotDisplayType": display_type},
+                         "relationships": {"appStoreVersionLocalization": {"data": {"type": "appStoreVersionLocalizations", "id": localization["id"]}}}},
+            })["data"]["id"]
+        already = {s["attributes"]["fileName"] for s in call("GET", f"/appScreenshotSets/{set_id}/appScreenshots").get("data", [])}
+
+        for file in files:
+            if file.name in already:
+                print(f"  {file.name} already there"); continue
+            content = file.read_bytes()
+            reserved = call("POST", "/appScreenshots", {
+                "data": {"type": "appScreenshots", "attributes": {"fileSize": len(content), "fileName": file.name},
+                         "relationships": {"appScreenshotSet": {"data": {"type": "appScreenshotSets", "id": set_id}}}},
+            })["data"]
+            for operation in reserved["attributes"]["uploadOperations"]:
+                request = urllib.request.Request(operation["url"], data=content, method=operation["method"])
+                for header in operation.get("requestHeaders", []):
+                    request.add_header(header["name"], header["value"])
+                with urllib.request.urlopen(request, timeout=300) as response:
+                    if response.status >= 300:
+                        die(f"upload of {file.name} returned {response.status}")
+            call("PATCH", f"/appScreenshots/{reserved['id']}", {
+                "data": {"type": "appScreenshots", "id": reserved["id"],
+                         "attributes": {"uploaded": True, "sourceFileChecksum": hashlib.md5(content).hexdigest()}},
+            })
+            print(f"  {file.name} uploaded ({len(content) // 1024} KB)")
+        print(f"{display_type}: {len(files)} screenshot(s)")
+
+
+# The two credit packs, exactly as store/listing.md and Store.swift name
+# them. A mismatch here is a purchase that takes the money and grants
+# nothing, and nothing in the toolchain checks it for you.
+IAPS = [
+    {"productId": "credits_1000", "name": "1,000 Credits", "price": "4.99",
+     "description": "1,000 credits for OpenPdfEdit — exactly what the one-time Watermark and OCR unlock costs. Credits never expire."},
+    {"productId": "credits_5000", "name": "5,000 Credits", "price": "19.99",
+     "description": "5,000 credits for OpenPdfEdit. Credits never expire and can be spent in any OpenApps product."},
+]
+
+
+def iaps() -> None:
+    """Create the consumables, name them, and put them on the US price."""
+    app = app_id()
+    have = {p["attributes"]["productId"]: p for p in call("GET", f"/apps/{app}/inAppPurchasesV2?limit=50").get("data", [])}
+
+    for wanted in IAPS:
+        product = have.get(wanted["productId"])
+        if product:
+            print(f"{wanted['productId']} exists ({product['attributes'].get('state')})")
+        else:
+            product = call("POST", "/inAppPurchases", {
+                "data": {"type": "inAppPurchases", "attributes": {
+                    "name": wanted["name"], "productId": wanted["productId"],
+                    "inAppPurchaseType": "CONSUMABLE",
+                    "reviewNote": "Credits are spent inside the app on the one-time Watermark and OCR unlock. "
+                                  "Sign in with the demo account in App Review Information, tap the Watermark tool, "
+                                  "and the credits panel appears.",
+                }, "relationships": {"app": {"data": {"type": "apps", "id": app}}}},
+            })["data"]
+            print(f"{wanted['productId']} created")
+
+        localizations = call("GET", f"/inAppPurchases/{product['id']}/inAppPurchaseLocalizations").get("data", [])
+        if not any(l["attributes"]["locale"] == "en-US" for l in localizations):
+            call("POST", "/inAppPurchaseLocalizations", {
+                "data": {"type": "inAppPurchaseLocalizations", "attributes": {
+                    "locale": "en-US", "name": wanted["name"], "description": wanted["description"]},
+                    "relationships": {"inAppPurchaseV2": {"data": {"type": "inAppPurchases", "id": product["id"]}}}},
+            })
+            print(f"  described")
+
+        schedule = call("GET", f"/inAppPurchases/{product['id']}/iapPriceSchedule").get("data")
+        if schedule:
+            print("  priced already")
+            continue
+        # A price is chosen by naming Apple's own price point for the US
+        # territory; the other territories follow from it.
+        points = call("GET", f"/inAppPurchases/{product['id']}/pricePoints?filter[territory]=USA&limit=200").get("data", [])
+        match = next((p for p in points if p["attributes"]["customerPrice"] == wanted["price"]), None)
+        if not match:
+            print(f"  no ${wanted['price']} price point among {len(points)}"); continue
+        call("POST", "/inAppPurchasePriceSchedules", {
+            "data": {"type": "inAppPurchasePriceSchedules",
+                     "relationships": {
+                         "inAppPurchase": {"data": {"type": "inAppPurchases", "id": product["id"]}},
+                         "baseTerritory": {"data": {"type": "territories", "id": "USA"}},
+                         "manualPrices": {"data": [{"type": "inAppPurchasePrices", "id": "${price}"}]},
+                     }},
+            "included": [{"type": "inAppPurchasePrices", "id": "${price}", "attributes": {"startDate": None},
+                          "relationships": {"inAppPurchasePricePoint": {"data": {"type": "inAppPurchasePricePoints", "id": match["id"]}}}}],
+        })
+        print(f"  priced at ${wanted['price']}")
+
+
 def main() -> None:
     commands = {
         "whoami": whoami,
@@ -237,6 +506,9 @@ def main() -> None:
         "ensure-app-id": lambda: print(f"app id record {ensure_app_id()}"),
         "ensure-profile": ensure_profile,
         "setup": lambda: (ensure_cert(), ensure_app_id(), ensure_profile()),
+        "listing": listing,
+        "screenshots": screenshots,
+        "iaps": iaps,
     }
     if len(sys.argv) != 2 or sys.argv[1] not in commands:
         print(__doc__)

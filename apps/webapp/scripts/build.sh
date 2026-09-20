@@ -21,7 +21,14 @@ WEBAPP_DIR="$(dirname "$SCRIPT_DIR")"
 WORKSPACE_DIR="$(dirname "$(dirname "$WEBAPP_DIR")")"
 DESKTOP_DIR="$WORKSPACE_DIR/apps/desktop"
 EXT_DIR="$WORKSPACE_DIR/apps/extension"
-DIST_DIR="$WEBAPP_DIR/dist"
+# Both overridable, for the one other caller: apps/ios/scripts/sync-web.sh
+# builds the same SPA for the app bundle, where the base must be empty and
+# the output must not overwrite the site's own dist.
+DIST_DIR="${DIST_DIR:-$WEBAPP_DIR/dist}"
+# Empty is a real value here — BASE_PATH= means "no base", which is what a
+# bundle served from the root of a custom scheme needs — so ${BASE_PATH-…}
+# rather than ${BASE_PATH:-…}.
+BASE_PATH="${BASE_PATH-/app}"
 
 log() { printf '\033[1m==> %s\033[0m\n' "$1"; }
 
@@ -44,7 +51,7 @@ log "Building the SPA against the wasm backend"
 # cannot be applied afterwards by nginx: a base-less build under /app/ loads
 # every file and then renders "Not found: /app/". Only this build sets it --
 # the desktop app and the extension are served from their own root.
-(cd "$DESKTOP_DIR" && rm -rf build .svelte-kit && BASE_PATH=/app VITE_BACKEND=wasm npm run build)
+(cd "$DESKTOP_DIR" && rm -rf build .svelte-kit && BASE_PATH="$BASE_PATH" VITE_BACKEND=wasm npm run build)
 
 if [ ! -f "$DESKTOP_DIR/build/index.html" ]; then
   echo "build.sh: $DESKTOP_DIR/build/index.html missing — did the SPA build fail silently?" >&2
