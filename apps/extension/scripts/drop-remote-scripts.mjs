@@ -1,32 +1,34 @@
-// Takes the Telegram loader out of the extension's index.html, and then
-// proves nothing else in dist/ loads code from the internet.
+// Proves a built package loads no code from the internet — and takes out
+// the Telegram loader if a build ever puts one back.
 //
-// apps/desktop/src/app.html carries a small bootstrap that appends
-// <script src="https://telegram.org/js/telegram-web-app.js"> when the URL
-// fragment says the page is open inside a Telegram Mini App. The web app
-// needs it. The extension cannot use it at all: its pages are opened as
-// chrome-extension://…/index.html, where no fragment ever says tgWebApp,
-// and MV3's `script-src 'self' 'wasm-unsafe-eval'` would refuse the tag
-// anyway.
+//   node drop-remote-scripts.mjs [dist-directory]
 //
-// It still has to go, because a store review reads the code rather than
-// what the code can reach: a <script> pointing at another origin is
-// exactly the Chrome Web Store's definition of remote code, and leaving
-// it in means answering "yes, we use remote code" and defending it. With
-// it removed the honest answer is no — which is also the true one, since
-// everything the extension runs is in the package: PDFium and the Rust
-// core as WebAssembly, the SPA's own chunks, nothing fetched.
+// The Mini App bridge used to live in apps/desktop/src/app.html, so every
+// target carried a <script src="https://telegram.org/…"> and this script
+// cut it out of the extension's copy. It is gone at the source now: the
+// bridge belongs to the Telegram build, in its own private repository,
+// and nothing built here ships it (svelte.config.js, $telegram).
 //
-// Run by scripts/build-spa.sh after the SPA is copied in and before the
-// inline scripts are externalized, so the loader never reaches an
-// inline-N.js file. It fails the build rather than warn: a quiet pass
-// here would be discovered in a store review weeks later.
+// So the removal is a safety net and the *assertion* is the point. A
+// store review reads the code rather than what the code can reach: a
+// <script> pointing at another origin is the Chrome Web Store's own
+// definition of remote code, MV3 forbids it, and an iOS bundle carrying
+// one is a question at review. With none present the honest answer to
+// "are you using remote code?" is no — everything these packages run is
+// in them: PDFium and the Rust core as WebAssembly, the SPA's own chunks.
+//
+// Called by the extension build, the web app build and the iOS bundle
+// sync, each with its own directory. It fails the build rather than
+// warn: a quiet pass here is discovered in a review weeks later.
 import { readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const DIST = join(dirname(fileURLToPath(import.meta.url)), "..", "dist");
+const DIST = process.argv[2]
+  ? resolve(process.argv[2])
+  : join(dirname(fileURLToPath(import.meta.url)), "..", "dist");
 const INDEX = join(DIST, "index.html");
+const label = DIST.split("/").slice(-2).join("/");
 
 // --- 1. the Telegram loader ------------------------------------------------
 const before = readFileSync(INDEX, "utf8");
@@ -38,13 +40,10 @@ const loader = /[ \t]*<script\b[^>]*>(?:(?!<\/script>)[\s\S])*?telegram\.org(?:(
 // and a reviewer reads the file rather than executing it.
 const explanation = /[ \t]*<!--(?:(?!-->)[\s\S])*?[Tt]elegram(?:(?!-->)[\s\S])*?-->\s*/g;
 const found = before.match(loader)?.length ?? 0;
-if (found === 0) {
-  console.error("drop-remote-scripts: no Telegram loader in dist/index.html.");
-  console.error("  If app.html no longer has one, delete this step; if it moved, teach this script where.");
-  process.exit(1);
+if (found > 0) {
+  writeFileSync(INDEX, before.replace(loader, "\n").replace(explanation, ""));
+  console.log(`drop-remote-scripts: removed ${found} Telegram loader script tag(s) from ${label}/index.html`);
 }
-writeFileSync(INDEX, before.replace(loader, "\n").replace(explanation, ""));
-console.log(`drop-remote-scripts: removed ${found} Telegram loader script tag(s) from index.html`);
 
 // --- 2. nothing else reaches out -------------------------------------------
 // Only the ways a browser is actually told to run someone else's code:
@@ -81,4 +80,4 @@ if (offenders.length > 0) {
   console.error("  A store asks whether the extension uses remote code; this is what makes the answer yes.");
   process.exit(1);
 }
-console.log("drop-remote-scripts: no remote code in dist/ — every script it runs is in the package");
+console.log(`drop-remote-scripts: no remote code in ${label} — every script it runs is in the package`);
