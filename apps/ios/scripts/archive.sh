@@ -77,8 +77,21 @@ mkdir -p "$BUILD"
 # and installs that profile.
 PROFILE_NAME="${IOS_PROFILE_NAME:-OpenPdfEdit App Store}"
 SIGNING=(-allowProvisioningUpdates)
-if security cms -D -i "$HOME/Library/MobileDevice/Provisioning Profiles"/*.mobileprovision 2>/dev/null \
-     | grep -q "<string>$PROFILE_NAME</string>"; then
+# One file at a time: `security cms -i` reads a single profile, so passing
+# the glob checks only whichever sorts first — which is right exactly until
+# a second profile appears, and then the archive silently falls back to
+# automatic signing and fails asking for a development profile.
+profile_installed() {
+  local file
+  for file in "$HOME/Library/MobileDevice/Provisioning Profiles"/*.mobileprovision; do
+    [ -e "$file" ] || continue
+    if security cms -D -i "$file" 2>/dev/null | grep -q "<string>$PROFILE_NAME</string>"; then
+      return 0
+    fi
+  done
+  return 1
+}
+if profile_installed; then
   log "Signing with \"$PROFILE_NAME\""
   SIGNING=(
     CODE_SIGN_STYLE=Manual
