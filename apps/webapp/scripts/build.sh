@@ -218,7 +218,13 @@ if (html.includes("service-worker.js")) process.exit(0);
 // (APP-96). The title leads with what people search for and ends with the
 // name; og/twitter tags make a shared link a card instead of a bare URL.
 const TITLE = "Free Online PDF Editor & Viewer — No Upload | OpenPdfEdit";
-const DESCRIPTION = "Edit PDFs in your browser — annotate, edit text, fill forms, redact, sign and reorganise pages. Nothing is uploaded: every page renders and every edit saves on your own machine. Free, no account, works offline.";
+// Two descriptions, because the limits differ. A results page cuts the
+// meta one around 158 characters, and the old 212-character version lost
+// exactly the part that earns the click — "Free, no account" (APP-96,
+// second review). A social card has no such limit, so og:description
+// keeps the longer sentence.
+const DESCRIPTION = "Edit PDFs in your browser — annotate, edit text, fill forms, redact and sign. Nothing is uploaded; every edit saves on your own machine. Free, no account.";
+const OG_DESCRIPTION = "Edit PDFs in your browser — annotate, edit text, fill forms, redact, sign and reorganise pages. Nothing is uploaded: every page renders and every edit saves on your own machine. Free, no account, works offline.";
 const inject = [
   '<link rel="manifest" href="./manifest.webmanifest">',
   // Every path on this host answers with this same file and a 200 —
@@ -240,7 +246,7 @@ const inject = [
   '<meta property="og:type" content="website">',
   '<meta property="og:url" content="https://openpdfedit.com/app/">',
   `<meta property="og:title" content="${TITLE}">`,
-  `<meta property="og:description" content="${DESCRIPTION}">`,
+  `<meta property="og:description" content="${OG_DESCRIPTION}">`,
   '<meta property="og:image" content="https://openpdfedit.com/og.png">',
   '<meta name="twitter:card" content="summary_large_image">',
   // iOS reads none of the manifest's icons: it wants this tag, and puts
@@ -316,10 +322,19 @@ const html = readFileSync(file, "utf8");
 const body = html.slice(html.indexOf("<body")).replace(/<script[\s\S]*?<\/script>/g, "");
 const words = body.replace(/<[^>]*>/g, " ").replace(/&amp;/g, "&").split(/\s+/).filter(Boolean).length;
 const title = html.match(/<title>([^<]*)<\/title>/)?.[1].replace(/&amp;/g, "&") ?? "";
+const description = html.match(/<meta name="description" content="([^"]*)"/)?.[1] ?? "";
 const checks = [
   [words >= 350 && words <= 450, `static body text: ${words} words (350–450)`],
   [(html.match(/<h1[\s>]/g) ?? []).length === 1, "exactly one <h1>"],
   [title.length > 0 && title.length <= 60, `<title> "${title}" is ${title.length} characters (≤ 60)`],
+  // Measured, not judged by eye: the first version of this was written
+  // as "already good, leave it" and was 212 characters.
+  [description.length > 0 && description.length <= 158, `description is ${description.length} characters (≤ 158)`],
+  // OCR and the watermark are the same purchase. A free-looking list
+  // entry for either is a paywall the reader walks into.
+  [["OCR", "Watermark"].every((tool) => (body.split("<li>").find((li) => li.includes(`<strong>${tool}</strong>`)) ?? "").includes("Supporter")),
+    "OCR and Watermark both marked Supporter"],
+  [!/split one into parts/i.test(body), "no claim of splitting one file into many"],
   [["og:type", "og:url", "og:title", "og:description", "og:image"].every((p) => html.includes(`property="${p}"`)) && html.includes('name="twitter:card"'), "og and twitter tags"],
   [!existsSync(`${dist}/sitemap.xml`), "no sitemap.xml of its own"],
   [!/umami/i.test(html), "no analytics — privacy.html promises none"],
