@@ -84,7 +84,12 @@ log "Checking what is actually live"
 # ones. A check that cries wolf is worse than no check: the third time it
 # is right, nobody looks.
 ORIGIN="$(grep -o 'WEBAPP_ORIGIN = "[^"]*"' apps/desktop/src/lib/openapps.ts | cut -d'"' -f2)"
-BASE="$(grep -o 'BASE_PATH=[^ ]*' apps/webapp/scripts/build.sh | head -1 | cut -d= -f2)"
+# The build script's own default, however it is written there: it became
+# BASE_PATH="${BASE_PATH-/app}" when the iOS bundle needed a base-less
+# build of the same SPA, and the older `cut -d=` reading turned that into
+# a literal ${BASE_PATH-/app} and asked the apex for a file that lives
+# under /app.
+BASE="$(sed -n 's/^BASE_PATH=.*[-:]\([^}"]*\)}*".*$/\1/p;s/^BASE_PATH=\([^ "]*\)$/\1/p' apps/webapp/scripts/build.sh | head -1)"
 [ -n "$ORIGIN" ] || { echo "  could not read WEBAPP_ORIGIN from openapps.ts" >&2; exit 1; }
 SW_URL="${ORIGIN}${BASE}/service-worker.js"
 echo "  asking $SW_URL"

@@ -67,6 +67,12 @@ cp -R "$DESKTOP_DIR/build/." "$DIST_DIR/"
 # <script src="/pdfium.js"> itself and dynamically imports
 # /wasm-gen/openpdfedit_wasm.js through a string specifier, so nothing
 # copies these unless a script does it explicitly.
+# Nothing in the package may fetch code from another origin — the same
+# check the extension build runs, for the same reason: a review reads the
+# code, and the iOS bundle is built from this output too.
+log "Checking the build loads no remote code"
+node "$EXT_DIR/scripts/drop-remote-scripts.mjs" "$DIST_DIR"
+
 log "Copying the wasm runtime assets"
 PDFIUM_DIR="$WORKSPACE_DIR/.vendor/pdfium-wasm/release/node"
 for f in pdfium.js pdfium.wasm; do

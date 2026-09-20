@@ -103,6 +103,10 @@ grep -q 'id="landing-copy"' "$DEST/index.html" &&
 grep -q 'base: "/app"' "$DEST/index.html" &&
   { echo "sync-web.sh: index.html still carries the site's /app base — the app would render nothing" >&2; exit 1; }
 
+# The bundle is a binary Apple reviews: a <script> from another origin in
+# it is a question at review, and there is no reason for one to be here.
+node "$WORKSPACE_DIR/apps/extension/scripts/drop-remote-scripts.mjs" "$DEST"
+
 log "Done"
 echo "  files: $(find "$DEST" -type f | wc -l | tr -d ' ')"
 echo "  size:  $(du -sh "$DEST" | cut -f1)"
