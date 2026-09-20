@@ -51,3 +51,5 @@ apps/extension/src/wasm-gen/
 apps/ios/www/
 apps/ios/.build/
 apps/extension/dist-idtest/
+.edgeone/
+__pycache__/
