@@ -12,8 +12,17 @@
 	<key>teamID</key>
 	<string>__TEAM_ID__</string>
 
+	<!-- Manual, with the profile scripts/asc.py installs: automatic export
+	     re-derives a profile from the account and picks a development one
+	     when the team has no registered devices. -->
 	<key>signingStyle</key>
-	<string>automatic</string>
+	<string>manual</string>
+
+	<key>provisioningProfiles</key>
+	<dict>
+		<key>com.openpdfedit.app</key>
+		<string>OpenPdfEdit App Store</string>
+	</dict>
 
 	<!-- Let Apple thin the binary per device. It matters here: the bundle
 	     carries a WebAssembly build of PDFium and the Rust core, so the

@@ -68,6 +68,27 @@ log "OpenPdfEdit $VERSION ($BUILD_NUMBER), team $TEAM"
 rm -rf "$BUILD"
 mkdir -p "$BUILD"
 
+# Manual signing when the App Store profile is installed, automatic when
+# it is not. Automatic alone asks Apple for an *iOS App Development*
+# profile, which needs a registered device — so a team that has never
+# enrolled one (nobody debugs on hardware here; the simulator and the
+# tests cover it) cannot archive at all, with an error that reads as
+# though the distribution profile were missing. scripts/asc.py creates
+# and installs that profile.
+PROFILE_NAME="${IOS_PROFILE_NAME:-OpenPdfEdit App Store}"
+SIGNING=(-allowProvisioningUpdates)
+if security cms -D -i "$HOME/Library/MobileDevice/Provisioning Profiles"/*.mobileprovision 2>/dev/null \
+     | grep -q "<string>$PROFILE_NAME</string>"; then
+  log "Signing with \"$PROFILE_NAME\""
+  SIGNING=(
+    CODE_SIGN_STYLE=Manual
+    CODE_SIGN_IDENTITY="Apple Distribution"
+    PROVISIONING_PROFILE_SPECIFIER="$PROFILE_NAME"
+  )
+else
+  log "No \"$PROFILE_NAME\" profile installed; letting Xcode sign (needs a registered device)"
+fi
+
 log "Archiving"
 xcodebuild archive \
   -project "$IOS_DIR/OpenPdfEdit.xcodeproj" \
@@ -75,7 +96,7 @@ xcodebuild archive \
   -configuration Release \
   -destination "generic/platform=iOS" \
   -archivePath "$ARCHIVE" \
-  -allowProvisioningUpdates \
+  "${SIGNING[@]}" \
   CURRENT_PROJECT_VERSION="$BUILD_NUMBER" \
   | grep -E "error:|warning:|ARCHIVE" || true
 
