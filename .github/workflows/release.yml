@@ -168,16 +168,32 @@ jobs:
           # tarball of the .app, and asking only for the dmg produces the
           # installer but nothing for an existing install to update from.
           npm run tauri build -- --bundles app,dmg
+      - name: Notarize and staple the .dmg
+        if: env.APPLE_ID != ''
+        run: |
+          # The bundler notarizes and staples the .app, and then builds the
+          # .dmg around it — so the disk image itself carries no ticket.
+          # Online that still passes, because Gatekeeper asks Apple; on a
+          # machine with no network the first thing a new user sees is
+          # "cannot be opened". The image is its own notarization subject,
+          # so it is submitted and stapled here.
+          dmg="$(find target/release/bundle/dmg -maxdepth 1 -name '*.dmg' | head -1)"
+          xcrun notarytool submit "$dmg" --apple-id "$APPLE_ID" \
+            --password "$APPLE_PASSWORD" --team-id "$APPLE_TEAM_ID" --wait
+          xcrun stapler staple "$dmg"
+
       - name: Check what was actually signed
         if: env.APPLE_SIGNING_IDENTITY != ''
         run: |
           # "It built" is not "it opens on a stranger's Mac". Gatekeeper's
-          # own verdict is what these three answer.
+          # own verdict is what these answer, and stapler answers for the
+          # machine that is offline when it opens the download.
           app="$(find target/release/bundle/macos -maxdepth 1 -name '*.app' | head -1)"
           dmg="$(find target/release/bundle/dmg -maxdepth 1 -name '*.dmg' | head -1)"
           codesign --verify --deep --strict --verbose=2 "$app"
           codesign -dv --verbose=4 "$app" 2>&1 | grep -E 'Authority|TeamIdentifier|Runtime|flags'
           spctl --assess --type exec --verbose=4 "$app"
+          xcrun stapler validate "$app"
           xcrun stapler validate "$dmg"
 
       - uses: actions/upload-artifact@v4
