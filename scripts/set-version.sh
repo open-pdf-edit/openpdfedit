@@ -78,9 +78,17 @@ SITE="$(cd "$(dirname "$0")/../../openpdfedit-website" 2>/dev/null && pwd || tru
 if [ -n "$SITE" ] && [ -f "$SITE/index.html" ]; then
   perl -pi -e 's{<span class="mono">v[0-9.]+</span>}{<span class="mono">v'"$VERSION"'</span>}' \
     "$SITE/index.html" "$SITE/privacy.html"
-  python3 "$SITE/scripts/build-jsonld.py"
+  # The version, and only the version. This used to rerun
+  # build-jsonld.py, which rebuilds the whole block from the page: on
+  # 1.0.1 that dropped the X profile from sameAs and turned "Inspect
+  # signatures" into "Inspect signatures claims only", both on a page
+  # whose live copy had been corrected by hand. Regenerating the feature
+  # list is a deliberate act for when the tools change, not a side
+  # effect of a version bump.
+  perl -pi -e 's/"softwareVersion": "[^"]*"/"softwareVersion": "'"$VERSION"'"/' "$SITE/index.html"
+  SITE_VERSION="$(sed -n 's/.*"softwareVersion": "\([^"]*\)".*/\1/p' "$SITE/index.html" | head -1)"
   printf '%-46s %s\n' "openpdfedit-website/index.html" \
-    "$(sed -n 's/.*"softwareVersion": "\([^"]*\)".*/\1/p' "$SITE/index.html" | head -1)"
+    "${SITE_VERSION:-(the page carries no version — nothing to bump)}"
 else
   echo
   echo "  NOTE: openpdfedit-website is not checked out beside this repo, so the" >&2
