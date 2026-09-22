@@ -19,7 +19,10 @@
    * and extension builds branch on, so the whole component and both
    * plugin imports drop out of those bundles rather than shipping as
    * dead code that throws if it ever ran. */
-  const isDesktop = backendKind === "tauri";
+  // Not in the Mac App Store build, which the store updates and which
+  // must not update itself: there the updater plugin is not compiled in
+  // at all (the Rust `updater` feature), and this draws nothing.
+  const isDesktop = backendKind === "tauri" && import.meta.env.VITE_TARGET !== "appstore";
 
   /** What the control is currently saying. `idle` is the resting state;
    * everything else is the result of a check — the one the user asked

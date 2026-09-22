@@ -1,0 +1,22 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "identifier": "com.openpdfedit.app",
+  "build": {
+    "beforeBuildCommand": "VITE_TARGET=appstore npm run build:app"
+  },
+  "bundle": {
+    "createUpdaterArtifacts": false,
+    "category": "Productivity",
+    "macOS": {
+      "signingIdentity": "Apple Distribution: DE JIAN KOH (JY2NWT5QFV)",
+      "entitlements": "appstore/OpenPdfEdit.entitlements",
+      "files": {
+        "embedded.provisionprofile": "appstore/embedded.provisionprofile"
+      },
+      "minimumSystemVersion": "12.0"
+    }
+  },
+  "plugins": {
+    "updater": null
+  }
+}
