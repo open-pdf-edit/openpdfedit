@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- The Mac App Store build's entitlements, and nothing more than it needs.
+     The sandbox is required for the store. Files are reached only as the
+     person hands them over — through the open and save panels, a drag onto
+     the window, or Finder's Open With — which is exactly what
+     user-selected read-write grants. The network is the account server:
+     sign-in, the credit balance, and redeeming App Store purchases. PDFs
+     never travel over it. -->
+<plist version="1.0">
+<dict>
+	<key>com.apple.security.app-sandbox</key>
+	<true/>
+	<key>com.apple.security.files.user-selected.read-write</key>
+	<true/>
+	<key>com.apple.security.network.client</key>
+	<true/>
+	<!-- Required for a store build signed outside Xcode: they tie the
+	     binary to the provisioning profile embedded beside it. -->
+	<key>com.apple.application-identifier</key>
+	<string>JY2NWT5QFV.com.openpdfedit.app</string>
+	<key>com.apple.developer.team-identifier</key>
+	<string>JY2NWT5QFV</string>
+</dict>
+</plist>

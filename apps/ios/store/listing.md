@@ -173,18 +173,31 @@ panel, where both packs appear together.
 
 ## Sign-In Information — required
 
-Tick **Sign-in required** and supply a demo account. This is not
-optional: the reviewer will test the in-app purchase, purchases are
-authenticated, and a reviewer who cannot reach the buy button rejects the
-build. Create the account on the production server before submitting:
+Tick **Sign-in required** and supply the shared review account. The
+reviewer will test the in-app purchase, purchases are authenticated, and a
+reviewer who cannot reach the buy button rejects the build.
 
-```
-Username: appreview@openpdfedit.com
-Password: <generate one; store it in the password manager, not here>
-```
+OpenApps has no email or password sign-in — accounts are Google, Nostr or an
+Ethereum wallet — so the review account is a **Nostr key**, which is a
+credential a reviewer can simply paste. It is one account for every OpenApps
+app, since they share an account system, and it was created on the
+production server on 2026-09-22 with a zero balance.
 
-Give it a credit balance of zero. The reviewer needs to *make* a
-purchase, and a pre-credited account hides the thing under review.
+- **The key** lives in `~/.config/openapps/app-review.txt` (mode 600) on the
+  release Mac, and in the password manager. Never in this repository.
+- **Username field:** `Nostr key (paste it — see notes)`
+- **Password field:** the `nsec1…` key from that file.
+
+And in the notes, the path, because it is four taps deep and a reviewer
+will not guess it:
+
+> Sign in with the Nostr key supplied in the password field. There is no
+> email login. Tap Account → Continue with Nostr → "No extension? Use a
+> remote signer" → "I only have a private key", paste the key, and sign in.
+> The account has zero credits so that the in-app purchase can be tested.
+
+Keep the balance at zero. The reviewer needs to *make* a purchase, and a
+pre-credited account hides the thing under review.
 
 ## Review notes
 

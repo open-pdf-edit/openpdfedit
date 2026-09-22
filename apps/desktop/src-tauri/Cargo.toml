@@ -27,14 +27,14 @@ tauri-build = { version = "2", features = [] }
 # pre-1.0 state, given this dev environment has no screen-capture/
 # accessibility access to observe the UI any other way. Revisit before a
 # real 1.0 release — devtools access isn't something to ship to end users.
-tauri = { version = "2", features = ["devtools"] }
+tauri = { version = "2", features = [] }
 tauri-plugin-opener = "2"
 tauri-plugin-dialog = "2"
 # In-app updates. `process` is what lets the app relaunch itself once an
 # update is staged — without it the new version only appears the next
 # time the user happens to quit and reopen, which reads as the update
 # having done nothing.
-tauri-plugin-updater = "2"
+tauri-plugin-updater = { version = "2", optional = true }
 tauri-plugin-process = "2"
 serde.workspace = true
 serde_json.workspace = true
@@ -55,3 +55,16 @@ openpdfedit-compare.workspace = true
 
 [dev-dependencies]
 
+[features]
+default = ["updater", "devtools"]
+# In-app updates, for the builds we distribute ourselves. The Mac App Store
+# forbids an app that updates itself — the store is the only updater — so
+# its build leaves this out entirely rather than switching it off.
+updater = ["dep:tauri-plugin-updater"]
+# The inspector. Kept in the builds we ship ourselves, as before; left out
+# of the store build, where a reviewer opening a web inspector on a native
+# app is a question nobody needs to answer.
+devtools = ["tauri/devtools"]
+# The Mac App Store build: sandboxed, updated by the store, sold through
+# StoreKit. Built with --no-default-features --features appstore.
+appstore = []
