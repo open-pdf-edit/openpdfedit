@@ -650,6 +650,48 @@ def ensure_mac_profile() -> None:
     print(f"wrote {MAC_PROFILE_OUT} ({plist['Name']}, expires {plist['ExpirationDate']:%Y-%m-%d})")
 
 
+def review_notes() -> None:
+    """"Notes for the reviewer" on both versions, from store/listing.md.
+
+    The sign-in paragraph first — which field the key is in has no answer
+    anywhere else on the form — then the notes that pre-empt the two
+    classic rejections: 4.2 (this is a web wrapper) and 3.1.1 (credits
+    sold outside in-app purchase). Contact details and the demo account
+    fields are left exactly as they are.
+    """
+    src = (Path(__file__).resolve().parent.parent / "store" / "listing.md").read_text()
+
+    def quoted(heading: str) -> str:
+        body = src.split(f"## {heading}\n", 1)[1].split("\n## ", 1)[0]
+        lines = [l[1:].lstrip() if l.strip() != ">" else "" for l in body.splitlines() if l.startswith(">")]
+        paragraphs, current = [], []
+        for line in lines:
+            if not line or line[:2] in ("1.", "2.", "3.", "4.") or line.isupper():
+                if current:
+                    paragraphs.append(" ".join(current)); current = []
+                if line:
+                    current.append(line)
+            else:
+                current.append(line)
+        if current:
+            paragraphs.append(" ".join(current))
+        return "\n\n".join(paragraphs)
+
+    signin = quoted("Review notes: sign-in (both platforms)")
+    app = app_id()
+    for platform, heading in (("IOS", "Review notes"), ("MAC_OS", "Mac review notes")):
+        notes = signin + "\n\n" + quoted(heading)
+        if len(notes) > 4000:
+            die(f"{platform} notes are {len(notes)} characters, over Apple's 4000")
+        version = version_for(app, platform)
+        detail = call("GET", f"/appStoreVersions/{version['id']}/appStoreReviewDetail").get("data")
+        if not detail:
+            die(f"{platform} has no App Review Information yet — its contact details come from the form")
+        call("PATCH", f"/appStoreReviewDetails/{detail['id']}",
+             {"data": {"type": "appStoreReviewDetails", "id": detail["id"], "attributes": {"notes": notes}}})
+        print(f"{platform}: notes set ({len(notes)} characters)")
+
+
 def main() -> None:
     commands = {
         "whoami": whoami,
@@ -658,6 +700,7 @@ def main() -> None:
         "ensure-profile": ensure_profile,
         "setup": lambda: (ensure_cert(), ensure_app_id(), ensure_profile()),
         "listing": listing,
+        "review-notes": review_notes,
         "mac-listing": lambda: listing("MAC_OS"),
         "screenshots": screenshots,
         "mac-screenshots": lambda: screenshots("MAC_OS"),

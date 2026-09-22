@@ -263,6 +263,15 @@ will not guess it:
 Keep the balance at zero. The reviewer needs to *make* a purchase, and a
 pre-credited account hides the thing under review.
 
+## Review notes: sign-in (both platforms)
+
+> SIGN IN: the demo account is a Nostr key. It is in the Username field
+> (it starts with nsec1); the Password field is not used. Tap Account →
+> Continue with Nostr → "No extension? Use a remote signer" → "I only have
+> a private key", paste the key, and sign in. There is no email login.
+> Please make the in-app purchase with this account: it has zero credits,
+> and it is the account our server credits sandbox purchases to.
+
 ## Review notes
 
 Paste into "Notes for the reviewer". The first paragraph exists because
@@ -293,6 +302,33 @@ conclusion.
 >    panel appears explaining the one-time 1,000-credit unlock.
 > 4. Sign in with the demo account supplied above, then buy the 1,000
 >    Credits pack. The unlock is then permanent for that account.
+>
+> Almost the entire app is free. Only Watermark and OCR are paid, they
+> are unlocked together, and the charge is once — not a subscription and
+> not per use.
+
+## Mac review notes
+
+> This is not a web wrapper. The complete PDF engine — PDFium and our
+> Rust core, compiled to WebAssembly — ships inside the app bundle and
+> runs on the Mac. To confirm: turn off Wi-Fi and every feature below
+> still works, including opening, editing, OCR and exporting. Nothing is
+> fetched at runtime and no document ever leaves the Mac.
+>
+> Credits are digital content consumed inside the app and are sold only
+> through in-app purchase. There is no link to an external payment page
+> anywhere in the app.
+>
+> HOW TO TEST
+>
+> 1. Click Open PDF… on the first screen and choose any PDF.
+> 2. Annotate it, edit its text, reorder pages, then save. All free, and
+>    no account is needed for any of it.
+> 3. Click Watermark or OCR. They are the only two paid tools, so a panel
+>    appears explaining the one-time 1,000-credit unlock.
+> 4. Sign in with the demo account supplied above, then buy the 1,000
+>    Credits pack. The unlock is then permanent for that account, on the
+>    Mac and on iPhone and iPad.
 >
 > Almost the entire app is free. Only Watermark and OCR are paid, they
 > are unlocked together, and the charge is once — not a subscription and
