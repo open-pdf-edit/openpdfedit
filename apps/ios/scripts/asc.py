@@ -308,13 +308,16 @@ def listing() -> None:
 
     version = ios_version(app)
     # The build's CFBundleShortVersionString decides which version record it
-    # can attach to, so the record follows the binary, not the other way.
-    if version["attributes"]["versionString"] != "1.0.0":
+    # can attach to, so the record follows the binary, not the other way —
+    # read from the project, where scripts/set-version.sh writes it.
+    project = (Path(__file__).resolve().parent.parent / "OpenPdfEdit.xcodeproj" / "project.pbxproj").read_text()
+    marketing = re.search(r"MARKETING_VERSION = ([^;]+);", project).group(1).strip()
+    if version["attributes"]["versionString"] != marketing:
         call("PATCH", f"/appStoreVersions/{version['id']}", {
             "data": {"type": "appStoreVersions", "id": version["id"],
-                     "attributes": {"versionString": "1.0.0", "copyright": "2026 DE JIAN KOH"}},
+                     "attributes": {"versionString": marketing, "copyright": "2026 DE JIAN KOH"}},
         })
-        print("version record → 1.0.0")
+        print(f"version record → {marketing}")
 
     localizations = call("GET", f"/appStoreVersions/{version['id']}/appStoreVersionLocalizations").get("data", [])
     body = {k: copy[k] for k in ("description", "keywords", "promotionalText", "supportUrl", "marketingUrl")}
@@ -499,6 +502,48 @@ def iaps() -> None:
         print(f"  priced at ${wanted['price']}")
 
 
+def content_rights() -> None:
+    """The declaration App Store Connect requires before a first submission.
+
+    Everything the app shows is the customer's own document or the app's
+    own interface; nothing is licensed from anyone else.
+    """
+    app = app_id()
+    call("PATCH", f"/apps/{app}", {"data": {"type": "apps", "id": app,
+         "attributes": {"contentRightsDeclaration": "DOES_NOT_USE_THIRD_PARTY_CONTENT"}}})
+    print("content rights: does not use third-party content")
+
+
+def availability() -> None:
+    """On sale in every territory, and in any Apple adds later.
+
+    Without this the app can be approved and still be sold nowhere. It is
+    a v2 resource, created once; a 409 means it already exists.
+    """
+    app = app_id()
+    territories = []
+    url = "/territories?limit=200"
+    while url:
+        page = call("GET", url)
+        territories += [t["id"] for t in page.get("data", [])]
+        url = page.get("links", {}).get("next")
+    # A local id per territory, "${USA}" — one braces pair is the local-id
+    # syntax, the other is the f-string's own escaping.
+    included = [{"type": "territoryAvailabilities", "id": f"${{{t}}}",
+                 "attributes": {"available": True},
+                 "relationships": {"territory": {"data": {"type": "territories", "id": t}}}}
+                for t in territories]
+    call("POST", "https://api.appstoreconnect.apple.com/v2/appAvailabilities", {
+        "data": {"type": "appAvailabilities", "attributes": {"availableInNewTerritories": True},
+                 "relationships": {
+                     "app": {"data": {"type": "apps", "id": app}},
+                     "territoryAvailabilities": {"data": [{"type": "territoryAvailabilities", "id": i["id"]} for i in included]},
+                 }},
+        "included": included,
+    })
+    print(f"availability: {len(territories)} territories, and new ones as Apple adds them")
+
+
 def main() -> None:
     commands = {
         "whoami": whoami,
@@ -509,6 +554,8 @@ def main() -> None:
         "listing": listing,
         "screenshots": screenshots,
         "iaps": iaps,
+        "content-rights": content_rights,
+        "availability": availability,
     }
     if len(sys.argv) != 2 or sys.argv[1] not in commands:
         print(__doc__)
