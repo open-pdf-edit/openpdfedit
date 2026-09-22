@@ -406,7 +406,7 @@ def listing(platform: str = "IOS") -> None:
 
 
 
-def screenshots() -> None:
+def screenshots(platform: str = "IOS") -> None:
     """Upload store/screenshots to the version, one set per device size.
 
     Apple takes a screenshot in three steps — reserve, PUT the bytes to the
@@ -418,10 +418,17 @@ def screenshots() -> None:
     folder = Path(__file__).resolve().parent.parent / "store" / "screenshots"
     # 6.9-inch iPhone and 13-inch iPad: the two sizes a universal app must
     # give, and the only two these captures are made at.
-    sets = {"APP_IPHONE_67": sorted(f for f in folder.glob("*.png") if "-ipad" not in f.name),
-            "APP_IPAD_PRO_3GEN_129": sorted(folder.glob("*-ipad.png"))}
+    # By name: NN-name.png is iPhone, NN-name-ipad.png iPad, NN-name-mac.png
+    # the Mac. Only the numbered ones — iap-review.png is the in-app
+    # purchase's review image, not a listing screenshot.
+    numbered = sorted(f for f in folder.glob("[0-9][0-9]-*.png"))
+    if platform == "MAC_OS":
+        sets = {"APP_DESKTOP": [f for f in numbered if f.stem.endswith("-mac")]}
+    else:
+        sets = {"APP_IPHONE_67": [f for f in numbered if not f.stem.endswith(("-ipad", "-mac"))],
+                "APP_IPAD_PRO_3GEN_129": [f for f in numbered if f.stem.endswith("-ipad")]}
 
-    version = ios_version(app_id())
+    version = version_for(app_id(), platform)
     localization = next(l for l in call("GET", f"/appStoreVersions/{version['id']}/appStoreVersionLocalizations")["data"]
                         if l["attributes"]["locale"] == "en-US")
     existing = {s["attributes"]["screenshotDisplayType"]: s["id"]
@@ -653,6 +660,7 @@ def main() -> None:
         "listing": listing,
         "mac-listing": lambda: listing("MAC_OS"),
         "screenshots": screenshots,
+        "mac-screenshots": lambda: screenshots("MAC_OS"),
         "iaps": iaps,
         "content-rights": content_rights,
         "availability": availability,
