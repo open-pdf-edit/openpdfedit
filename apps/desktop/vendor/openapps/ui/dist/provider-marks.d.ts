@@ -47,4 +47,13 @@ export declare const ethereumMark: SVGTemplateResult;
  * you like ... use them on your websites."
  */
 export declare const nostrMark: SVGTemplateResult;
+/**
+ * GitHub's mark, from primer/octicons (`mark-github-16`, MIT), verbatim.
+ *
+ * The one mark here drawn in `currentColor`. GitHub's logo guidelines allow
+ * it in black or white only, never a brand colour, so it takes the button's
+ * own text colour: black on a light surface, white on a dark one — which is
+ * exactly those two cases.
+ */
+export declare const githubMark: SVGTemplateResult;
 //# sourceMappingURL=provider-marks.d.ts.map
