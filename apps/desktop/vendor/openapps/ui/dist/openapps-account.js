@@ -22,11 +22,12 @@ import { OpenAppsElement } from "./base.js";
 import { notify } from "./context.js";
 import { connectEthereum, discoverEthereumWallets, signNostr, signSiwe, } from "./wallet.js";
 /** Linked by leaving the page for the provider, not by signing in it. */
-const REDIRECT_PROVIDERS = ["google", "github"];
+const REDIRECT_PROVIDERS = ["apple", "google", "github"];
 function isRedirectProvider(namespace) {
     return REDIRECT_PROVIDERS.includes(namespace);
 }
 const LABELS = {
+    apple: "Apple",
     google: "Google",
     github: "GitHub",
     eip155: "Wallet",
