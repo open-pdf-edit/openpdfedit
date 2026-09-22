@@ -37,7 +37,7 @@
     signInWithTelegram,
   } from "$lib/openapps";
   import { isBrowserExtension } from "$lib/backend";
-  import { nativeShell } from "$lib/native";
+  import { nativeShell, storeKit } from "$lib/native";
   import IapPanel from "./IapPanel.svelte";
   import { initData as telegramInitData, isTelegram } from "$telegram";
   import Icon from "./Icon.svelte";
@@ -304,7 +304,7 @@
                checkout there is not a second option, it is grounds for
                rejection under guideline 3.1.1. Everywhere else there is no
                App Store to sell through. -->
-          {#if nativeShell()}
+          {#if storeKit()}
             <IapPanel />
           {:else}
             <openapps-buy></openapps-buy>

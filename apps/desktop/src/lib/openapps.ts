@@ -147,7 +147,12 @@ export const SUPPORTER_COST = 1000;
 /// appears. Kept as a named constant rather than inlined so the gate is
 /// greppable, and so a build that wants them open (a self-hosted one,
 /// say) has one line to change rather than a flow to unpick.
-export const SUPPORTER_TOOLS_ARE_PREMIUM = true;
+//
+/// VITE_SUPPORTER_OPEN=1 is that one line, as a build setting: a local
+/// build made to test the tools themselves — OCR inside the Mac App
+/// Store sandbox, say — without an account holding the unlock. Unset in
+/// every build we ship, and nothing in the release scripts sets it.
+export const SUPPORTER_TOOLS_ARE_PREMIUM = import.meta.env.VITE_SUPPORTER_OPEN !== "1";
 
 /// Has this account already redeemed the unlock?
 ///

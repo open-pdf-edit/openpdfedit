@@ -5,6 +5,12 @@
   import { initLocale } from "$lib/i18n/index.svelte";
   initLocale();
 
+  // Before anything asks for it: the purchase panel and the startup
+  // recovery sweep both look for StoreKit. A build-time constant, so the
+  // web app and the extension carry none of it.
+  import { installMacStoreKit } from "$lib/storekit-mac";
+  if (import.meta.env.VITE_TARGET === "appstore") installMacStoreKit();
+
   import "../app.css";
   // Registers <openapps-login>/<openapps-account>/<openapps-credits>/
   // <openapps-buy> as custom elements and configures the one client they

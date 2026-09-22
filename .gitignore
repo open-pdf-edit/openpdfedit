@@ -59,3 +59,6 @@ __pycache__/
 apps/desktop/src-tauri/appstore/embedded.provisionprofile
 apps/desktop/src-tauri/appstore/libpdfium.dylib
 apps/desktop/src-tauri/appstore/OpenPdfEdit.test.entitlements
+
+# The Swift build products of the Mac App Store native library.
+apps/desktop/src-tauri/appstore-native/.build/

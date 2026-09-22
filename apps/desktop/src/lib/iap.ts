@@ -16,12 +16,12 @@
 
 import { getClient, notify } from "@openapps/ui";
 
-import type { NativePurchase, NativeShell } from "$lib/native";
+import type { NativePurchase, StoreKitBridge } from "$lib/native";
 import { redeemAppleReceipt, type RedeemResult } from "$lib/openapps";
 
 /// Redeem a receipt, then finish the transaction if — and only if — the
 /// server granted the credits.
-export async function collect(receipt: NativePurchase, shell: NativeShell): Promise<RedeemResult> {
+export async function collect(receipt: NativePurchase, shell: StoreKitBridge): Promise<RedeemResult> {
   let result = await redeemAppleReceipt(accessToken(), receipt.receipt);
 
   // An access token that aged out. This is the trap the entitlement check
@@ -49,7 +49,7 @@ export async function collect(receipt: NativePurchase, shell: NativeShell): Prom
 /// the server — is one they have no way to describe.
 ///
 /// Returns how many were credited, for the caller to report or ignore.
-export async function collectOutstanding(shell: NativeShell): Promise<number> {
+export async function collectOutstanding(shell: StoreKitBridge): Promise<number> {
   if (!getClient()?.isLoggedIn) return 0;
   let credited = 0;
   try {
