@@ -433,6 +433,8 @@ pub fn run() {
             forms::list_form_fields_cmd,
             forms::fill_form_fields_cmd,
             ocr::ocr_document_cmd,
+            ocr::ocr_page_sizes_cmd,
+            ocr::ocr_add_text_layer_cmd,
             signatures::list_signatures_cmd,
             numbering::number_pages_cmd,
             outline::document_outline_cmd,

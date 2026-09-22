@@ -157,6 +157,32 @@ async function getWorker(lang: string, onLoading?: () => void): Promise<Tesserac
  * PNG-encoding each page first would cost more than the recognition on
  * short documents.
  */
+/** What width to render a page at before reading it.
+ *
+ * Tesseract wants roughly 300 DPI, and this is the single number that
+ * most affects whether OCR output is usable. Screen-size renders (what
+ * the viewer asks for) give it about a third of that and recognition
+ * gets noticeably worse.
+ *
+ * It used to be the flat 2550 px that 300 DPI works out to for a Letter
+ * page, which silently made the resolution depend on how big the page
+ * claimed to be. A scan placed into the PDF at 1:1 — a page 2263 pt
+ * wide, three times Letter — was then rendered at about 80 DPI, and
+ * Chinese recognition on it dropped whole words: 事项 and 考试时间 came
+ * back as nothing at all until the same page was rendered larger.
+ *
+ * The ceiling is memory: the bitmap is RGBA, so 4200 px across a page of
+ * this shape is already ~55 MB before Tesseract makes its own copies,
+ * and a browser tab is not generous. The floor keeps small pages from
+ * being read at a resolution no amount of upscaling fixes. */
+const OCR_MIN_WIDTH_PX = 2550;
+const OCR_MAX_WIDTH_PX = 4000;
+
+export function ocrRenderWidth(pageWidthPt: number): number {
+  const atThreeHundredDpi = Math.round((pageWidthPt / 72) * 300);
+  return Math.min(OCR_MAX_WIDTH_PX, Math.max(OCR_MIN_WIDTH_PX, atThreeHundredDpi));
+}
+
 export async function recognisePage(
   bitmap: { width: number; height: number; data: Uint8Array | Uint8ClampedArray },
   lang: string = DEFAULT_OCR_LANG,

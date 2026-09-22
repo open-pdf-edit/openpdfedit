@@ -707,31 +707,6 @@ type FileTarget =
 
 /** Whether this browser can write back to a file the user picked. False
  * in Firefox and Safari today. */
-/** What width to render a page at before reading it.
- *
- * Tesseract wants roughly 300 DPI, and this is the single number that
- * most affects whether OCR output is usable. Screen-size renders (what
- * the viewer asks for) give it about a third of that and recognition
- * gets noticeably worse.
- *
- * It used to be the flat 2550 px that 300 DPI works out to for a Letter
- * page, which silently made the resolution depend on how big the page
- * claimed to be. A scan placed into the PDF at 1:1 — a page 2263 pt
- * wide, three times Letter — was then rendered at about 80 DPI, and
- * Chinese recognition on it dropped whole words: 事项 and 考试时间 came
- * back as nothing at all until the same page was rendered larger.
- *
- * The ceiling is memory: the bitmap is RGBA, so 4200 px across a page of
- * this shape is already ~55 MB before Tesseract makes its own copies,
- * and a browser tab is not generous. The floor keeps small pages from
- * being read at a resolution no amount of upscaling fixes. */
-const OCR_MIN_WIDTH_PX = 2550;
-const OCR_MAX_WIDTH_PX = 4000;
-
-function ocrRenderWidth(pageWidthPt: number): number {
-  const atThreeHundredDpi = Math.round((pageWidthPt / 72) * 300);
-  return Math.min(OCR_MAX_WIDTH_PX, Math.max(OCR_MIN_WIDTH_PX, atThreeHundredDpi));
-}
 
 export function supportsFileSystemAccess(): boolean {
   return (
@@ -2320,7 +2295,7 @@ export const wasmBackend: Backend = {
    * pixels per character it wants.
    */
   async ocrDocument(request) {
-    const { recognisePage } = await import("./ocr-browser");
+    const { recognisePage, ocrRenderWidth } = await import("./ocr-browser");
     const session = await ensureSession();
     if (!openDocs.has(request.handle)) {
       throw new Error(`ocrDocument: unknown document handle ${request.handle}`);

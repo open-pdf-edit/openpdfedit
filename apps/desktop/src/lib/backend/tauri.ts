@@ -387,7 +387,41 @@ export const tauriBackend: Backend = {
   },
 
   async ocrDocument(request: OcrDocumentRequest) {
-    return invoke<OpenedDocument>("ocr_document_cmd", { request });
+    // Recognition runs in this page, with the tesseract.js engine and
+    // language data the build bundles under /ocr — the web app's path.
+    // It used to run a `tesseract` binary found on PATH or at Homebrew's
+    // prefix, so OCR worked only for customers who had installed one
+    // themselves, and could never run in the Mac App Store's sandbox,
+    // which forbids executing anything outside the app. Pixels come from
+    // the viewer's own renderer; the words end in the same Rust
+    // `add_text_layer` both paths share, as one undoable mutation.
+    const { recognisePage, ocrRenderWidth } = await import("./ocr-browser");
+    const sizes = await invoke<{ width: number; height: number }[]>("ocr_page_sizes_cmd", {
+      handle: request.handle,
+    });
+    const pages = [];
+    for (let pageIndex = 0; pageIndex < sizes.length; pageIndex++) {
+      const page = await tauriBackend.getPageBitmap(
+        request.handle,
+        pageIndex,
+        ocrRenderWidth(sizes[pageIndex].width),
+      );
+      const words = await recognisePage(
+        { width: page.width, height: page.height, data: page.rgba },
+        request.lang,
+      );
+      pages.push({
+        page_index: pageIndex,
+        page_width_pt: sizes[pageIndex].width,
+        page_height_pt: sizes[pageIndex].height,
+        image_width_px: page.width,
+        image_height_px: page.height,
+        words,
+      });
+    }
+    return invoke<OpenedDocument>("ocr_add_text_layer_cmd", {
+      request: { handle: request.handle, pages },
+    });
   },
 
   // --- file-picker primitives ---
