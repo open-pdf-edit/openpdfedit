@@ -234,7 +234,7 @@ def install_profile(profile: dict) -> None:
 
 # --- the listing ----------------------------------------------------------------
 
-def listing_copy() -> dict:
+def listing_copy(platform: str = "IOS") -> dict:
     """The listing, read out of store/listing.md so there is one copy of it.
 
     The file is written for a person to read — wrapped prose in blockquotes,
@@ -275,9 +275,10 @@ def listing_copy() -> dict:
             out += text
         return out
 
+    mac = platform == "MAC_OS"
     return {
-        "promotionalText": blockquote("Promotional text (170 max)"),
-        "description": blockquote("Description (4000 max)"),
+        "promotionalText": blockquote("Mac promotional text (170 max)" if mac else "Promotional text (170 max)"),
+        "description": blockquote("Mac description (4000 max)" if mac else "Description (4000 max)"),
         "keywords": re.search(r"## Keywords.*?```\n(.*?)\n```", src, re.S).group(1).strip(),
         "supportUrl": "https://openpdfedit.com/support",
         "marketingUrl": "https://openpdfedit.com",
@@ -293,25 +294,38 @@ def app_id() -> str:
     return found[0]["id"]
 
 
-def ios_version(app: str) -> dict:
+def version_for(app: str, platform: str) -> dict:
     for v in call("GET", f"/apps/{app}/appStoreVersions?limit=20").get("data", []):
-        if v["attributes"]["platform"] == "IOS":
+        if v["attributes"]["platform"] == platform:
             return v
-    die("no iOS version record on the app")
+    die(f"no {platform} version record on the app")
 
 
-def listing() -> None:
-    copy, app = listing_copy(), app_id()
+def ios_version(app: str) -> dict:
+    return version_for(app, "IOS")
+
+
+def marketing_version(platform: str) -> str:
+    """The version the binary carries, which the record must match."""
+    root = Path(__file__).resolve().parent.parent
+    if platform == "MAC_OS":
+        conf = json.loads((root.parent / "desktop" / "src-tauri" / "tauri.conf.json").read_text())
+        return conf["version"]
+    project = (root / "OpenPdfEdit.xcodeproj" / "project.pbxproj").read_text()
+    return re.search(r"MARKETING_VERSION = ([^;]+);", project).group(1).strip()
+
+
+def listing(platform: str = "IOS") -> None:
+    copy, app = listing_copy(platform), app_id()
     for field, limit in (("promotionalText", 170), ("description", 4000), ("keywords", 100), ("subtitle", 30)):
         if len(copy[field]) > limit:
             die(f"{field} is {len(copy[field])} characters, over Apple's {limit}")
 
-    version = ios_version(app)
+    version = version_for(app, platform)
     # The build's CFBundleShortVersionString decides which version record it
     # can attach to, so the record follows the binary, not the other way —
-    # read from the project, where scripts/set-version.sh writes it.
-    project = (Path(__file__).resolve().parent.parent / "OpenPdfEdit.xcodeproj" / "project.pbxproj").read_text()
-    marketing = re.search(r"MARKETING_VERSION = ([^;]+);", project).group(1).strip()
+    # read from where scripts/set-version.sh writes it.
+    marketing = marketing_version(platform)
     if version["attributes"]["versionString"] != marketing:
         call("PATCH", f"/appStoreVersions/{version['id']}", {
             "data": {"type": "appStoreVersions", "id": version["id"],
@@ -371,13 +385,22 @@ def listing() -> None:
         })
         print("age rating: 4+")
 
-    builds = [b for b in call("GET", f"/builds?filter[app]={app}&limit=20").get("data", [])
+    # This platform's builds only. A universal app's iOS and Mac builds share
+    # one list, and "the newest valid one" would otherwise attach a Mac build
+    # to the iOS version the moment one existed.
+    builds = [b for b in call("GET", f"/builds?filter[app]={app}&filter[preReleaseVersion.platform]={platform}&limit=20").get("data", [])
               if b["attributes"].get("processingState") == "VALID"]
     if builds:
         newest = sorted(builds, key=lambda b: b["attributes"]["uploadedDate"])[-1]
-        call("PATCH", f"/appStoreVersions/{version['id']}/relationships/build",
-             {"data": {"type": "builds", "id": newest["id"]}})
-        print(f"build {newest['attributes']['version']} attached")
+        attached = call("GET", f"/appStoreVersions/{version['id']}/build").get("data") or {}
+        # Apple answers a re-attach of the build already there with a 409
+        # that reads like a real failure, so it is not asked for.
+        if attached.get("id") == newest["id"]:
+            print(f"build {newest['attributes']['version']} already attached")
+        else:
+            call("PATCH", f"/appStoreVersions/{version['id']}/relationships/build",
+                 {"data": {"type": "builds", "id": newest["id"]}})
+            print(f"build {newest['attributes']['version']} attached")
     else:
         print("no processed build to attach yet — Apple is still processing the upload")
 
@@ -628,6 +651,7 @@ def main() -> None:
         "ensure-profile": ensure_profile,
         "setup": lambda: (ensure_cert(), ensure_app_id(), ensure_profile()),
         "listing": listing,
+        "mac-listing": lambda: listing("MAC_OS"),
         "screenshots": screenshots,
         "iaps": iaps,
         "content-rights": content_rights,

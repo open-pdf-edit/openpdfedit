@@ -40,11 +40,30 @@ die() { echo "build-appstore: $1" >&2; exit 1; }
 
 case "$MODE" in test|store|upload) ;; *) die "mode is test, store or upload — not '$MODE'" ;; esac
 
-# PDFium is the bundle's other binary. It is signed here, on a copy, with
-# the identity this build uses: the vendored file stays as it was for the
-# Developer ID build, which signs it with a different identity.
+# Universal — Apple silicon and Intel — because the store is the whole
+# point of this build and an arm64-only app cannot even be installed on an
+# Intel Mac. TARGET=aarch64-apple-darwin builds one slice, faster, for a
+# quick local check.
+TARGET="${TARGET:-universal-apple-darwin}"
+
+# PDFium is the bundle's other binary: the same release in both
+# architectures, joined, then signed with the identity this build uses.
+# A copy — the vendored file stays as it is for the Developer ID build.
 mkdir -p "$OUT"
-cp "$ROOT/.vendor/pdfium/lib/libpdfium.dylib" "$STORE_DIR/libpdfium.dylib"
+PDFIUM_ARM="$ROOT/.vendor/pdfium/lib/libpdfium.dylib"
+if [ "$TARGET" = universal-apple-darwin ]; then
+  TAG="$(sed -n 's/^PDFIUM_TAG="\([^"]*\)".*/\1/p' "$ROOT/scripts/fetch-pdfium.sh" | head -1)"
+  X64_DIR="$ROOT/.vendor/pdfium-x64"
+  if ! grep -q "BUILD=${TAG##*/}" "$X64_DIR/VERSION" 2>/dev/null; then
+    log "Fetching Intel PDFium ($TAG)"
+    rm -rf "$X64_DIR" && mkdir -p "$X64_DIR"
+    curl -fsSL "https://github.com/bblanchon/pdfium-binaries/releases/download/$TAG/pdfium-mac-x64.tgz" | tar xz -C "$X64_DIR"
+  fi
+  lipo -create "$PDFIUM_ARM" "$X64_DIR/lib/libpdfium.dylib" -output "$STORE_DIR/libpdfium.dylib"
+else
+  cp "$PDFIUM_ARM" "$STORE_DIR/libpdfium.dylib"
+fi
+echo "  PDFium: $(lipo -archs "$STORE_DIR/libpdfium.dylib")"
 
 CONFIG="$OUT/tauri.appstore.$MODE.conf.json"
 if [ "$MODE" = test ]; then
@@ -86,15 +105,16 @@ fi
 
 log "Building (no updater, no inspector)"
 cd "$HERE"
-npx tauri build --bundles app --config "$CONFIG" --features appstore -- --no-default-features
+npx tauri build --bundles app --target "$TARGET" --config "$CONFIG" --features appstore -- --no-default-features
 
-APP="$ROOT/target/release/bundle/macos/OpenPdfEdit.app"
+APP="$ROOT/target/$TARGET/release/bundle/macos/OpenPdfEdit.app"
 [ -d "$APP" ] || die "no app at $APP"
 rm -rf "$OUT/OpenPdfEdit.app" && cp -R "$APP" "$OUT/OpenPdfEdit.app"
 APP="$OUT/OpenPdfEdit.app"
 
 log "What was built"
 /usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "$APP/Contents/Info.plist"
+echo "  architectures: $(lipo -archs "$APP/Contents/MacOS/"*) (app), $(lipo -archs "$APP/Contents/Resources/libpdfium.dylib") (PDFium)"
 codesign -d --entitlements - --xml "$APP" 2>/dev/null | plutil -convert json -o - - 2>/dev/null \
   | python3 -c "import json,sys; e=json.load(sys.stdin); print('  entitlements:', ', '.join(k.split('.')[-1] if 'security' in k else k for k in e))"
 # Not merely "was it built without the updater" — is any of it in there.

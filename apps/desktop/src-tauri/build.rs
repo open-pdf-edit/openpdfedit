@@ -38,9 +38,16 @@ fn link_appstore_native() {
     let target = std::env::var("TARGET").unwrap();
     let arch = if target.starts_with("aarch64") { "arm64" } else { "x86_64" };
 
+    // A build folder per architecture. With a shared one, a universal
+    // build's second pass overwrites the first's library, and a later
+    // build that finds this script's output cached links whichever
+    // architecture was written last.
+    let scratch = package.join(format!(".build/{arch}"));
     let status = Command::new("swift")
         .args(["build", "-c", "release", "--arch", arch, "--package-path"])
         .arg(&package)
+        .arg("--scratch-path")
+        .arg(&scratch)
         .status()
         .expect("swift is needed for the appstore feature (Xcode's command line tools)");
     assert!(status.success(), "building appstore-native failed");
@@ -50,6 +57,8 @@ fn link_appstore_native() {
     let bin = Command::new("swift")
         .args(["build", "-c", "release", "--arch", arch, "--show-bin-path", "--package-path"])
         .arg(&package)
+        .arg("--scratch-path")
+        .arg(&scratch)
         .output()
         .expect("swift build --show-bin-path");
     let out = String::from_utf8(bin.stdout).unwrap();
