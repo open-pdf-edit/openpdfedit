@@ -95,10 +95,17 @@ else
   security find-identity -v | grep -q "$PKG_IDENTITY" || die "no '$PKG_IDENTITY' — run asc.py ensure-installer-cert"
   log "Store build"
   codesign --force --timestamp --sign "$APP_IDENTITY" "$STORE_DIR/libpdfium.dylib"
-  python3 - "$TAURI_DIR/tauri.appstore.conf.json" "$CONFIG" <<'PY'
+  # A build number of its own: App Store Connect refuses a second upload
+  # with a CFBundleVersion it has seen, and never releases one back.
+  # Minutes since 2020 always grows and needs no state — the same rule
+  # apps/ios/scripts/archive.sh uses.
+  BUILD_NUMBER=$(( ($(date +%s) - 1577836800) / 60 ))
+  log "Build number $BUILD_NUMBER"
+  python3 - "$TAURI_DIR/tauri.appstore.conf.json" "$CONFIG" "$BUILD_NUMBER" <<'PY'
 import json, sys
 c = json.load(open(sys.argv[1]))
 c["bundle"]["resources"] = {"../../../.vendor/pdfium/lib/libpdfium.dylib": None, "appstore/libpdfium.dylib": "libpdfium.dylib"}
+c["bundle"]["macOS"]["bundleVersion"] = sys.argv[3]
 json.dump(c, open(sys.argv[2], "w"), indent=2)
 PY
 fi
@@ -113,7 +120,7 @@ rm -rf "$OUT/OpenPdfEdit.app" && cp -R "$APP" "$OUT/OpenPdfEdit.app"
 APP="$OUT/OpenPdfEdit.app"
 
 log "What was built"
-/usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "$APP/Contents/Info.plist"
+echo "  $(/usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "$APP/Contents/Info.plist") $(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$APP/Contents/Info.plist") ($(/usr/libexec/PlistBuddy -c "Print :CFBundleVersion" "$APP/Contents/Info.plist"))"
 echo "  architectures: $(lipo -archs "$APP/Contents/MacOS/"*) (app), $(lipo -archs "$APP/Contents/Resources/libpdfium.dylib") (PDFium)"
 codesign -d --entitlements - --xml "$APP" 2>/dev/null | plutil -convert json -o - - 2>/dev/null \
   | python3 -c "import json,sys; e=json.load(sys.stdin); print('  entitlements:', ', '.join(k.split('.')[-1] if 'security' in k else k for k in e))"
