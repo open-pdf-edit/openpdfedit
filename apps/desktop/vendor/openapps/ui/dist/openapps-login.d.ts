@@ -66,7 +66,7 @@ export declare class OpenAppsLogin extends OpenAppsElement {
     private loginWithBunker;
     /** Sign with a pasted `nsec1…`. The key stays in this browser. */
     private loginWithNsec;
-    private loginWithGoogle;
+    private loginWithRedirect;
     private logout;
     render(): TemplateResult;
     /**

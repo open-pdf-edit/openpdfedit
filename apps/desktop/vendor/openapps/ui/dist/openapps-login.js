@@ -16,7 +16,7 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
 import { css, html, nothing } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 import { OpenAppsElement } from "./base.js";
-import { ethereumMark, googleMark, nostrMark } from "./provider-marks.js";
+import { ethereumMark, githubMark, googleMark, nostrMark } from "./provider-marks.js";
 import { notify } from "./context.js";
 import { clearReferral, referralInUrl, storedReferral } from "./referral-code.js";
 import { connectEthereum, discoverEthereumWallets, nostrProviderNames, signNostr, signNostrWithBunker, signNostrWithSecretKey, signSiwe, waitForNostrProvider, } from "./wallet.js";
@@ -201,7 +201,7 @@ let OpenAppsLogin = class OpenAppsLogin extends OpenAppsElement {
             }
         });
     }
-    loginWithGoogle() {
+    loginWithRedirect(provider) {
         // A full-page redirect, not a popup: popups are blocked by default in
         // extensions and on mobile Safari. Come back to this exact page —
         // minus any fragment, which the server refuses because it needs to put
@@ -211,7 +211,7 @@ let OpenAppsLogin = class OpenAppsLogin extends OpenAppsElement {
         // inside the callback, which never sees this page's query string, so a
         // code left only in `return_to` arrives one step too late to attribute
         // the signup.
-        window.location.href = this.sdk.auth.googleStartUrl(here, referralFromUrl());
+        window.location.href = this.sdk.auth.redirectStartUrl(provider, here, referralFromUrl());
     }
     async logout() {
         await this.run(() => this.sdk.auth.logout());
@@ -227,9 +227,10 @@ let OpenAppsLogin = class OpenAppsLogin extends OpenAppsElement {
         // at unpredictable times and hiding a button the user could have used
         // is worse than showing one that explains itself.
         const google = this.enabled?.google ?? false;
+        const github = this.enabled?.github ?? false;
         const wallet = this.enabled?.eip155 ?? false;
         const nostr = this.enabled?.nostr ?? false;
-        if (this.enabled && !google && !wallet && !nostr) {
+        if (this.enabled && !google && !github && !wallet && !nostr) {
             return this.frame(html `
         <p class="muted">This server has no login methods configured.</p>
         ${this.error ? html `<p class="error" role="alert">${this.error}</p>` : nothing}
@@ -246,9 +247,18 @@ let OpenAppsLogin = class OpenAppsLogin extends OpenAppsElement {
             ? html `<button
               class="provider ${block}"
               ?disabled=${this.busy}
-              @click=${this.loginWithGoogle}
+              @click=${() => this.loginWithRedirect("google")}
             >
               ${googleMark}<span>Continue with Google</span>
+            </button>`
+            : nothing}
+        ${github
+            ? html `<button
+              class="provider ${block}"
+              ?disabled=${this.busy}
+              @click=${() => this.loginWithRedirect("github")}
+            >
+              ${githubMark}<span>Continue with GitHub</span>
             </button>`
             : nothing}
         ${wallet && this.wallets
