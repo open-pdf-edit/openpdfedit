@@ -24,10 +24,10 @@
   // should not have to know that word.
   import { collect } from "$lib/iap";
   import { t } from "./i18n/index.svelte";
-  import { nativeShell, type NativeProduct, type NativePurchase } from "$lib/native";
+  import { storeKit, type NativeProduct, type NativePurchase } from "$lib/native";
   import { showToast } from "$lib/toast.svelte";
 
-  const shell = nativeShell();
+  const shell = storeKit();
 
   let products = $state<NativeProduct[]>([]);
   let loading = $state(true);

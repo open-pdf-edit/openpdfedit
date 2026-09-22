@@ -61,6 +61,32 @@ export interface NativeShell {
   finish(transactionId: string): Promise<{ finished: boolean }>;
 }
 
+/// Purchases through the App Store — the part of a native shell the
+/// purchase panel needs, and all of it.
+///
+/// Two things provide it: the iOS app's shell, and the Mac App Store
+/// build's StoreKit commands (installed by `$lib/storekit-mac`). Sign-in
+/// and documents are not here on purpose: on the Mac the desktop app
+/// already does both itself, and only the iOS shell answers them.
+export interface StoreKitBridge {
+  products(): Promise<NativeProduct[]>;
+  purchase(productId: string): Promise<NativePurchaseResult>;
+  outstanding(): Promise<NativePurchase[]>;
+  finish(transactionId: string): Promise<{ finished: boolean }>;
+  on(event: "receipt", fn: (detail: NativePurchase) => void): () => void;
+}
+
+/// StoreKit, from whichever native side has it, or `null` where purchases
+/// are not sold through the App Store (the web app, the extension, the
+/// Developer ID desktop build — which sell credits by card instead).
+export function storeKit(): StoreKitBridge | null {
+  return (
+    nativeShell() ??
+    (globalThis as { OpenPdfEditStoreKit?: StoreKitBridge }).OpenPdfEditStoreKit ??
+    null
+  );
+}
+
 /** The shell, or `null` everywhere that is not it. */
 export function nativeShell(): NativeShell | null {
   const shell = (globalThis as { OpenPdfEditNative?: NativeShell }).OpenPdfEditNative;

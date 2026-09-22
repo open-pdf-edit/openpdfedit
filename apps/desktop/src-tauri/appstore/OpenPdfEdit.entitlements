@@ -15,6 +15,12 @@
 	<true/>
 	<key>com.apple.security.network.client</key>
 	<true/>
+	<!-- Recent files. The sandbox's grant for a picked file ends with the
+	     session; a security-scoped bookmark, created while it lasts, is
+	     how a recent reopens after a relaunch instead of reporting the
+	     file "moved, renamed or deleted" when it is exactly where it was. -->
+	<key>com.apple.security.files.bookmarks.app-scope</key>
+	<true/>
 	<!-- Required for a store build signed outside Xcode: they tie the
 	     binary to the provisioning profile embedded beside it. -->
 	<key>com.apple.application-identifier</key>

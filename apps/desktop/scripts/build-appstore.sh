@@ -59,6 +59,7 @@ if [ "$MODE" = test ]; then
 	<key>com.apple.security.app-sandbox</key><true/>
 	<key>com.apple.security.files.user-selected.read-write</key><true/>
 	<key>com.apple.security.network.client</key><true/>
+	<key>com.apple.security.files.bookmarks.app-scope</key><true/>
 </dict></plist>
 XML
   python3 - "$TAURI_DIR/tauri.appstore.conf.json" "$CONFIG" <<'PY'

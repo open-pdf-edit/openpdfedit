@@ -41,6 +41,7 @@
 //! for [`capture_pre_edit_snapshot`] below, which `ocr.rs` — out of
 //! scope for every one of these moves — still calls directly).
 
+mod appstore;
 mod annotations;
 mod compare;
 mod compress;
@@ -212,16 +213,22 @@ fn redo_cmd(state: State<'_, AppState>, handle: DocHandle) -> Result<OpenedDocum
 /// Thin wrapper over `openpdfedit_session::open_document_impl`.
 #[tauri::command]
 fn open_document(
+    app: tauri::AppHandle,
     state: State<'_, AppState>,
     path: String,
     password: Option<String>,
 ) -> Result<OpenedDocument, CommandError> {
-    openpdfedit_session::open_document_with_password_impl(
+    // In the Mac App Store's sandbox a path is only readable while the
+    // grant from the panel that produced it lasts; a recent, after a
+    // relaunch, needs its bookmark to ask again. No-ops everywhere else.
+    let path = appstore::regain(&app, &path);
+    let opened = openpdfedit_session::open_document_with_password_impl(
         &state,
         std::path::Path::new(&path),
         password.as_deref(),
-    )
-    .map_err(Into::into)
+    )?;
+    appstore::remember(&app, &path);
+    Ok(opened)
 }
 
 /// Closes the window for real, after the front-end has resolved the
@@ -248,11 +255,16 @@ fn save_document(
 /// `openpdfedit_session::save_document_as_impl`.
 #[tauri::command]
 fn save_document_as(
+    app: tauri::AppHandle,
     state: State<'_, AppState>,
     handle: DocHandle,
     path: String,
 ) -> Result<OpenedDocument, CommandError> {
-    openpdfedit_session::save_document_as_impl(&state, handle, Path::new(&path)).map_err(Into::into)
+    let saved = openpdfedit_session::save_document_as_impl(&state, handle, Path::new(&path))?;
+    // A file saved somewhere new is a recent too, and in the sandbox it
+    // needs its own bookmark to reopen.
+    appstore::remember(&app, &path);
+    Ok(saved)
 }
 
 /// Thin wrapper over `openpdfedit_session::close_document_impl` — as of
@@ -382,6 +394,9 @@ pub fn run() {
     let builder = builder.plugin(tauri_plugin_updater::Builder::new().build());
     builder
         .setup(|app| {
+            // StoreKit's listener, first: a transaction that arrives with
+            // nobody listening is delivered again only on the next launch.
+            appstore::start(app.handle());
             // Engine construction moved into `setup` because locating the
             // bundled library needs the `AppHandle`, which doesn't exist
             // until the builder runs.
@@ -438,6 +453,10 @@ pub fn run() {
             ocr::ocr_document_cmd,
             ocr::ocr_page_sizes_cmd,
             ocr::ocr_add_text_layer_cmd,
+            appstore::storekit_products,
+            appstore::storekit_purchase,
+            appstore::storekit_outstanding,
+            appstore::storekit_finish,
             signatures::list_signatures_cmd,
             numbering::number_pages_cmd,
             outline::document_outline_cmd,
