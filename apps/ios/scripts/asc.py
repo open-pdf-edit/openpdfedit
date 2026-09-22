@@ -544,6 +544,82 @@ def availability() -> None:
     print(f"availability: {len(territories)} territories, and new ones as Apple adds them")
 
 
+# --- the Mac App Store ------------------------------------------------------------
+#
+# The same universal bundle id, so one purchase and one set of credit packs
+# cover iPhone, iPad and Mac. Two things differ from iOS: the package is a
+# .pkg, which needs an installer certificate of its own, and the profile is
+# embedded in the .app rather than chosen by Xcode at archive time.
+
+MAC_PROFILE_NAME = os.environ.get("MAC_PROFILE_NAME", f"{APP_NAME} Mac App Store")
+MAC_PROFILE_OUT = Path(__file__).resolve().parents[2] / "desktop" / "src-tauri" / "appstore" / "embedded.provisionprofile"
+
+
+def installed_identity(prefix: str) -> str | None:
+    listing = run("security", "find-identity", "-v")
+    match = re.search(r'"(' + re.escape(prefix) + r'[^"]+)"', listing)
+    return match.group(1) if match else None
+
+
+def ensure_installer_cert() -> None:
+    """The Mac Installer Distribution certificate that signs the .pkg.
+
+    Same shape as ensure_cert: the key is generated here, Apple signs only
+    the request. Its identity reads "3rd Party Mac Developer Installer".
+    """
+    existing = installed_identity("3rd Party Mac Developer Installer") or installed_identity("Mac Installer Distribution")
+    if existing:
+        print(f"already have {existing}")
+        return
+    WORK.mkdir(parents=True, exist_ok=True)
+    key_path, csr_path, cer_path = WORK / "installer.key", WORK / "installer.csr", WORK / "installer.cer"
+    if not key_path.exists():
+        run("openssl", "genrsa", "-out", str(key_path), "2048")
+        key_path.chmod(0o600)
+    run("openssl", "req", "-new", "-key", str(key_path), "-out", str(csr_path),
+        "-subj", f"/CN={APP_NAME} Installer/O={APP_NAME}/C=US")
+    created = call("POST", "/certificates", {
+        "data": {"type": "certificates", "attributes": {
+            "certificateType": "MAC_INSTALLER_DISTRIBUTION", "csrContent": csr_path.read_text()}},
+    })
+    cer_path.write_bytes(base64.b64decode(created["data"]["attributes"]["certificateContent"]))
+    pem = WORK / "installer.pem"
+    pem.write_text(run("openssl", "x509", "-inform", "DER", "-in", str(cer_path)))
+    p12, password = WORK / "installer.p12", base64.urlsafe_b64encode(os.urandom(18)).decode()
+    run("openssl", "pkcs12", "-export", "-legacy", "-out", str(p12), "-inkey", str(key_path),
+        "-in", str(pem), "-passout", f"pass:{password}")
+    p12.chmod(0o600)
+    run("security", "import", str(p12), "-k", str(Path.home() / "Library/Keychains/login.keychain-db"),
+        "-P", password, "-T", "/usr/bin/productbuild", "-T", "/usr/bin/security")
+    p12.unlink()
+    print("installed", installed_identity("3rd Party Mac Developer Installer") or installed_identity("Mac Installer Distribution") or "(no identity appeared — check the WWDR intermediate)")
+
+
+def ensure_mac_profile() -> None:
+    """The MAC_APP_STORE profile, written where the store build embeds it."""
+    bundle_id = ensure_app_id()
+    certs = [c for c in call("GET", "/certificates?limit=200").get("data", [])
+             if c["attributes"]["certificateType"] == "DISTRIBUTION"]
+    if not certs:
+        die("no Apple Distribution certificate — run ensure-cert first")
+    profile = next((p for p in call("GET", "/profiles?limit=200").get("data", [])
+                    if p["attributes"]["name"] == MAC_PROFILE_NAME and p["attributes"]["profileState"] == "ACTIVE"), None)
+    if not profile:
+        profile = call("POST", "/profiles", {
+            "data": {"type": "profiles", "attributes": {"name": MAC_PROFILE_NAME, "profileType": "MAC_APP_STORE"},
+                     "relationships": {
+                         "bundleId": {"data": {"type": "bundleIds", "id": bundle_id}},
+                         "certificates": {"data": [{"type": "certificates", "id": c["id"]} for c in certs]},
+                     }},
+        })["data"]
+        print(f"created profile {MAC_PROFILE_NAME}")
+    content = base64.b64decode(profile["attributes"]["profileContent"])
+    MAC_PROFILE_OUT.parent.mkdir(parents=True, exist_ok=True)
+    MAC_PROFILE_OUT.write_bytes(content)
+    plist = plistlib.loads(re.search(rb"<\?xml.*</plist>", content, re.S).group(0))
+    print(f"wrote {MAC_PROFILE_OUT} ({plist['Name']}, expires {plist['ExpirationDate']:%Y-%m-%d})")
+
+
 def main() -> None:
     commands = {
         "whoami": whoami,
@@ -556,6 +632,8 @@ def main() -> None:
         "iaps": iaps,
         "content-rights": content_rights,
         "availability": availability,
+        "ensure-installer-cert": ensure_installer_cert,
+        "ensure-mac-profile": ensure_mac_profile,
     }
     if len(sys.argv) != 2 or sys.argv[1] not in commands:
         print(__doc__)
