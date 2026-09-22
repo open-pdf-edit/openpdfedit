@@ -421,9 +421,8 @@ export interface OcrDocumentRequest {
    * Not cosmetic: Tesseract reads the script it has trained data for and
    * responds to anything else with silence or nonsense rather than an
    * error, so the wrong value here looks exactly like a feature that
-   * does not work. The desktop passes this to a local `tesseract`, which
-   * needs the matching language pack installed; the browser fetches it
-   * from this origin. */
+   * does not work. Every build recognises in the page with tesseract.js,
+   * and fetches the matching language data from its own bundle. */
   lang?: string;
 }
 

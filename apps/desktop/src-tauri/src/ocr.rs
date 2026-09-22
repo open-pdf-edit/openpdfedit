@@ -58,6 +58,46 @@ pub fn ocr_document_cmd(
     ocr_document_impl(&state.engine, &state.docs, &state.history, request)
 }
 
+/// Page sizes in points, for the page-side recogniser to choose a render
+/// width from — the same 300-DPI rule the browser build uses.
+#[tauri::command]
+pub fn ocr_page_sizes_cmd(
+    state: State<'_, AppState>,
+    handle: DocHandle,
+) -> Result<Vec<openpdfedit_session::PageSize>, CommandError> {
+    // The session's DTO, not the engine's type: it is the one that
+    // serialises, and the shape the front end already reads page sizes in.
+    Ok(state
+        .engine
+        .page_sizes(handle)?
+        .into_iter()
+        .map(|s| openpdfedit_session::PageSize { width: s.width, height: s.height })
+        .collect())
+}
+
+/// The write half of OCR, for words recognised in the page.
+///
+/// The desktop now recognises with tesseract.js, as the web app does,
+/// rather than running a `tesseract` binary: that one had to be installed
+/// by the customer, and cannot be run at all from inside the Mac App
+/// Store's sandbox. This is the same `add_ocr_text_layer_impl` the web
+/// build reaches through `WasmSession.addOcrTextLayer` — one mutation, so
+/// one Undo takes the whole document's OCR back.
+#[tauri::command]
+pub fn ocr_add_text_layer_cmd(
+    state: State<'_, AppState>,
+    request: openpdfedit_session::ocr::AddOcrTextLayerRequest,
+) -> Result<OpenedDocument, CommandError> {
+    openpdfedit_session::ocr::add_ocr_text_layer_impl(
+        &state.engine,
+        &state.docs,
+        &state.history,
+        state.store.as_ref(),
+        request,
+    )
+    .map_err(Into::into)
+}
+
 fn ocr_document_impl(
     engine: &EngineHandle,
     docs: &Mutex<HashMap<DocHandle, OpenDoc>>,
@@ -236,5 +276,74 @@ mod tests {
             lang: None,
         };
         assert!(ocr_document_impl(engine, &docs, &history, request).is_err());
+    }
+
+    /// The page-side path end to end on the Rust half: the JSON that
+    /// `tauri.ts`'s `ocrDocument` sends, parsed as the command parses it,
+    /// written as a text layer the engine can then find — with no
+    /// `tesseract` binary anywhere. That is the property the Mac App
+    /// Store build depends on, so it is tested without one.
+    #[test]
+    fn page_recognised_words_become_a_searchable_text_layer() {
+        let Some(engine) = crate::test_support::shared_engine() else {
+            return;
+        };
+        let tmp_path = std::env::temp_dir().join(format!(
+            "openpdfedit-ocr-page-side-{}.pdf",
+            std::process::id()
+        ));
+        // A page with no text layer at all, as a scan would be.
+        std::fs::write(&tmp_path, text_page_pdf_bytes("", 40.0)).expect("should write temp file");
+        let handle = engine.open(&tmp_path).expect("engine should open the temp file");
+        let doc = Document::open(&tmp_path).expect("doc crate should open the temp file");
+        let docs: Mutex<HashMap<DocHandle, OpenDoc>> = Mutex::new(HashMap::new());
+        docs.lock().unwrap().insert(
+            handle,
+            OpenDoc {
+                path: tmp_path.clone(),
+                original_path: tmp_path.clone(),
+                dirty: false,
+                doc,
+                encryption: None,
+            },
+        );
+        let history: Mutex<HashMap<PathBuf, DocHistory>> = Mutex::new(HashMap::new());
+
+        let sizes = engine.page_sizes(handle).expect("page sizes");
+        // Exactly the shape tauri.ts builds: snake_case, pixel-space boxes
+        // relative to the rendered bitmap, and the page's size in points.
+        let json = serde_json::json!({
+            "handle": handle,
+            "pages": [{
+                "page_index": 0,
+                "page_width_pt": sizes[0].width,
+                "page_height_pt": sizes[0].height,
+                "image_width_px": 2550,
+                "image_height_px": 3300,
+                "words": [{
+                    "text": "INVOICE", "left": 300.0, "top": 400.0,
+                    "width": 700.0, "height": 120.0, "confidence": 96.0
+                }]
+            }]
+        });
+        let request: openpdfedit_session::ocr::AddOcrTextLayerRequest =
+            serde_json::from_value(json).expect("the page's JSON must parse as the command's request");
+
+        let result = openpdfedit_session::ocr::add_ocr_text_layer_impl(
+            engine, &docs, &history, &FsWorkingStore, request,
+        )
+        .expect("writing the text layer should succeed");
+
+        // Found by the document search a customer would use, which is the
+        // point of OCR: before the layer there was nothing to find.
+        let hits = engine
+            .search_document(result.handle, "INVOICE", openpdfedit_engine::SearchOptions::default(), 10)
+            .expect("search should run on the OCR'd document");
+        assert!(
+            !hits.is_empty(),
+            "the recognised word must be findable in the new text layer"
+        );
+        eprintln!("page-side OCR: {} hit(s) for INVOICE after the text layer", hits.len());
+        let _ = std::fs::remove_file(&tmp_path);
     }
 }
