@@ -55,6 +55,12 @@ is the field for anything time-sensitive later.
 
 ## Description (4000 max)
 
+Every line below is a claim about the build, checked against its code on
+2026-09-22 — three were not true until then: pages could not be
+*inserted*, one document could not be *split into many* (the pages panel
+extracts the selected pages into one new file), and the outline could be
+*read* but not edited. Check a new line the same way before adding it.
+
 > OpenPdfEdit is a complete PDF editor that runs entirely on your device.
 > Not a viewer with a subscription attached, and not a front end for
 > someone else's server — the whole editor is in the app.
@@ -73,9 +79,9 @@ is the field for anything time-sensitive later.
 > • Redact — properly, by removing the content, not by drawing over it
 > • Add text fields and checkboxes, fill in forms, and sign with a
 >   signature you draw once and reuse
-> • Reorder, rotate, insert and delete pages
-> • Merge several PDFs into one, or split one into many
-> • Number pages, and edit the document outline
+> • Reorder, rotate, crop and delete pages
+> • Merge several PDFs into one, or pull the pages you need out into a new file
+> • Number pages, and move around a long document by its outline
 > • Compress a file that is too large to email
 > • Extract pages and text
 > • Encrypt a document with a password
@@ -105,6 +111,64 @@ is the field for anything time-sensitive later.
 >
 > OpenPdfEdit is open source. The editor, the rendering engine and the
 > app around them can all be read, built and audited by anyone.
+
+## Mac description (4000 max)
+
+The same product on the Mac App Store, without the one thing the Mac build
+does not do: it does not appear in Finder's Open With, so the iOS listing's
+share-sheet paragraph is left out rather than reworded into a claim.
+
+> OpenPdfEdit is a complete PDF editor that runs entirely on your Mac.
+> Not a viewer with a subscription attached, and not a front end for
+> someone else's server — the whole editor is in the app.
+>
+> That has one consequence worth stating plainly: your documents are
+> never uploaded anywhere. There is no server to leak them and no privacy
+> policy you have to take on trust, because the file never leaves your
+> Mac in the first place. Turn off Wi-Fi and everything below still
+> works.
+>
+> WHAT YOU CAN DO
+>
+> • Annotate — highlight, underline, strike through, and add sticky notes
+> • Draw freehand, or add rectangles and ellipses
+> • Edit the text already in a document, and move text and images around
+> • Redact — properly, by removing the content, not by drawing over it
+> • Add text fields and checkboxes, fill in forms, and sign with a
+>   signature you draw once and reuse
+> • Reorder, rotate, crop and delete pages
+> • Merge several PDFs into one, or pull the pages you need out into a new file
+> • Number pages, and move around a long document by its outline
+> • Compress a file that is too large to email
+> • Extract pages and text
+> • Encrypt a document with a password
+> • Search inside a document
+>
+> WHAT COSTS MONEY
+>
+> Almost nothing, and we would rather say so than bury it. Every tool
+> listed above is free, forever, with no account.
+>
+> Two tools — Watermark and OCR — are unlocked together for a one-time
+> 1,000 credits. Not a subscription. Not per use. Once. OCR runs on your
+> Mac too: it turns a scanned page into text you can select and search,
+> with nothing to install. Credits are bought in the app, never expire,
+> and the unlock is remembered by your account, so it follows you to
+> OpenPdfEdit on iPhone and iPad as well.
+>
+> An account is needed only to buy credits. Everything else works signed
+> out.
+>
+> OPEN SOURCE
+>
+> OpenPdfEdit is open source. The editor, the rendering engine and the
+> app around them can all be read, built and audited by anyone.
+
+## Mac promotional text (170 max)
+
+> Your PDFs never leave your Mac. Edit, annotate, fill, sign, merge and
+> export entirely on device — no upload, no account needed, and all of it
+> works offline.
 
 ## Keywords (100 max, comma-separated, no spaces)
 
