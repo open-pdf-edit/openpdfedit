@@ -16,7 +16,7 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
 import { css, html, nothing } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 import { OpenAppsElement } from "./base.js";
-import { ethereumMark, githubMark, googleMark, nostrMark } from "./provider-marks.js";
+import { appleMark, ethereumMark, githubMark, googleMark, nostrMark } from "./provider-marks.js";
 import { notify } from "./context.js";
 import { clearReferral, referralInUrl, storedReferral } from "./referral-code.js";
 import { connectEthereum, discoverEthereumWallets, nostrProviderNames, signNostr, signNostrWithBunker, signNostrWithSecretKey, signSiwe, waitForNostrProvider, } from "./wallet.js";
@@ -226,11 +226,12 @@ let OpenAppsLogin = class OpenAppsLogin extends OpenAppsElement {
         // signer is discovered when the user clicks, because extensions inject
         // at unpredictable times and hiding a button the user could have used
         // is worse than showing one that explains itself.
+        const apple = this.enabled?.apple ?? false;
         const google = this.enabled?.google ?? false;
         const github = this.enabled?.github ?? false;
         const wallet = this.enabled?.eip155 ?? false;
         const nostr = this.enabled?.nostr ?? false;
-        if (this.enabled && !google && !github && !wallet && !nostr) {
+        if (this.enabled && !apple && !google && !github && !wallet && !nostr) {
             return this.frame(html `
         <p class="muted">This server has no login methods configured.</p>
         ${this.error ? html `<p class="error" role="alert">${this.error}</p>` : nothing}
@@ -243,6 +244,17 @@ let OpenAppsLogin = class OpenAppsLogin extends OpenAppsElement {
         const block = this.variant === "panel" ? "block" : "";
         return this.frame(html `
       <div class="stack">
+        ${apple
+            ? // First, and the same size as the rest: Apple's guidelines ask
+                // that it be at least as prominent as any other sign-in offered.
+                html `<button
+              class="provider ${block}"
+              ?disabled=${this.busy}
+              @click=${() => this.loginWithRedirect("apple")}
+            >
+              ${appleMark}<span>Continue with Apple</span>
+            </button>`
+            : nothing}
         ${google
             ? html `<button
               class="provider ${block}"

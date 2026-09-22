@@ -4,7 +4,8 @@ export type Namespace = "eip155" | "nostr";
  * Sign-ins that leave the page for the provider and come back with a
  * one-time code, rather than being signed in the page.
  */
-export type RedirectProvider = "google" | "github";
+/** Sign-ins that leave the page for the provider and come back. */
+export type RedirectProvider = "google" | "github" | "apple";
 /** Login methods a given deployment has configured. */
 export interface AuthMethods {
     google: boolean;
@@ -13,6 +14,9 @@ export interface AuthMethods {
      * product, so it can be on for one product and off for another.
      */
     github: boolean;
+    /** Sign in with Apple — offered alongside Google, as App Store
+     *  guideline 4.8 requires of an app with a third-party sign-in. */
+    apple?: boolean;
     eip155: boolean;
     nostr: boolean;
 }

@@ -56,4 +56,11 @@ export declare const nostrMark: SVGTemplateResult;
  * exactly those two cases.
  */
 export declare const githubMark: SVGTemplateResult;
+/**
+ * The Apple logo, for Sign in with Apple. `currentColor`, so it is black on
+ * a light button and white on a dark one — the two appearances Apple's
+ * Human Interface Guidelines allow — while the button itself stays as
+ * neutral as the others in the row. Path: Font Awesome Free, CC BY 4.0.
+ */
+export declare const appleMark: SVGTemplateResult;
 //# sourceMappingURL=provider-marks.d.ts.map

@@ -194,6 +194,7 @@ def ensure_app_id() -> str:
 
 def ensure_profile() -> None:
     """The App Store profile, installed where Xcode looks for it."""
+    clear_invalid_profiles(PROFILE_NAME)
     bundle_id = ensure_app_id()
     certs = [c for c in call("GET", "/certificates?limit=200").get("data", [])
              if c["attributes"]["certificateType"] in ("DISTRIBUTION", "IOS_DISTRIBUTION")]
@@ -216,6 +217,22 @@ def ensure_profile() -> None:
         }},
     })
     install_profile(created["data"])
+
+
+def clear_invalid_profiles(name: str) -> None:
+    """Deletes profiles of this name that Apple has marked INVALID.
+
+    Changing an App ID's capabilities — adding Sign in with Apple, say —
+    invalidates every profile built on it. An INVALID profile still holds
+    its name, and still sits in the listing looking like the one to use,
+    so the next archive fails with a signing error that does not mention
+    either fact. Replaced here instead.
+    """
+    for profile in call("GET", "/profiles?limit=200").get("data", []):
+        a = profile["attributes"]
+        if a["name"] == name and a["profileState"] == "INVALID":
+            call("DELETE", f"/profiles/{profile['id']}")
+            print(f"deleted invalidated profile {name}")
 
 
 def install_profile(profile: dict) -> None:
@@ -627,6 +644,7 @@ def ensure_installer_cert() -> None:
 
 def ensure_mac_profile() -> None:
     """The MAC_APP_STORE profile, written where the store build embeds it."""
+    clear_invalid_profiles(MAC_PROFILE_NAME)
     bundle_id = ensure_app_id()
     certs = [c for c in call("GET", "/certificates?limit=200").get("data", [])
              if c["attributes"]["certificateType"] == "DISTRIBUTION"]
