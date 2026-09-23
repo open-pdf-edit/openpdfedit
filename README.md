@@ -17,10 +17,18 @@ survive annotation edits) · AcroForm fill **and** field creation · page
 organization (rotate, delete, reorder, crop, extract, merge) · redaction
 (true content removal) · signature list/placement · text-run and image
 editing · watermark (tiled text/logo stamps, 0°/45°, opacity, band or
-full-page) · document compare (text + pixel diff) · OCR (a local
-tesseract on the desktop, tesseract.js in the browser) · optional
-OpenApps account panel (sign-in, credits — never required, no network
-without it).
+full-page) · document compare (text + pixel diff) · OCR (tesseract.js,
+in the page, twelve languages) · optional OpenApps account panel
+(sign-in, credits — never required).
+
+**What crosses the network.** Nothing you open does, with or without an
+account: every page is rendered, edited and saved on your machine. The
+one exception is the OCR engine itself. In the web app it is fetched on
+first use of OCR — the WebAssembly core and the one language you asked
+for, a few megabytes, from openpdfedit.com, the same origin that served
+the app — and recognition is offline from then on. The desktop and iOS
+builds carry those files inside the bundle and fetch nothing at all, and
+the extension ships without OCR.
 
 ## Try it without building anything
 
@@ -34,8 +42,8 @@ whole of it — same engine, same interface, nothing installed.
 | **Web** | [openpdfedit.com/app](https://openpdfedit.com/app) | Live, and always the newest build — nothing to install or update |
 | **macOS** | `OpenPdfEdit_<version>_aarch64.dmg` | Apple Silicon. Ad-hoc signed; see below for the first-run warning |
 | **Windows** | `OpenPdfEdit_<version>_x64-setup.exe` | x64 installer |
-| **Windows (Store)** | Microsoft Store | An MSIX, built by [`msix.yml`](.github/workflows/msix.yml). A separate product identity from the `.exe` — the two install side by side |
-| **Browser extension** | Edge Add-ons, or `openpdfedit-dist.zip` loaded unpacked | Chrome 103+, Edge and other Chromium browsers. Not Firefox: MV3 differs enough to need its own build |
+| **Windows (Store)** | — | An MSIX is built by [`msix.yml`](.github/workflows/msix.yml), with a separate product identity from the `.exe` so the two install side by side. Not submitted to the Microsoft Store yet |
+| **Browser extension** | `openpdfedit-dist.zip`, loaded unpacked | Chrome 103+, Edge and other Chromium browsers. Not on a store yet: [`publish-edge.yml`](.github/workflows/publish-edge.yml) can only replace the package of a product that already exists, and the first submission has to be made by hand. Not Firefox: MV3 differs enough to need its own build |
 | **iOS** | — | Built and runnable from Xcode; not yet on the App Store |
 | **CLI** | `apps/cli` | Headless batch operations, no browser and no PDFium |
 | **MCP** | `apps/mcp` | Exposes the engine to an MCP client |
@@ -45,10 +53,16 @@ interface on the same WebAssembly engine as the extension, it needs no
 install, and it cannot fall behind — which the desktop app can, and
 does, if nobody downloads a new build.
 
-What the desktop app adds over the web app: native file dialogs, and an
-OCR path that shells out to a local tesseract instead of running
-tesseract.js in a worker. Everything after recognition is the same Rust
-either way.
+What the desktop app adds over the web app: native file dialogs, and
+saving over the original — with a recents list that survives a relaunch
+— always, where the web app can only do either in the Chromium browsers
+that implement the File System Access API. OCR is no longer one of the
+differences — it
+used to shell out to a `tesseract` binary found on the customer's PATH,
+which meant a paid feature that worked only for people who had installed
+one themselves and could never run inside the Mac App Store's sandbox.
+Both now recognise with tesseract.js in the page, and everything after
+recognition was always the same Rust.
 
 ## Releases
 
@@ -167,5 +181,21 @@ cd apps/extension && npm run e2e # Playwright against the packaged build
 
 ## License
 
-MIT OR Apache-2.0, at your option — see [LICENSE-MIT](LICENSE-MIT) and
-[LICENSE-APACHE](LICENSE-APACHE).
+[AGPL-3.0-or-later](LICENSE). Read it, run it, change it, share it. The
+one condition that matters: if you build on this code and hand the
+result to anyone — as a download *or* as a website people use over a
+network — that version has to be open too, under the same licence.
+Using it yourself, inside a company or for research, obliges you
+nothing.
+
+Two parts of the tree are not under it, and say so themselves:
+`apps/mcp` is `LicenseRef-Proprietary`, and the vendored OpenApps
+packages under `apps/desktop/vendor/openapps` stay MIT OR Apache-2.0,
+which is their own licence and is compatible with this one.
+
+**Releases up to and including 1.0.1 were published under MIT OR
+Apache-2.0**, and that grant cannot be withdrawn: any copy of those
+commits stays permissively licensed for whoever holds it, forever. The
+change applies from the next version onward. It brings this repository
+in line with OpenCapture and OpenTabs, which have been AGPL from the
+start.

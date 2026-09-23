@@ -12,7 +12,7 @@
     "check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
     "tauri": "tauri"
   },
-  "license": "MIT OR Apache-2.0",
+  "license": "AGPL-3.0-or-later",
   "dependencies": {
     "@firecrawl/anydoc-wasm": "^0.2.3",
     "@openapps/sdk": "file:vendor/openapps/sdk",
