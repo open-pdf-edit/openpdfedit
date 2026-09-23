@@ -47,6 +47,13 @@ ignore = [
 [licenses]
 confidence-threshold = 0.8
 allow = [
+    # This workspace's own crates. `licenses.private.ignore` is false
+    # below, so they are checked like any dependency and the project's
+    # own licence has to be listed here too. It is not an invitation to
+    # take on an AGPL *dependency*: a copyleft crate from outside would
+    # still want a deliberate decision, scoped the way the
+    # CDLA-Permissive-2.0 exception further down is.
+    "AGPL-3.0-or-later",
     "MIT",
     "Apache-2.0",
     "Apache-2.0 WITH LLVM-exception",
