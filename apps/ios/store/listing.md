@@ -336,10 +336,20 @@ conclusion.
 
 ## Export compliance
 
-`ITSAppUsesNonExemptEncryption` is already `false` in `Info.plist`, so
-App Store Connect will not ask at upload time. The app's only use of
-cryptography is HTTPS and PDF password encryption via the platform and
-PDFium — both exempt.
+`ITSAppUsesNonExemptEncryption` is `false` on both targets, so App Store
+Connect does not ask at upload time. The app's only use of cryptography is
+HTTPS and PDF password encryption via the platform and PDFium — both
+exempt.
+
+**The Mac target only got this on 2026-09-23**, after the 1.0.1 submission
+was refused with "This build is missing export compliance information".
+iOS had carried the key in `apps/ios/OpenPdfEdit/Info.plist` since the
+start; the Tauri Mac build had no `Info.plist` of its own at all, so
+nothing answered the question. Build 3537358 was answered through the API
+after the fact (`PATCH /builds/{id}` with `usesNonExemptEncryption`), and
+`apps/desktop/src-tauri/Info.plist` now carries the key so no later build
+asks again. A key set per project rather than per config, so the
+Developer ID build gets it too.
 
 ## Before you press Submit
 

@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Merged into the generated Info.plist by the Tauri CLI. Keep it to keys
+  Tauri does not already set — overwriting the version or the bundle id
+  from here fights the build rather than extending it.
+
+  ITSAppUsesNonExemptEncryption answers Apple's export-compliance question
+  at upload time instead of leaving it for someone to click. Without it,
+  App Store Connect refuses the submission with "This build is missing
+  export compliance information", which is what happened to the Mac 1.0.1
+  upload on 2026-09-23 — the iOS target has carried this key all along, so
+  only the Mac build ever asked.
+
+  `false` is the same answer the iOS target gives, and for the same
+  reason recorded in apps/ios/store/listing.md: the only cryptography here
+  is HTTPS and PDF password encryption, both exempt. If the app ever adds
+  encryption of its own beyond that, this key is where the lie would
+  start — revisit it rather than leaving it.
+-->
+<plist version="1.0">
+<dict>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
+</dict>
+</plist>
