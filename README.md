@@ -18,8 +18,12 @@ organization (rotate, delete, reorder, crop, extract, merge) · redaction
 (true content removal) · signature list/placement · text-run and image
 editing · watermark (tiled text/logo stamps, 0°/45°, opacity, band or
 full-page) · document compare (text + pixel diff) · OCR (tesseract.js,
-in the page, twelve languages) · optional OpenApps account panel
-(sign-in, credits — never required).
+in the page, twelve languages) · optional OpenApps account panel.
+
+**Two of those are paid.** Watermark and OCR are the Supporter tools:
+1,000 credits once, for both together, and that is the only charge
+anywhere in the product. Signing in is needed for those two and for
+nothing else — everything else on the list is free, with no account.
 
 **What crosses the network.** Nothing you open does, with or without an
 account: every page is rendered, edited and saved on your machine. The
@@ -56,13 +60,15 @@ does, if nobody downloads a new build.
 What the desktop app adds over the web app: native file dialogs, and
 saving over the original — with a recents list that survives a relaunch
 — always, where the web app can only do either in the Chromium browsers
-that implement the File System Access API. OCR is no longer one of the
-differences — it
-used to shell out to a `tesseract` binary found on the customer's PATH,
-which meant a paid feature that worked only for people who had installed
-one themselves and could never run inside the Mac App Store's sandbox.
-Both now recognise with tesseract.js in the page, and everything after
-recognition was always the same Rust.
+that implement the File System Access API.
+
+OCR is no longer one of those differences. It used to shell out to a
+`tesseract` binary found on the customer's PATH, so it ran only for
+people who had installed one themselves and could never run inside the
+Mac App Store's sandbox. Both now recognise with tesseract.js in the
+page, so OCR works everywhere, and everything after recognition was
+always the same Rust. What changed is the engine and where it runs, not
+what it costs: OCR is still a Supporter tool, with watermark.
 
 ## Releases
 
