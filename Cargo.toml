@@ -29,7 +29,7 @@ members = [
 version = "0.1.0"
 edition = "2021"
 license = "AGPL-3.0-or-later"
-repository = "https://github.com/openpdfedit/openpdfedit"
+repository = "https://github.com/open-pdf-edit/openpdfedit"
 
 [workspace.dependencies]
 # --- internal crates ---

@@ -67,16 +67,14 @@ recognition was always the same Rust.
 ## Releases
 
 Artifacts are attached to each
-[GitHub Release](https://github.com/open-pdf-edit/OpenPdfEdit/releases),
+[GitHub Release](https://github.com/open-pdf-edit/openpdfedit/releases),
 built by [`release.yml`](.github/workflows/release.yml) on every `v*`
-tag. A tag with a hyphen in it (`v1.0.1-rc1`) is a release candidate —
-the same artifacts, marked pre-release. Nothing reaches a store from a
-tag either way: both store workflows are `workflow_dispatch` only, so
+tag; the newest is always at
+[`/releases/latest`](https://github.com/open-pdf-edit/openpdfedit/releases/latest).
+A tag with a hyphen in it (`v1.0.1-rc1`) is a release candidate — the
+same artifacts, marked pre-release. Nothing reaches a store from a tag
+either way: both store workflows are `workflow_dispatch` only, so
 publishing is always a deliberate act.
-
-| | Latest |
-|---|---|
-| Stable | [`v1.0.0`](https://github.com/open-pdf-edit/OpenPdfEdit/releases/tag/v1.0.0) — eight languages, in-app updates, and the update popup that closes |
 
 **Releases from `v0.1.11-rc2` update themselves.** The macOS and Windows
 builds check for a new version on launch and offer to install it, which
