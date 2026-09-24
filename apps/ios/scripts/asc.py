@@ -696,9 +696,13 @@ def review_notes() -> None:
         return "\n\n".join(paragraphs)
 
     signin = quoted("Review notes: sign-in (both platforms)")
+    # Apple asked for these on the iOS 2.1 reply and said to keep them for
+    # future submissions, so the Mac gets them too rather than waiting to
+    # be asked the same six questions.
+    about = quoted("Review notes: about the app (both platforms)")
     app = app_id()
     for platform, heading in (("IOS", "Review notes"), ("MAC_OS", "Mac review notes")):
-        notes = signin + "\n\n" + quoted(heading)
+        notes = signin + "\n\n" + quoted(heading) + "\n\n" + about
         if len(notes) > 4000:
             die(f"{platform} notes are {len(notes)} characters, over Apple's 4000")
         version = version_for(app, platform)
