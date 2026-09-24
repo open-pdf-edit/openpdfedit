@@ -271,16 +271,23 @@ pre-credited account hides the thing under review.
 > us, and the account can be deleted in the app at Account → Delete
 > account.
 >
-> There is no email-and-password login anywhere in this app, which is why
-> the Username and Password fields on this form hold a Nostr key instead.
-> That key is a fallback if Apple sign-in is not convenient: paste the
-> value from the Username field (it starts with nsec1) at Account →
-> Continue with Nostr → "No extension? Use a remote signer" → "I only have
-> a private key". The Password field is not used.
+> There is no email-and-password login in this app, which is why the
+> Username field on this form holds a Nostr key instead (the Password
+> field is unused). To use it: Account → Continue with Nostr → "No
+> extension? Use a remote signer" → "I only have a private key", and
+> paste the value from the Username field.
 >
-> Please make the in-app purchase with whichever account you sign in
-> with. Both start with zero credits, and our server credits sandbox
-> purchases to them.
+> IMPORTANT, for the in-app purchase step: please sign in with the Nostr
+> demo account above, not with Apple. Our server credits a sandbox
+> purchase only to accounts named in its configuration, and the demo
+> account is the one named. A purchase made on any other account is
+> refused with "this server credits Production purchases; that receipt
+> is Sandbox" — not a bug you have found, but the guard that stops a
+> sandbox receipt buying real credits. The demo account starts with zero
+> credits so the purchase is a real test.
+>
+> Sign in with Apple is the right way to see the sign-in and account
+> deletion flows; the Nostr account is the one to buy with.
 
 ## Review notes: about the app (both platforms)
 
@@ -290,42 +297,36 @@ are shared, not copied, or the two platforms drift.
 
 > PURPOSE AND AUDIENCE
 >
-> A PDF editor for people who do not want their documents uploaded to a
-> website to be edited. Contracts, medical letters, ID scans, anything
-> confidential: every other free PDF tool asks you to upload the file to
-> a server. This one does the work on the device. For anyone who signs,
-> fills, redacts or annotates PDFs and would rather not hand them to a
-> stranger — and for people on slow or metered connections, since nothing
-> is uploaded or downloaded.
+> A PDF editor for people who do not want their documents uploaded to be
+> edited. Contracts, medical letters, ID scans: every other free PDF tool
+> asks you to upload the file to a server, and this one does the work on
+> the device. For anyone who signs, fills, redacts or annotates PDFs and
+> would rather not hand them to a stranger.
 >
 > EXTERNAL SERVICES
 >
-> The editing itself uses none. PDFium and Tesseract are compiled into
-> the bundle, not called over a network. The app contacts exactly three
-> hosts, all ours, and only if you choose to sign in:
-> auth.openpdfedit.com (accounts and credit balance),
-> gateway.openpdfedit.com (the only service that can spend credits), and
-> openpdfedit.com (the support and privacy pages linked from the app).
-> Authentication is Sign in with Apple and Nostr. Payment is Apple
-> in-app purchase and nothing else. There is no analytics, no
-> advertising, no AI service, and no third-party data provider.
+> The editing uses none: PDFium and Tesseract are compiled into the
+> bundle, not called over a network. The app contacts three hosts, all
+> ours, and only if you sign in: auth.openpdfedit.com (accounts and
+> balance), gateway.openpdfedit.com (the only service that can spend
+> credits), openpdfedit.com (support and privacy pages). Authentication
+> is Sign in with Apple and Nostr; payment is Apple in-app purchase and
+> nothing else. No analytics, advertising, AI service or data provider.
 >
 > REGIONAL DIFFERENCES
 >
-> None. The features are identical in every territory; there is no
+> None. Features are identical in every territory and there is no
 > geographic gating in the code. The interface is offered in eight
-> languages and OCR in twelve, both chosen by the user rather than by
-> location. The only thing that varies by region is the price Apple
-> displays, which StoreKit formats.
+> languages and OCR in twelve, both chosen by the user, not by location.
+> Only the displayed price varies, which StoreKit formats.
 >
 > REGULATED INDUSTRY AND THIRD-PARTY MATERIAL
 >
 > Neither applies. This is a document editor, not a regulated service.
-> The two third-party components are bundled under permissive licences
-> that allow redistribution: PDFium (BSD-3-Clause, Google) and
-> Tesseract with tesseract.js (Apache-2.0). No protected or licensed
-> content ships with the app, and it displays only the files the user
-> opens. Our own source is public at
+> Two third-party components are bundled under permissive licences that
+> allow redistribution: PDFium (BSD-3-Clause) and Tesseract with
+> tesseract.js (Apache-2.0). No protected content ships with the app; it
+> displays only files the user opens. Our source is public at
 > github.com/open-pdf-edit/openpdfedit under AGPL-3.0-or-later.
 
 ## Review notes
@@ -354,14 +355,12 @@ conclusion.
 > 1. Open any PDF from Files, or tap Open on the first screen.
 > 2. Annotate it, edit its text, reorder pages, then export. All free,
 >    and no account is needed for any of it.
-> 3. Tap the Watermark tool. Because it is one of only two paid tools, a
->    panel appears explaining the one-time 1,000-credit unlock.
-> 4. Sign in with the demo account supplied above, then buy the 1,000
->    Credits pack. The unlock is then permanent for that account.
+> 3. Tap Watermark. A panel explains the one-time 1,000-credit unlock.
+> 4. Sign in with the Nostr demo account, then buy the 1,000 Credits
+>    pack. The unlock is permanent for that account.
 >
 > Almost the entire app is free. Only Watermark and OCR are paid, they
-> are unlocked together, and the charge is once — not a subscription and
-> not per use.
+> unlock together, and the charge is once — not a subscription.
 
 
 ## Mac review notes
