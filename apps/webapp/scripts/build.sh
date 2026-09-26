@@ -232,6 +232,41 @@ const inject = [
   '<meta name="apple-mobile-web-app-capable" content="yes">',
   '<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">',
   '<meta name="apple-mobile-web-app-title" content="OpenPdfEdit">',
+  // The crawler copy, styled before the app exists.
+  //
+  // landing.html is appended before </body>, so on the first frame it is
+  // a direct child of <body>. Every rule that styles it lives in
+  // +page.svelte under `.landing-slot :global(.landing-copy …)` — and
+  // `.landing-slot` is rendered by the app, which then moves the node
+  // into it. Until that happens not one of those selectors matches, so
+  // this is not "the CSS has not arrived yet": there is no applicable
+  // CSS at all. Four hundred words of unstyled black text, for as long
+  // as it takes to fetch and run a 145 KB chunk and the 33 KB
+  // stylesheet it pulls in, neither of which the origin compresses.
+  //
+  // So: the same declarations, keyed on the id instead. Deliberately
+  // NOT on `.landing-slot`, and deliberately without Svelte's scope
+  // hash — that hash is regenerated on every build, and hard-coding it
+  // would break silently and invisibly the next time the component is
+  // touched. Once the app moves the node, the scoped rules are more
+  // specific and take over; these keep applying until then and do not
+  // fight afterwards.
+  //
+  // The eleven custom properties below are all defined in the
+  // render-blocking head stylesheet, so they resolve on the first
+  // frame. `margin: … auto` rather than the scoped rule's `margin-top`,
+  // because the centring parent is part of the app that has not
+  // rendered yet.
+  "<style>",
+  "#landing-copy{max-width:62ch;margin:var(--space-6) auto 0;padding-inline:var(--space-4);" +
+    "color:var(--text-muted);font:var(--type-body);text-align:left}",
+  "#landing-copy h1{font:var(--type-h2);color:var(--text-strong);text-align:center;margin:0 0 var(--space-3)}",
+  "#landing-copy h2{font:var(--type-h3);color:var(--text-strong);margin:var(--space-5) 0 var(--space-2)}",
+  "#landing-copy p,#landing-copy li{line-height:1.6}",
+  "#landing-copy p{margin:0 0 var(--space-3)}",
+  "#landing-copy ul,#landing-copy ol{padding-left:1.25em;margin:0;display:grid;gap:var(--space-1)}",
+  "#landing-copy strong{color:var(--text-strong);font-weight:600}",
+  "</style>",
   "<script>",
   // Catch beforeinstallprompt before the app exists. Chromium fires it
   // as soon as it decides the page is installable, which can be before
@@ -305,6 +340,19 @@ const checks = [
   [["og:type", "og:url", "og:title", "og:description", "og:image"].every((p) => html.includes(`property="${p}"`)) && html.includes('name="twitter:card"'), "og and twitter tags"],
   [!existsSync(`${dist}/sitemap.xml`), "no sitemap.xml of its own"],
   [!/umami/i.test(html), "no analytics — privacy.html promises none"],
+  // The copy above is appended to <body>, and everything that styles it
+  // in the app is scoped under `.landing-slot`, which does not exist
+  // until the app has rendered. Without a rule in the head that matches
+  // it on its own, the first thing anyone opening the editor sees is
+  // four hundred words of unstyled text (APP-187). This is cheap to
+  // reintroduce — a build-config change, a component refactor — and it
+  // throws no error when it breaks, it just looks broken.
+  [/<style>[\s\S]*#landing-copy[\s\S]*<\/style>/.test(html.slice(0, html.indexOf("</head>"))),
+    "head styles #landing-copy directly, so the crawler copy is not unstyled before boot"],
+  // The same rules scoped to .landing-slot are what take over once the
+  // node is moved; the head copy must not carry Svelte's scope hash,
+  // which is regenerated every build.
+  [!/#landing-copy[^{]*\.svelte-/.test(html), "the head rules carry no Svelte scope hash"],
 ];
 let failed = 0;
 for (const [ok, what] of checks) { console.log(`  ${ok ? "ok  " : "FAIL"}  ${what}`); if (!ok) failed++; }
