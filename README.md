@@ -1,5 +1,7 @@
 # OpenPdfEdit
 
+**The open-source alternative to Adobe Acrobat, Smallpdf and iLovePDF — your documents never leave your machine.** [openpdfedit.com](https://openpdfedit.com)
+
 A fast, local-first PDF editor with a Rust core. One engine, one
 interface, six ways to run it: in a browser, as a desktop app, as a
 browser extension, on iOS, from a shell, or over MCP. Documents are
