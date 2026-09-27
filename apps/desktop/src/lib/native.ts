@@ -54,6 +54,13 @@ export interface NativeShell {
   on(event: "receipt", fn: (detail: NativePurchase) => void): () => void;
   ready(): Promise<{ platform: string }>;
   readDocument(detail: NativeDocument): Promise<File>;
+  /// Hands bytes to the iOS share sheet — "Save to Files", Mail, AirDrop.
+  ///
+  /// The only way a file leaves the iOS app. Everywhere else the browser
+  /// takes an `<a download>`; a WKWebView treats that as a navigation and
+  /// the shell cancels it, so without this every Save and Export did
+  /// nothing and reported nothing.
+  saveFile(name: string, bytes: Uint8Array, mime: string): Promise<boolean>;
   signIn(): Promise<NativeSignIn>;
   products(): Promise<NativeProduct[]>;
   purchase(productId: string): Promise<NativePurchaseResult>;

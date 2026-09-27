@@ -25,7 +25,9 @@
 // (verified in Task 7); nothing here needs it to change.
 
 import { base } from "$app/paths";
+import { nativeShell } from "$lib/native";
 import { clearRecents, forgetRecent, listRecents, rememberRecent } from "$lib/recents";
+import { showToast } from "$lib/toast.svelte";
 import type {
   AddAnnotationRequest,
   AnnotationSummaryDto,
@@ -751,12 +753,38 @@ async function writeTarget(target: FileTarget, bytes: Uint8Array): Promise<void>
  * immediately because the download has to be able to resolve the URL
  * after the click returns. */
 function downloadBytes(name: string, bytes: Uint8Array, mimeType: string) {
+  if (handOffToShell(name, bytes, mimeType)) return;
   const url = URL.createObjectURL(new Blob([bytes], { type: mimeType }));
   const anchor = document.createElement("a");
   anchor.href = url;
   anchor.download = name;
   anchor.click();
   setTimeout(() => URL.revokeObjectURL(url), 10_000);
+}
+
+/** The iOS shell's share sheet, where there is one.
+ *
+ * `<a download>` below is a download in a browser and a *navigation* in a
+ * WKWebView — one the shell cancels, because it allows only its own
+ * scheme. So on iOS the anchor did nothing, silently, and every Save and
+ * Export appeared to succeed while producing no file. Reported from
+ * TestFlight as "save and export md are both still broken", and true of
+ * every route out of the app.
+ *
+ * Returns whether the shell took it, so the caller can fall through to
+ * the browser path everywhere else. Failures are surfaced rather than
+ * swallowed: the sheet not opening is exactly the silence this replaces.
+ */
+function handOffToShell(name: string, bytes: Uint8Array, mimeType: string): boolean {
+  const shell = nativeShell();
+  if (!shell) return false;
+  void shell.saveFile(name, bytes, mimeType).catch((e: unknown) => {
+    showToast(e instanceof Error ? e.message : "Could not save the file.", {
+      tone: "warning",
+      title: "Save failed",
+    });
+  });
+  return true;
 }
 
 /** How long a print target stays alive. The print dialog is modal to the
@@ -1134,6 +1162,7 @@ async function writeDocumentTo(handle: number, target: FileTarget): Promise<Uint
  * revoked. Revoked on a timer rather than immediately because Chrome
  * needs the URL to still resolve when it starts the download. */
 function downloadTextFile(name: string, contents: string, mimeType: string) {
+  if (handOffToShell(name, new TextEncoder().encode(contents), mimeType)) return;
   const url = URL.createObjectURL(new Blob([contents], { type: mimeType }));
   const anchor = document.createElement("a");
   anchor.href = url;
@@ -2006,13 +2035,12 @@ export const wasmBackend: Backend = {
   async encryptDocument(handle, choices) {
     const session = await ensureSession();
     const bytes = session.encryptDocumentBytes(handle, JSON.stringify(choices));
-    // No filesystem here, so "save a copy" means hand it to a download.
-    const url = URL.createObjectURL(new Blob([bytes], { type: "application/pdf" }));
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = "protected.pdf";
-    anchor.click();
-    setTimeout(() => URL.revokeObjectURL(url), 10_000);
+    // No filesystem here, so "save a copy" means hand it out. Through
+    // the shared helper rather than its own anchor: this had a private
+    // copy of the download, so when the iOS shell was taught to take
+    // files it would have been the one export still silently doing
+    // nothing.
+    downloadBytes("protected.pdf", bytes, "application/pdf");
     return { bytes: bytes.byteLength };
   },
 

@@ -195,6 +195,63 @@ final class BridgeTests: XCTestCase {
         XCTAssertEqual(file["size"] as? Int, 15)
     }
 
+    /// The write direction, which did not exist until APP-168's sibling:
+    /// Save and Export Markdown both produced an `<a download>` at a
+    /// blob: URL, which `AppWebView.policy(for:)` cancels, so every
+    /// export did nothing and said nothing. Staging is tested rather than
+    /// presenting — the share sheet needs a key window, while decoding,
+    /// the filename and the directory are what can quietly be wrong.
+    func testBytesToShareAreStagedUnderTheNameTheyWereGiven() throws {
+        let bytes = Data("%PDF-1.7\nexported\n%%EOF\n".utf8)
+        let file = try WebBridge.stageForSharing(named: "annual report.pdf", data: bytes)
+
+        XCTAssertEqual(file.lastPathComponent, "annual report.pdf")
+        XCTAssertEqual(try Data(contentsOf: file), bytes)
+        try? FileManager.default.removeItem(at: file.deletingLastPathComponent())
+    }
+
+    /// Two exports of the same name, both sheets open at once. Sharing a
+    /// directory would mean the second write replaced the first file
+    /// while someone was still choosing where to put it.
+    func testTwoExportsOfOneNameDoNotCollide() throws {
+        let first = try WebBridge.stageForSharing(named: "notes.md", data: Data("first".utf8))
+        let second = try WebBridge.stageForSharing(named: "notes.md", data: Data("second".utf8))
+
+        XCTAssertNotEqual(first, second)
+        XCTAssertEqual(try Data(contentsOf: first), Data("first".utf8))
+        XCTAssertEqual(try Data(contentsOf: second), Data("second".utf8))
+        for url in [first, second] {
+            try? FileManager.default.removeItem(at: url.deletingLastPathComponent())
+        }
+    }
+
+    /// The page should always send a name; if it ever does not, the
+    /// customer gets a file rather than a share of a directory.
+    func testAnEmptyNameStillProducesAFile() throws {
+        let file = try WebBridge.stageForSharing(named: "", data: Data("x".utf8))
+        XCTAssertEqual(file.lastPathComponent, "document.pdf")
+        try? FileManager.default.removeItem(at: file.deletingLastPathComponent())
+    }
+
+    /// The bridge has to *have* the action. Before this existed the page
+    /// got "unknown action saveFile" — which is what the web app would
+    /// see again if the case were ever dropped.
+    func testSaveFileIsAnActionTheBridgeKnows() async throws {
+        let result = try await js(
+            """
+            try {
+              await window.webkit.messageHandlers.openpdfedit.postMessage({
+                action: 'saveFile', name: 'x.pdf', data: 'bm90IGEgcGRm'
+              });
+              return 'accepted';
+            } catch (e) {
+              return String(e.message || e);
+            }
+            """
+        ) as? String
+        XCTAssertNotEqual(result?.contains("unknown action"), true, "got \(result ?? "nil")")
+    }
+
     func testAnUnknownActionIsRefusedRatherThanIgnored() async throws {
         let result = try await js(
             """

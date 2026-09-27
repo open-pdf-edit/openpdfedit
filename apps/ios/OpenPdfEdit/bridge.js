@@ -81,6 +81,40 @@
       });
     },
 
+    // --- documents leaving ------------------------------------------
+
+    /**
+     * Hands bytes to the iOS share sheet — "Save to Files", Mail, AirDrop.
+     *
+     * This is the only way a file leaves the app. The web layer's usual
+     * route is an `<a download>` at a blob: URL, which a WKWebView treats
+     * as a navigation and the shell cancels, so every Save and Export did
+     * nothing at all and said nothing about it.
+     *
+     * Base64, unlike `readDocument`, which fetches. The incoming
+     * direction had a URL the shell could serve; going out there is only
+     * a Blob in the page, and `postMessage` carries strings. It costs a
+     * third on top of the bytes, briefly — acceptable for a document
+     * somebody is saving by hand, and the alternative is a second scheme
+     * handler for one message.
+     */
+    saveFile: function (name, bytes, mime) {
+      var binary = "";
+      var view = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
+      // In slices: String.fromCharCode.apply on a whole multi-megabyte
+      // array overflows the argument list and throws.
+      for (var i = 0; i < view.length; i += 0x8000) {
+        binary += String.fromCharCode.apply(null, view.subarray(i, i + 0x8000));
+      }
+      return call("saveFile", {
+        name: name,
+        mime: mime || "application/octet-stream",
+        data: btoa(binary),
+      }).then(function (r) {
+        return !!(r && r.shared);
+      });
+    },
+
     // --- account --------------------------------------------------------
 
     /**
