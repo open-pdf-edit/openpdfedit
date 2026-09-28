@@ -354,7 +354,9 @@ conclusion.
 >
 > 1. Open any PDF from Files, or tap Open on the first screen.
 > 2. Annotate it, edit its text, reorder pages, then export. All free,
->    and no account is needed for any of it.
+>    and no account is needed for any of it. Export opens the iOS share
+>    sheet — choose "Save to Files" to keep the result. There is no
+>    silent download folder on iOS, so the sheet is the save.
 > 3. Tap Watermark. A panel explains the one-time 1,000-credit unlock.
 > 4. Sign in with the Nostr demo account, then buy the 1,000 Credits
 >    pack. The unlock is permanent for that account.
