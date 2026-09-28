@@ -25,6 +25,7 @@
   import { base } from "$app/paths";
   import { t } from "./i18n/index.svelte";
   import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
+  import { invoke } from "@tauri-apps/api/core";
   import { listen, type UnlistenFn } from "@tauri-apps/api/event";
   import { getClient, onChange, notify } from "@openapps/ui";
   import {
@@ -65,6 +66,36 @@
 
   let loggedIn = $state(getClient()?.isLoggedIn ?? false);
 
+  /** The label of the sign-in window this panel opened, while one is
+   * open.
+   *
+   * Closing it is this window's job because the sign-in window cannot
+   * be relied on to do it. A provider that redirects out of the page
+   * and back — Apple, Google — can return a webview with no Tauri IPC
+   * at all, and then every "close me" call in it is a silent no-op and
+   * the window just sits there. The label is known for certain only
+   * here, where it was minted. */
+  let loginLabel: string | null = null;
+
+  /** Closes the sign-in window if one is open, by label, through Rust.
+   *
+   * Not `Window.getByLabel(label).close()`: that destroys the *main*
+   * window instead, measured, even though the app's own registry
+   * reports both labels correctly. `close_window_by_label` looks the
+   * label up in the manager's own map, where it means what it says. */
+  function closeLoginWindow(): void {
+    const label = loginLabel;
+    if (!label) return;
+    // Only once there is actually a session. Both callers fire on any
+    // notice that storage changed, and the sign-in page writes to
+    // storage while it is still being used — an unguarded close here
+    // shut the window in the moment it opened, before anyone could
+    // sign in with it.
+    if (!getClient()?.isLoggedIn) return;
+    loginLabel = null;
+    void invoke("close_window_by_label", { label }).catch(() => {});
+  }
+
   function refresh(): void {
     loggedIn = getClient()?.isLoggedIn ?? false;
   }
@@ -80,7 +111,10 @@
     // see `tauriAvailable`'s doc above for why calling `listen()` there
     // throws rather than rejecting (so a `.catch` alone wouldn't help).
     if (tauriAvailable) {
-      void listen("openapps-session-changed", refresh).then((un) => {
+      void listen("openapps-session-changed", () => {
+        refresh();
+        closeLoginWindow();
+      }).then((un) => {
         if (cancelled) un();
         else stopRemote = un;
       });
@@ -164,6 +198,11 @@
   function sessionChangedElsewhere(): void {
     refresh();
     notify();
+    // Also here, not only on the Tauri event: when the sign-in window
+    // returns from the provider without IPC it emits nothing, and this
+    // same-origin storage write is the only notice the editor gets that
+    // sign-in finished. Without it the window stays open for good.
+    closeLoginWindow();
   }
 
   function signIn(): void {
@@ -262,7 +301,6 @@
       width: 420,
       height: 640,
       resizable: false,
-      parent: "main",
     });
     // Creating a window is a privileged call, so it can be refused by the
     // capability files rather than by anything the user did — and the
@@ -272,6 +310,7 @@
     // granted `core:webview:allow-create-webview-window`, so this had
     // never once opened. Saying so is the difference between a bug
     // someone reports and a bug nobody can see.
+    loginLabel = win.label;
     void win.once("tauri://error", (e) => {
       showToast(typeof e.payload === "string" ? e.payload : "Could not open the sign-in window.", {
         tone: "warning",

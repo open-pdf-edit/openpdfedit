@@ -238,6 +238,29 @@ fn close_window(window: tauri::Window) {
     let _ = window.destroy();
 }
 
+/// Closes another window, named by the label its creator minted.
+///
+/// Exists because neither half of the obvious approach works. A window
+/// created at runtime cannot close itself reliably: after a sign-in that
+/// redirects out to the provider and back, that webview can come back
+/// without Tauri's IPC at all, so every "close me" call in it is a
+/// no-op and the window simply stays. And the creator cannot close it
+/// from JavaScript either — `Window.getByLabel(child).close()` destroys
+/// the *main* window instead, measured, even though the app's own
+/// registry reports both labels correctly.
+///
+/// Looking the label up here sidesteps both. `get_webview_window` is the
+/// manager's own map, so the label means what it says, and the caller
+/// needs nothing of the target but its name. Missing is not an error:
+/// the window may already be gone because it closed itself first, or
+/// because someone shut it by hand, and neither is a failure.
+#[tauri::command]
+fn close_window_by_label(app: tauri::AppHandle, label: String) {
+    if let Some(window) = app.get_webview_window(&label) {
+        let _ = window.destroy();
+    }
+}
+
 /// Writes the working copy over the file the user opened. This is the
 /// *only* path that touches their file — every other command edits the
 /// scratch copy (see [`OpenDoc`]). Thin wrapper over
@@ -432,6 +455,7 @@ pub fn run() {
             save_document,
             save_document_as,
             close_window,
+            close_window_by_label,
             undo_cmd,
             redo_cmd,
             annotations::add_annotation_cmd,
