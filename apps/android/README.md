@@ -48,8 +48,11 @@ command line rather than by tapping at coordinates:
 then evaluate against the page target from `http://localhost:9333/json`
 (suppress the `Origin` header — CDP rejects it otherwise). Verified this way:
 the bridge is injected with `platform: "android"`; `saveFile` opens the
-picker, writes the bytes and resolves `true`; cancelling resolves `false`
-rather than rejecting, because dismissing a picker is not an error.
+picker, writes the bytes and resolves `true` — read back off the device to
+confirm; cancelling resolves `false` rather than rejecting, because
+dismissing a picker is not an error. A VIEW intent carrying a `content://`
+URI opens the document through `/__incoming/`, checked after `pm clear` so
+nothing could have been restored from a previous run.
 
 ## Not done
 
@@ -62,5 +65,8 @@ rather than rejecting, because dismissing a picker is not an error.
   the client half does not. Until it does, `storeKit()` returns null and no
   purchase UI is offered — which is why that check moved off "is there a
   shell" and onto "can it actually buy something".
-- **A launcher icon**, and a pass over the toolbar: at phone width the top bar
-  overlaps itself.
+- **A launcher icon.**
+- **A toolbar pass.** At phone width the top bar fits until the Recent button
+  appears, and then Open/Recent and the language/Account buttons overlap each
+  other. It lays out correctly with no history, which is why it looks fine on
+  a first run and wrong on a second.
