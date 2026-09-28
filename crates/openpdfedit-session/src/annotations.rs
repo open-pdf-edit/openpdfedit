@@ -321,9 +321,21 @@ pub fn select_text_impl<E: Engine>(
     request: TextSelectionQuadsRequest,
 ) -> Result<TextSelection, SessionError> {
     let chars = engine.page_char_boxes(request.handle, request.page_index)?;
+    // The two points are opposite corners of the drag's bounding box, in
+    // whichever order the caller had them. Text runs down the page, so a
+    // selection begins at the top-left corner and ends at the
+    // bottom-right one — and that has to be derived here rather than
+    // trusted, because a caller holding a plain `[min_x, min_y, max_x,
+    // max_y]` rectangle hands over the *bottom*-left and *top*-right
+    // instead. Those snap to the start of the last line and the end of
+    // the first, so a multi-line drag selects roughly the middle half of
+    // itself and silently drops the rest — which is what the markup
+    // tools did until this normalisation existed.
+    let (x0, y0) = (request.x0.min(request.x1), request.y0.max(request.y1));
+    let (x1, y1) = (request.x0.max(request.x1), request.y0.min(request.y1));
     let (Some(start), Some(end)) = (
-        openpdfedit_engine::nearest_char_index(&chars, request.x0, request.y0),
-        openpdfedit_engine::nearest_char_index(&chars, request.x1, request.y1),
+        openpdfedit_engine::nearest_char_index(&chars, x0, y0),
+        openpdfedit_engine::nearest_char_index(&chars, x1, y1),
     ) else {
         return Ok(TextSelection::default());
     };
@@ -332,9 +344,7 @@ pub fn select_text_impl<E: Engine>(
     let (Some(start_box), Some(end_box)) = (start_box, end_box) else {
         return Ok(TextSelection::default());
     };
-    if !near_enough(start_box, request.x0, request.y0)
-        || !near_enough(end_box, request.x1, request.y1)
-    {
+    if !near_enough(start_box, x0, y0) || !near_enough(end_box, x1, y1) {
         return Ok(TextSelection::default());
     }
 
@@ -766,6 +776,68 @@ mod tests {
     /// content-stream interpreter) — the exact primitive that turns
     /// "freehand rectangle the user has to eyeball onto the words" into
     /// real text selection.
+    /// The corners of a drag rectangle arrive in whichever order the
+    /// caller happened to store them, and `[min_x, min_y, max_x, max_y]`
+    /// — the obvious shape to have — names the *bottom*-left and
+    /// *top*-right. Taken literally that asks for "start of the last
+    /// line" through "end of the first", which quietly returns about
+    /// half of a multi-line drag. The markup tools passed exactly that,
+    /// so Highlight marked a fraction of what was dragged over while the
+    /// Select tool, which swapped the corners itself, was fine.
+    #[test]
+    fn a_multi_line_drag_selects_the_same_text_whichever_corners_it_names() {
+        let Some(engine) = crate::test_support::shared_handle() else {
+            return;
+        };
+        let tmp_path = std::env::temp_dir().join(format!(
+            "openpdfedit-session-multiline-selection-{}.pdf",
+            std::process::id()
+        ));
+        std::fs::write(
+            &tmp_path,
+            crate::test_support::text_lines_pdf_bytes(
+                &["First line here", "Second line here", "Third line here"],
+                50.0,
+                700.0,
+                12.0,
+                20.0,
+            ),
+        )
+        .expect("should write temp file");
+        let handle = engine.open(&tmp_path).expect("should open");
+
+        // A drag covering all three lines. The x range stays close to the
+        // real glyphs: "Third line here" at 12pt Helvetica ends near
+        // x=128, and an endpoint further right than SELECTION_SNAP_MARGIN
+        // from any character is correctly treated as pointing at nothing.
+        let corners = |x0, y0, x1, y1| TextSelectionQuadsRequest {
+            handle,
+            page_index: 0,
+            x0,
+            y0,
+            x1,
+            y1,
+        };
+        let top_left_first = select_text_impl(engine, corners(45.0, 710.0, 130.0, 655.0))
+            .expect("selection should succeed");
+        let bottom_left_first = select_text_impl(engine, corners(45.0, 655.0, 130.0, 710.0))
+            .expect("selection should succeed");
+
+        assert!(
+            top_left_first.text.contains("First") && top_left_first.text.contains("Third"),
+            "a drag over all three lines should select all three, got {:?}",
+            top_left_first.text
+        );
+        assert_eq!(
+            bottom_left_first.text, top_left_first.text,
+            "the same rectangle must select the same text whichever pair of \
+             opposite corners describes it"
+        );
+        assert_eq!(bottom_left_first.quads.len(), top_left_first.quads.len());
+
+        std::fs::remove_file(&tmp_path).ok();
+    }
+
     #[test]
     fn text_selection_quads_impl_snaps_a_drag_to_real_text() {
         let Some(engine) = crate::test_support::shared_handle() else {

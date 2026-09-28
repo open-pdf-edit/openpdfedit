@@ -1895,6 +1895,66 @@ mod test_support {
         bytes
     }
 
+    /// Several lines of text down one page, for the selection tests —
+    /// where the whole question is what a drag spanning more than one
+    /// line picks up, which a single-line fixture cannot ask.
+    pub(crate) fn text_lines_pdf_bytes(
+        lines: &[&str],
+        x: f64,
+        top_y: f64,
+        font_size: f64,
+        leading: f64,
+    ) -> Vec<u8> {
+        use lopdf::content::{Content, Operation};
+        use lopdf::{dictionary, Object, Stream};
+
+        let mut doc = lopdf::Document::with_version("1.5");
+        let pages_id = doc.new_object_id();
+        let font_id = doc.add_object(dictionary! {
+            "Type" => "Font",
+            "Subtype" => "Type1",
+            "BaseFont" => "Helvetica",
+            "Encoding" => "WinAnsiEncoding",
+        });
+
+        let mut operations = Vec::new();
+        for (i, line) in lines.iter().enumerate() {
+            operations.push(Operation::new("BT", vec![]));
+            operations.push(Operation::new("Tf", vec!["F1".into(), font_size.into()]));
+            operations.push(Operation::new(
+                "Td",
+                vec![x.into(), (top_y - leading * i as f64).into()],
+            ));
+            operations.push(Operation::new("Tj", vec![Object::string_literal(*line)]));
+            operations.push(Operation::new("ET", vec![]));
+        }
+        let content_id = doc.add_object(Stream::new(
+            dictionary! {},
+            Content { operations }.encode().unwrap(),
+        ));
+
+        let page_id = doc.add_object(dictionary! {
+            "Type" => "Page",
+            "Parent" => pages_id,
+            "MediaBox" => vec![0.into(), 0.into(), 612.into(), 792.into()],
+            "Contents" => content_id,
+            "Resources" => dictionary! { "Font" => dictionary! { "F1" => font_id } },
+        });
+        doc.objects.insert(
+            pages_id,
+            Object::Dictionary(dictionary! {
+                "Type" => "Pages",
+                "Kids" => vec![page_id.into()],
+                "Count" => 1,
+            }),
+        );
+        let catalog_id = doc.add_object(dictionary! { "Type" => "Catalog", "Pages" => pages_id });
+        doc.trailer.set("Root", catalog_id);
+        let mut bytes = Vec::new();
+        doc.save_to(&mut bytes).unwrap();
+        bytes
+    }
+
     /// Shared no-tmp-left-behind check for [`crate::FsWorkingStore::write`]
     /// tests, in both this crate's own `lib.rs` test module and
     /// `forms::tests`. `FsWorkingStore::write`'s tmp sibling is per-*call*

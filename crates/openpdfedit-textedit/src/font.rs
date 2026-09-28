@@ -86,7 +86,25 @@ impl FontInfo {
     /// Decodes a raw `Tj`/`TJ` string operand into readable text.
     pub fn decode(&self, raw: &[u8]) -> String {
         if !self.is_cid {
-            return String::from_utf8_lossy(raw).into_owned();
+            // A simple font's bytes are character codes in *its* encoding,
+            // which is only ASCII by coincidence. A subset — what almost
+            // every producer embeds — renumbers its glyphs from 1, so the
+            // title of a page can arrive as `01 02 03 04`. Reading those
+            // bytes as text gives control characters, which is why this
+            // used to show a row of empty boxes for perfectly ordinary
+            // PDFs. `/ToUnicode` is the font's own statement of what its
+            // codes mean, so it wins whenever the font supplied one.
+            if self.to_unicode.is_empty() {
+                return String::from_utf8_lossy(raw).into_owned();
+            }
+            let mut out = String::with_capacity(raw.len());
+            for code in raw {
+                match self.to_unicode.get(&(*code as u16)) {
+                    Some(s) => out.push_str(s),
+                    None => out.push('\u{FFFD}'),
+                }
+            }
+            return out;
         }
         let mut out = String::new();
         for pair in raw.chunks(2) {
@@ -110,7 +128,35 @@ impl FontInfo {
     /// reports the distinct characters that have no glyph in the subset.
     pub fn encode(&self, text: &str) -> Result<Vec<u8>, Vec<char>> {
         if !self.is_cid {
-            return Ok(text.as_bytes().to_vec());
+            // The inverse of `decode`'s subset case, and the reason this
+            // matters more than the display did: writing the letter "H"
+            // into a subset that keeps its glyphs at 1..n means writing
+            // that subset's code for "H", not the byte 0x48. Emitting
+            // ASCII here produced codes the embedded font has no glyph
+            // for, so a replacement came back blank in the saved file —
+            // and reported success on the way, because every byte
+            // "encoded" fine.
+            if self.from_unicode.is_empty() {
+                return Ok(text.as_bytes().to_vec());
+            }
+            let mut bytes = Vec::with_capacity(text.len());
+            let mut missing: Vec<char> = Vec::new();
+            for ch in text.chars() {
+                match self.from_unicode.get(&ch) {
+                    // A simple font is addressed one byte at a time, so a
+                    // code above 0xFF cannot be written into its content
+                    // stream at all — that character is missing here even
+                    // though the table lists it.
+                    Some(code) if *code <= 0xFF => bytes.push(*code as u8),
+                    _ if !missing.contains(&ch) => missing.push(ch),
+                    _ => {}
+                }
+            }
+            return if missing.is_empty() {
+                Ok(bytes)
+            } else {
+                Err(missing)
+            };
         }
         let mut bytes = Vec::with_capacity(text.len() * 2);
         let mut missing: Vec<char> = Vec::new();
@@ -600,6 +646,55 @@ endbfchar";
         assert!(!bare.can_encode_text());
         // ...but a plain single-byte font always can.
         assert!(FontInfo::default().can_encode_text());
+    }
+
+    /// A subsetted single-byte font: glyphs renumbered from 1, with a
+    /// `/ToUnicode` table saying what those codes mean. This is what
+    /// almost every real-world producer embeds, and the shape the
+    /// Bitcoin whitepaper uses.
+    fn simple_subset_font(pairs: &[(u16, &str)]) -> FontInfo {
+        let mut info = FontInfo::default();
+        for (code, text) in pairs {
+            info.to_unicode.insert(*code, (*text).to_string());
+            let mut chars = text.chars();
+            if let (Some(ch), None) = (chars.next(), chars.next()) {
+                info.from_unicode.entry(ch).or_insert(*code);
+            }
+        }
+        info
+    }
+
+    #[test]
+    fn simple_subset_font_decodes_through_to_unicode_not_as_ascii() {
+        let font = simple_subset_font(&[(0x01, "H"), (0x02, "i"), (0x03, "!")]);
+        // Read as bytes these are control characters, which is what used
+        // to reach the Edit-text field as a row of empty boxes.
+        assert_eq!(font.decode(&[0x01, 0x02, 0x03]), "Hi!");
+    }
+
+    #[test]
+    fn simple_subset_font_encodes_back_into_its_own_codes() {
+        let font = simple_subset_font(&[(0x01, "H"), (0x02, "i")]);
+        assert_eq!(font.encode("Hi").unwrap(), vec![0x01, 0x02]);
+        // Not the ASCII bytes, which the subset has no glyph for — the
+        // old behaviour, which saved successfully and rendered blank.
+        assert_ne!(font.encode("Hi").unwrap(), b"Hi".to_vec());
+    }
+
+    #[test]
+    fn simple_subset_font_reports_characters_it_has_no_glyph_for() {
+        let font = simple_subset_font(&[(0x01, "H"), (0x02, "i")]);
+        let missing = font.encode("HiZ").expect_err("Z isn't in the subset");
+        assert_eq!(missing, vec!['Z']);
+    }
+
+    #[test]
+    fn simple_font_without_a_table_still_treats_bytes_as_characters() {
+        // No /ToUnicode: an ordinary WinAnsi font, where the byte really
+        // is the character. This is the path that must not regress.
+        let bare = FontInfo::default();
+        assert_eq!(bare.decode(b"Hello"), "Hello");
+        assert_eq!(bare.encode("Hello").unwrap(), b"Hello".to_vec());
     }
 
     #[test]

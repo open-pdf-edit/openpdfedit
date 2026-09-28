@@ -256,13 +256,27 @@
     }
     // A fresh label each time — a closed WebviewWindow can't be reused,
     // and a reused label throws.
-    new WebviewWindow(`login-${Date.now()}`, {
+    const win = new WebviewWindow(`login-${Date.now()}`, {
       url: "/login",
       title: "Sign in — OpenPdfEdit",
       width: 420,
       height: 640,
       resizable: false,
       parent: "main",
+    });
+    // Creating a window is a privileged call, so it can be refused by the
+    // capability files rather than by anything the user did — and the
+    // constructor reports that through an event, not by throwing. Left
+    // unhandled, the refusal went nowhere and Sign in was simply a button
+    // that did nothing at all, which is how it shipped: no capability
+    // granted `core:webview:allow-create-webview-window`, so this had
+    // never once opened. Saying so is the difference between a bug
+    // someone reports and a bug nobody can see.
+    void win.once("tauri://error", (e) => {
+      showToast(typeof e.payload === "string" ? e.payload : "Could not open the sign-in window.", {
+        tone: "warning",
+        title: "Sign-in failed",
+      });
     });
   }
 

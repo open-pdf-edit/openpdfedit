@@ -1,0 +1,12 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "login",
+  "description": "The sign-in popup `AccountPanel` opens (see its `signIn`), which needs its own capability because a capability applies to the windows it names and the main one names only `main`. A glob because the label carries a timestamp: a closed WebviewWindow cannot be reused, so each sign-in mints a fresh `login-<ms>`.\n\nIt does exactly two Tauri things, both in `routes/login/+page.svelte`: announces the new session with `emit` (covered by `core:default`), then closes itself. `allow-close` is listed separately because `core:window:default` is all getters and does not include it — without it the window would open and then be unable to go away.",
+  "windows": [
+    "login-*"
+  ],
+  "permissions": [
+    "core:default",
+    "core:window:allow-close"
+  ]
+}
