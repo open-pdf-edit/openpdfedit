@@ -271,20 +271,18 @@ pre-credited account hides the thing under review.
 > us, and the account can be deleted in the app at Account → Delete
 > account.
 >
-> There is no email-and-password login in this app, which is why the
-> Username field on this form holds a Nostr key instead (the Password
-> field is unused). To use it: Account → Continue with Nostr → "No
-> extension? Use a remote signer" → "I only have a private key", and
-> paste the value from the Username field.
+> There is no email-and-password login here, which is why the Username
+> field holds a Nostr key (the Password field is unused). To use it:
+> Account → Continue with Nostr → "No extension? Use a remote signer" →
+> "I only have a private key", then paste that value.
 >
 > IMPORTANT, for the in-app purchase step: please sign in with the Nostr
 > demo account above, not with Apple. Our server credits a sandbox
-> purchase only to accounts named in its configuration, and the demo
-> account is the one named. A purchase made on any other account is
-> refused with "this server credits Production purchases; that receipt
-> is Sandbox" — not a bug you have found, but the guard that stops a
-> sandbox receipt buying real credits. The demo account starts with zero
-> credits so the purchase is a real test.
+> purchase only to accounts named in its configuration, and that is the
+> one named. Any other account is refused with "this server credits
+> Production purchases; that receipt is Sandbox" — the guard that stops
+> a sandbox receipt buying real credits, not a bug. The demo account
+> starts at zero credits, so the purchase is a real test.
 >
 > Sign in with Apple is the right way to see the sign-in and account
 > deletion flows; the Nostr account is the one to buy with.
@@ -343,8 +341,8 @@ conclusion.
 > fetched at runtime and no document ever leaves the device.
 >
 > The app registers as a PDF editor, so "Open in OpenPdfEdit" appears in
-> the share sheet system-wide. Sending a PDF from Files or Mail is the
-> primary way it is used.
+> the system share sheet; sending a PDF from Files or Mail is the primary
+> way it is used.
 >
 > Credits are digital content consumed inside the app and are sold only
 > through in-app purchase. There is no link to an external payment page
@@ -355,8 +353,8 @@ conclusion.
 > 1. Open any PDF from Files, or tap Open on the first screen.
 > 2. Annotate it, edit its text, reorder pages, then export. All free,
 >    and no account is needed for any of it. Export opens the iOS share
->    sheet — choose "Save to Files" to keep the result. There is no
->    silent download folder on iOS, so the sheet is the save.
+>    sheet — choose "Save to Files". iOS has no download folder, so the
+>    sheet is the save.
 > 3. Tap Watermark. A panel explains the one-time 1,000-credit unlock.
 > 4. Sign in with the Nostr demo account, then buy the 1,000 Credits
 >    pack. The unlock is permanent for that account.
@@ -382,8 +380,10 @@ conclusion.
 > 1. Click Open PDF… on the first screen and choose any PDF.
 > 2. Annotate it, edit its text, reorder pages, then save. All free, and
 >    no account is needed for any of it.
-> 3. Click Watermark or OCR. They are the only two paid tools, so a panel
->    appears explaining the one-time 1,000-credit unlock.
+> 3. Click Tools in the toolbar, then Watermark or OCR — both live in
+>    that menu, which appears once a PDF is open. They are the only two
+>    paid tools, so a panel appears explaining the one-time
+>    1,000-credit unlock.
 > 4. Sign in with the demo account supplied above, then buy the 1,000
 >    Credits pack. The unlock is then permanent for that account, on the
 >    Mac and on iPhone and iPad.
