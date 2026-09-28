@@ -8,7 +8,7 @@
   // and closes itself — the main window never mounts <openapps-login> at
   // all, so that redirect can never happen to it.
   import { emit } from "@tauri-apps/api/event";
-  import { getCurrentWindow } from "@tauri-apps/api/window";
+  import { invoke } from "@tauri-apps/api/core";
   import { getClient } from "@openapps/ui";
   import {
     NATIVE_AUTH_CALLBACK,
@@ -124,7 +124,21 @@
       return;
     }
     await emit("openapps-session-changed");
-    await getCurrentWindow().close();
+    // `close_window` and not `getCurrentWindow().close()`.
+    //
+    // Every JS route to "close me" goes through a label this window
+    // cannot get right: `__TAURI_INTERNALS__.metadata` still reads
+    // `main` inside a window created at runtime, on both
+    // `getCurrentWindow` and `getCurrentWebviewWindow`, so the editor
+    // was what got destroyed — and being this window's parent, it took
+    // this window with it. Signing in made the whole app disappear
+    // while the session had in fact been saved.
+    //
+    // The Rust command takes `tauri::Window` from the command context,
+    // which Tauri resolves from the webview that actually sent the IPC.
+    // That is the one identity in the system this window cannot be
+    // wrong about.
+    await invoke("close_window");
   }
 
   $effect(() => {
