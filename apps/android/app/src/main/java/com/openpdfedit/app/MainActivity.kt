@@ -1,0 +1,362 @@
+package com.openpdfedit.app
+
+import android.annotation.SuppressLint
+import android.app.Activity
+import android.content.Intent
+import android.graphics.Color
+import android.net.Uri
+import android.os.Bundle
+import android.util.Log
+import android.webkit.ConsoleMessage
+import android.webkit.ValueCallback
+import android.webkit.WebChromeClient
+import android.webkit.WebResourceRequest
+import android.webkit.WebResourceResponse
+import android.webkit.WebView
+import android.webkit.WebViewClient
+import androidx.activity.OnBackPressedCallback
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.IntentCompat
+import androidx.webkit.WebViewAssetLoader
+import androidx.webkit.WebViewCompat
+import androidx.webkit.WebViewFeature
+import org.json.JSONObject
+import java.io.ByteArrayInputStream
+
+/**
+ * The shell. Everything the app does is the web build running on device;
+ * this class exists to host it, to serve it from an origin the page can
+ * do cryptography on, to carry documents in and out, and to keep it from
+ * navigating anywhere it shouldn't.
+ *
+ * Mirrors `apps/ios/OpenPdfEdit/AppWebView.swift` and its `WebBridge`
+ * deliberately, because the web layer cannot tell the two apart and
+ * should not have to.
+ */
+class MainActivity : AppCompatActivity() {
+
+    private lateinit var webView: WebView
+    private val bridge = WebBridge(this)
+
+    /** True once the page has said it can accept a document. Until then
+     *  a document that arrives is held rather than dropped — the OS
+     *  delivers the intent long before the editor exists. */
+    private var isReady = false
+    private var queued: Uri? = null
+
+    /** Documents handed to us by other apps, served at `/__incoming/<n>`
+     *  so the page can `fetch` them as a stream rather than receive
+     *  multi-megabyte base64. */
+    private val incoming = mutableMapOf<String, Uri>()
+    private var incomingSeq = 0
+
+    /** A `saveFile` waiting on the customer to choose a destination. */
+    private var pendingSave: PendingSave? = null
+
+    private class PendingSave(val callId: Int, val bytes: ByteArray)
+
+    /** The `<input type="file">` awaiting a result, or null. */
+    private var pendingFileCallback: ValueCallback<Array<Uri>>? = null
+
+    private val pickFile = registerForActivityResult(
+        ActivityResultContracts.OpenDocument(),
+    ) { uri ->
+        pendingFileCallback?.onReceiveValue(if (uri == null) null else arrayOf(uri))
+        pendingFileCallback = null
+    }
+
+    /**
+     * The Storage Access Framework's create-document picker.
+     *
+     * `StartActivityForResult` rather than the `CreateDocument` contract
+     * because that contract fixes the MIME type when it is registered,
+     * and this one call site saves PDFs, Markdown and text.
+     */
+    private val createDocument = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult(),
+    ) { result ->
+        val save = pendingSave
+        pendingSave = null
+        if (save == null) return@registerForActivityResult
+        val uri = result.data?.data
+        if (result.resultCode != Activity.RESULT_OK || uri == null) {
+            // Cancelling is not an error. An app that reports "save
+            // failed" because someone dismissed the picker is telling
+            // them something went wrong when nothing did.
+            resolve(save.callId, JSONObject().put("saved", false))
+            return@registerForActivityResult
+        }
+        val written = runCatching {
+            contentResolver.openOutputStream(uri)?.use { it.write(save.bytes) } ?: error("no stream")
+        }
+        if (written.isSuccess) {
+            resolve(save.callId, JSONObject().put("saved", true))
+        } else {
+            reject(save.callId, "could not write the file: ${written.exceptionOrNull()?.message}")
+        }
+    }
+
+    /**
+     * Serves `app/src/main/assets/www` at
+     * `https://appassets.androidplatform.net/`, and staged incoming
+     * documents at `/__incoming/<n>` beside it.
+     *
+     * An https origin rather than a custom scheme, for the same reason
+     * iOS uses `openpdfedit://localhost`: the page must be a **secure
+     * context** or `crypto.subtle` is undefined and the account SDK
+     * cannot start. `androidplatform.net` is reserved by Google for
+     * exactly this and never resolves on the network.
+     *
+     * This origin is also what the accounts server must allow in CORS —
+     * the Android counterpart to `openpdfedit://localhost`.
+     */
+    private val assetLoader: WebViewAssetLoader by lazy {
+        val assets = WebViewAssetLoader.AssetsPathHandler(this)
+        WebViewAssetLoader.Builder()
+            .addPathHandler("/__incoming/") { path -> serveIncoming(path) }
+            .addPathHandler("/") { path -> assets.handle("www/$path") }
+            .build()
+    }
+
+    @SuppressLint("SetJavaScriptEnabled")
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+
+        webView = WebView(this).apply {
+            setBackgroundColor(Color.parseColor("#111111"))
+            settings.javaScriptEnabled = true
+            settings.domStorageEnabled = true
+            settings.allowFileAccess = false
+            settings.allowContentAccess = false
+            settings.mediaPlaybackRequiresUserGesture = true
+            overScrollMode = WebView.OVER_SCROLL_NEVER
+            addJavascriptInterface(bridge, WebBridge.NAME)
+            webViewClient = ShellWebViewClient()
+            webChromeClient = ShellChromeClient()
+        }
+        // The inspector, in debug builds only — the same trade the
+        // desktop makes with its `devtools` Cargo feature, and left out
+        // of release for the same reason: a reviewer finding a web
+        // inspector on a native app is a question nobody needs to
+        // answer. It is also what makes the bridge testable from adb.
+        if (0 != (applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE)) {
+            WebView.setWebContentsDebuggingEnabled(true)
+        }
+        setContentView(webView)
+        injectBridge()
+
+        if (savedInstanceState == null) {
+            webView.loadUrl("$ORIGIN/index.html")
+        }
+        stage(intent)
+
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                if (webView.canGoBack()) webView.goBack() else finish()
+            }
+        })
+    }
+
+    /**
+     * Puts `bridge.js` in before the page's own scripts.
+     *
+     * `addDocumentStartJavaScript` is the exact counterpart of
+     * WKWebView's `.atDocumentStart` injection, but it is a WebView
+     * *feature* rather than an API level — an old System WebView simply
+     * does not have it. The fallback runs the same script from
+     * `onPageStarted`, which is marginally later but still before the
+     * app's own bundle has executed.
+     */
+    private fun injectBridge() {
+        val source = runCatching {
+            assets.open("bridge.js").bufferedReader().use { it.readText() }
+        }.getOrElse {
+            Log.e(TAG, "bridge.js missing from assets — the shell has no bridge", it)
+            return
+        }
+        bridgeSource = source
+        if (WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)) {
+            WebViewCompat.addDocumentStartJavaScript(webView, source, setOf(ORIGIN))
+        }
+    }
+
+    private var bridgeSource: String? = null
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        stage(intent)
+    }
+
+    // --- documents in ----------------------------------------------------
+
+    /** Takes a document from a VIEW or SEND intent and offers it to the
+     *  page, holding it if the page is not up yet. */
+    private fun stage(intent: Intent?) {
+        val uri = when (intent?.action) {
+            Intent.ACTION_VIEW -> intent.data
+            Intent.ACTION_SEND -> IntentCompat.getParcelableExtra(intent, Intent.EXTRA_STREAM, Uri::class.java)
+            else -> null
+        } ?: return
+        if (!isReady) {
+            queued = uri
+            return
+        }
+        deliver(uri)
+    }
+
+    fun flushQueued() {
+        val uri = queued ?: return
+        queued = null
+        deliver(uri)
+    }
+
+    private fun deliver(uri: Uri) {
+        val id = (++incomingSeq).toString()
+        incoming[id] = uri
+        val name = queryDisplayName(uri) ?: WebBridge.displayName(uri)
+        emit("document", JSONObject().put("path", "$ORIGIN/__incoming/$id").put("name", name))
+    }
+
+    /** The name the other app gave the file, which is what the customer
+     *  recognises — `content://` URIs carry no usable filename. */
+    private fun queryDisplayName(uri: Uri): String? = runCatching {
+        contentResolver.query(uri, null, null, null, null)?.use { c ->
+            val i = c.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+            if (i >= 0 && c.moveToFirst()) c.getString(i) else null
+        }
+    }.getOrNull()
+
+    private fun serveIncoming(path: String): WebResourceResponse? {
+        val uri = incoming[path.trim('/')] ?: return null
+        val bytes = runCatching {
+            contentResolver.openInputStream(uri)?.use { it.readBytes() }
+        }.getOrNull() ?: return null
+        return WebResourceResponse("application/pdf", null, ByteArrayInputStream(bytes))
+    }
+
+    fun releaseIncoming(path: String) {
+        incoming.remove(path.substringAfterLast('/'))
+    }
+
+    // --- bridge plumbing -------------------------------------------------
+
+    fun onMain(block: () -> Unit) = runOnUiThread(block)
+
+    fun markReady() {
+        isReady = true
+        flushQueued()
+    }
+
+    fun startSave(callId: Int, name: String, mime: String, bytes: ByteArray) {
+        pendingSave = PendingSave(callId, bytes)
+        val intent = Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
+            addCategory(Intent.CATEGORY_OPENABLE)
+            type = mime
+            putExtra(Intent.EXTRA_TITLE, name)
+        }
+        runCatching { createDocument.launch(intent) }.onFailure {
+            pendingSave = null
+            reject(callId, "no app can save files on this device")
+        }
+    }
+
+    fun startSignIn(callId: Int) = reject(callId, "sign-in is not available in this shell")
+
+    fun resolve(callId: Int, payload: JSONObject) = answer(callId, true, payload.toString())
+
+    fun reject(callId: Int, message: String) = answer(callId, false, WebBridge.quote(message))
+
+    private fun answer(callId: Int, ok: Boolean, payloadJson: String) {
+        val js = "window.OpenPdfEditNative && window.OpenPdfEditNative._resolve($callId, $ok, $payloadJson);"
+        webView.evaluateJavascript(js, null)
+    }
+
+    private fun emit(event: String, detail: JSONObject) {
+        // `JSON.parse` of a quoted string rather than an interpolated
+        // object literal: the values include filenames chosen by another
+        // app, and a filename with a quote in it would otherwise be a
+        // script injection into this app's own page.
+        val js = "window.OpenPdfEditNative && window.OpenPdfEditNative._emit(" +
+            "${WebBridge.quote(event)}, JSON.parse(${WebBridge.quote(detail.toString())}));"
+        webView.evaluateJavascript(js, null)
+    }
+
+    // --- webview clients -------------------------------------------------
+
+    private inner class ShellChromeClient : WebChromeClient() {
+
+        override fun onShowFileChooser(
+            webView: WebView,
+            filePathCallback: ValueCallback<Array<Uri>>,
+            fileChooserParams: FileChooserParams,
+        ): Boolean {
+            pendingFileCallback?.onReceiveValue(null)
+            pendingFileCallback = filePathCallback
+            val mimeTypes = fileChooserParams.acceptTypes
+                .filter { it.isNotBlank() }
+                .toTypedArray()
+                .ifEmpty { arrayOf("application/pdf") }
+            return runCatching { pickFile.launch(mimeTypes) }.isSuccess
+        }
+
+        override fun onConsoleMessage(message: ConsoleMessage): Boolean {
+            Log.i(TAG, "console ${message.messageLevel()}: ${message.message()} " +
+                "(${message.sourceId()}:${message.lineNumber()})")
+            return true
+        }
+    }
+
+    private inner class ShellWebViewClient : WebViewClient() {
+
+        override fun onPageStarted(view: WebView, url: String?, favicon: android.graphics.Bitmap?) {
+            super.onPageStarted(view, url, favicon)
+            if (!WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)) {
+                bridgeSource?.let { view.evaluateJavascript(it, null) }
+            }
+        }
+
+        override fun shouldInterceptRequest(
+            view: WebView,
+            request: WebResourceRequest,
+        ): WebResourceResponse? = assetLoader.shouldInterceptRequest(request.url)
+
+        /**
+         * Only the app's own origin may navigate inside the WebView.
+         *
+         * An `https` link is someone's actual intent to visit a web page,
+         * so it goes to their browser where the address bar is. Anything
+         * else is dropped rather than guessed at. Same policy as
+         * `AppWebView.policy(for:)` on iOS — and the same trap: a
+         * navigation the shell cancels is silent, so anything the app
+         * genuinely needs to *do* must go through the bridge, not a link.
+         */
+        override fun shouldOverrideUrlLoading(
+            view: WebView,
+            request: WebResourceRequest,
+        ): Boolean {
+            val url = request.url
+            if (url.toString().startsWith("$ORIGIN/")) return false
+            if (url.scheme == "https" || url.scheme == "mailto") {
+                runCatching { startActivity(Intent(Intent.ACTION_VIEW, url)) }
+            }
+            return true
+        }
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        webView.saveState(outState)
+    }
+
+    override fun onRestoreInstanceState(savedInstanceState: Bundle) {
+        super.onRestoreInstanceState(savedInstanceState)
+        webView.restoreState(savedInstanceState)
+    }
+
+    companion object {
+        const val ORIGIN = "https://appassets.androidplatform.net"
+        private const val TAG = "OpenPdfEdit"
+    }
+}

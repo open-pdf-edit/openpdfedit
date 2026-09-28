@@ -49,7 +49,11 @@ export interface NativeDocument {
 }
 
 export interface NativeShell {
-  platform: "ios";
+  /// Which shell this is. Widened past "ios" when the Android shell
+  /// arrived: the web layer treats them the same, and the one place
+  /// that genuinely differs is in-app purchase, which is optional
+  /// below rather than assumed.
+  platform: "ios" | "android";
   on(event: "document", fn: (detail: NativeDocument) => void): () => void;
   on(event: "receipt", fn: (detail: NativePurchase) => void): () => void;
   ready(): Promise<{ platform: string }>;
@@ -61,11 +65,17 @@ export interface NativeShell {
   /// the shell cancels it, so without this every Save and Export did
   /// nothing and reported nothing.
   saveFile(name: string, bytes: Uint8Array, mime: string): Promise<boolean>;
-  signIn(): Promise<NativeSignIn>;
-  products(): Promise<NativeProduct[]>;
-  purchase(productId: string): Promise<NativePurchaseResult>;
-  outstanding(): Promise<NativePurchase[]>;
-  finish(transactionId: string): Promise<{ finished: boolean }>;
+  /// Absent on a shell that has no native sign-in of its own, in which
+  /// case the account panel falls back to its own flow.
+  signIn?(): Promise<NativeSignIn>;
+  /// The store half. Optional as a group: a shell can carry documents
+  /// and files without selling anything, and `storeKit()` below is what
+  /// decides whether purchases are available — not the shell's mere
+  /// existence.
+  products?(): Promise<NativeProduct[]>;
+  purchase?(productId: string): Promise<NativePurchaseResult>;
+  outstanding?(): Promise<NativePurchase[]>;
+  finish?(transactionId: string): Promise<{ finished: boolean }>;
 }
 
 /// Purchases through the App Store — the part of a native shell the
@@ -87,17 +97,25 @@ export interface StoreKitBridge {
 /// are not sold through the App Store (the web app, the extension, the
 /// Developer ID desktop build — which sell credits by card instead).
 export function storeKit(): StoreKitBridge | null {
-  return (
-    nativeShell() ??
-    (globalThis as { OpenPdfEditStoreKit?: StoreKitBridge }).OpenPdfEditStoreKit ??
-    null
-  );
+  // A shell only counts as a store if it can actually buy something.
+  // It used to be enough to *be* a shell, which was true while iOS was
+  // the only one — an Android shell without Play Billing would
+  // otherwise advertise a purchase panel whose buttons do nothing.
+  const shell = nativeShell();
+  if (shell && typeof shell.purchase === "function") {
+    return shell as StoreKitBridge;
+  }
+  return (globalThis as { OpenPdfEditStoreKit?: StoreKitBridge }).OpenPdfEditStoreKit ?? null;
 }
 
 /** The shell, or `null` everywhere that is not it. */
 export function nativeShell(): NativeShell | null {
   const shell = (globalThis as { OpenPdfEditNative?: NativeShell }).OpenPdfEditNative;
-  return shell && typeof shell.purchase === "function" ? shell : null;
+  // Sniffed on `platform`, not on `purchase`. The old check meant a
+  // shell that sold nothing was not a shell at all — which on Android
+  // would have taken documents and Save down with in-app purchase,
+  // three unrelated things failing for one reason.
+  return shell && typeof shell.platform === "string" ? shell : null;
 }
 
 /// Whether purchases here must go through the App Store.

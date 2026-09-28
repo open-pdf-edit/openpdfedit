@@ -233,8 +233,11 @@
     // Google password can see whose page they are typing it into, and it
     // shares Safari's cookies, so an account already signed in on the
     // device usually needs one tap.
+    // `shell.signIn` and not merely `shell`: a native shell need not
+    // bring its own sign-in, and one that does not should fall through
+    // to the flow below rather than call an undefined method.
     const shell = nativeShell();
-    if (shell) {
+    if (shell?.signIn) {
       void shell
         .signIn()
         .then((result) => {

@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- No action bar: the editor draws its own chrome, exactly as the
+         iOS shell hides the navigation bar. The window background matches
+         the page so there is no white flash before the first paint. -->
+    <style name="Theme.OpenPdfEdit" parent="Theme.AppCompat.DayNight.NoActionBar">
+        <item name="android:windowBackground">#111111</item>
+    </style>
+</resources>

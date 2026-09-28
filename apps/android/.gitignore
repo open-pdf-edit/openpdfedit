@@ -1,0 +1,9 @@
+local.properties
+.gradle/
+build/
+app/build/
+# The web bundle is produced by scripts/sync-web.sh, never stored.
+.build/
+# Synced from the web build by scripts/sync-web.sh — never committed, the
+# same way apps/ios/www is produced rather than stored.
+app/src/main/assets/www/

@@ -22,7 +22,13 @@ WORKSPACE_DIR="$(dirname "$(dirname "$IOS_DIR")")"
 # BASE_PATH empty, its own output directory so the two cannot overwrite
 # each other.
 SRC="${IOS_WEB_DIR:-$IOS_DIR/.build/web}"
-DEST="$IOS_DIR/www"
+# Overridable so the Android shell can share this exact script rather than
+# keep a copy. Everything below the copy — dropping the service worker,
+# the crawler copy, the remote-script check — is a rule about shipping the
+# web build inside an app binary, not about iOS, and Play's review asks
+# the same questions Apple's does. A second copy of these rules would
+# drift, and the half that drifted would be the half nobody tested.
+DEST="${WEB_DEST:-$IOS_DIR/www}"
 
 log() { printf '\033[1m==> %s\033[0m\n' "$1"; }
 
