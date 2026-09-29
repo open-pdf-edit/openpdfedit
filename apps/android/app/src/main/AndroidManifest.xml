@@ -41,6 +41,21 @@
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="application/pdf" />
             </intent-filter>
+
+            <!-- Where sign-in comes back to. The login page runs in a
+                 Custom Tab, which has no opener to post a session to, so
+                 it finishes by redirecting here with the tokens in the
+                 URL fragment — a fragment is never sent to a server, so
+                 it cannot land in an access log on the way past. The
+                 scheme is deliberately not the one the bundled app is
+                 served from: two things claiming one scheme is a puzzle
+                 for whoever debugs it next. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="openpdfedit-auth" android:host="callback" />
+            </intent-filter>
         </activity>
     </application>
 </manifest>

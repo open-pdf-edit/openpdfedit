@@ -98,7 +98,12 @@
    */
   function handOverToNativeApp(): boolean {
     const params = new URLSearchParams(window.location.search);
-    if (params.get(NATIVE_PARAM) !== "ios") return false;
+    // Both native shells finish the same way: this page is opened in a
+    // system browser that has no opener to post a message back to, so it
+    // hands the session over by redirecting to a scheme the app claims.
+    // The value names the platform only so a log says which one.
+    const native = params.get(NATIVE_PARAM);
+    if (native !== "ios" && native !== "android") return false;
 
     const session = getClient()?.session;
     if (!session?.accessToken || !session?.refreshToken) return false;

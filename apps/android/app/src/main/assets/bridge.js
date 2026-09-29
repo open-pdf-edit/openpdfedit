@@ -183,14 +183,24 @@
       return call("finish", { transactionId: transactionId });
     },
 
-    // --- account ---------------------------------------------------
-    //
-    // No `signIn` here, deliberately. Sign-in on Android wants a Custom
-    // Tab and a callback the accounts server is configured to redirect
-    // to, and neither exists yet. Leaving the method *absent* rather
-    // than present-and-failing is the point: `nativeShell()?.signIn`
-    // then reads false and the web layer takes its own path, instead of
-    // calling something that rejects. A shell that answers a capability
-    // it cannot perform is the failure mode that cost a day on iOS.
+    // --- account --------------------------------------------------
+
+    /**
+     * Signs in through a Custom Tab.
+     *
+     * Resolves `{status:"signed_in", accessToken, refreshToken}`, or
+     * `{status:"cancelled"}` when the tab was dismissed — which is not
+     * an error and must not be shown as one.
+     *
+     * A Custom Tab rather than this WebView, for the same reasons iOS
+     * uses ASWebAuthenticationSession: a real address bar, so someone
+     * typing a password can see whose page they are on, and the
+     * browser's own cookies, so an account already signed in on the
+     * device is usually one tap. Loading the login page in here would
+     * replace the editor and lose whatever document is open.
+     */
+    signIn: function () {
+      return call("signIn");
+    },
   };
 })();

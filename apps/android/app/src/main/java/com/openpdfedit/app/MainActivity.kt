@@ -17,6 +17,7 @@ import android.webkit.WebViewClient
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
+import androidx.browser.customtabs.CustomTabsIntent
 import androidx.core.content.IntentCompat
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.launch
@@ -53,6 +54,13 @@ class MainActivity : AppCompatActivity() {
      *  multi-megabyte base64. */
     private val incoming = mutableMapOf<String, Uri>()
     private var incomingSeq = 0
+
+    /** A `signIn` waiting on the Custom Tab to come back, and whether
+     *  we are still waiting for it to. Backing out of a Custom Tab
+     *  produces no callback at all, so the return to this activity with
+     *  nothing delivered is the only signal that it was cancelled. */
+    private var pendingSignIn: Int? = null
+    private var awaitingSignInReturn = false
 
     /** A `saveFile` waiting on the customer to choose a destination. */
     private var pendingSave: PendingSave? = null
@@ -189,6 +197,15 @@ class MainActivity : AppCompatActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
+        if (intent.action == Intent.ACTION_VIEW &&
+            intent.data?.scheme == "openpdfedit-auth"
+        ) {
+            // Cleared before onResume runs, so the cancellation check
+            // below does not race this and report a success as a cancel.
+            awaitingSignInReturn = false
+            intent.data?.let { completeSignIn(it) }
+            return
+        }
         stage(intent)
     }
 
@@ -265,7 +282,74 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    fun startSignIn(callId: Int) = reject(callId, "sign-in is not available in this shell")
+    /**
+     * Signs in through a Custom Tab.
+     *
+     * The Android answer to iOS's `ASWebAuthenticationSession`, and for
+     * the same reasons: a real address bar, so someone typing a Google
+     * password can see whose page they are typing it into, and the
+     * browser's own cookies, so an account already signed in on the
+     * device is usually one tap. Loading the login page into this
+     * WebView instead would replace the editor with an OAuth screen and
+     * lose whatever document is open behind it.
+     */
+    fun startSignIn(callId: Int) {
+        pendingSignIn?.let { resolve(it, JSONObject().put("status", "cancelled")) }
+        pendingSignIn = callId
+        awaitingSignInReturn = true
+        val url = Uri.parse(LOGIN_URL).buildUpon().appendQueryParameter("native", "android").build()
+        runCatching { CustomTabsIntent.Builder().build().launchUrl(this, url) }
+            .onFailure {
+                // No browser at all, which is rare but not impossible on
+                // a stripped device. Falling back to a plain VIEW intent
+                // still reaches whatever can open a link.
+                runCatching { startActivity(Intent(Intent.ACTION_VIEW, url)) }
+                    .onFailure { _ ->
+                        pendingSignIn = null
+                        awaitingSignInReturn = false
+                        reject(callId, "no browser is available to sign in with")
+                    }
+            }
+    }
+
+    /** The tokens come back in the fragment, which never reaches a
+     *  server, so they cannot appear in an access log or a referrer on
+     *  the way past. */
+    private fun completeSignIn(uri: Uri) {
+        val callId = pendingSignIn ?: return
+        pendingSignIn = null
+        awaitingSignInReturn = false
+        val values = (uri.fragment ?: "").split('&').mapNotNull {
+            val i = it.indexOf('=')
+            if (i <= 0) null else Uri.decode(it.substring(0, i)) to Uri.decode(it.substring(i + 1))
+        }.toMap()
+        val access = values["access_token"].orEmpty()
+        val refresh = values["refresh_token"].orEmpty()
+        if (access.isBlank() || refresh.isBlank()) {
+            reject(callId, "the sign-in page came back without a session")
+            return
+        }
+        resolve(
+            callId,
+            JSONObject()
+                .put("status", "signed_in")
+                .put("accessToken", access)
+                .put("refreshToken", refresh),
+        )
+    }
+
+    override fun onResume() {
+        super.onResume()
+        // Back here with no callback delivered: they dismissed the tab.
+        // Not an error — an app that says "sign-in failed" because
+        // someone changed their mind is reporting a problem that did not
+        // happen.
+        if (awaitingSignInReturn) {
+            awaitingSignInReturn = false
+            pendingSignIn?.let { resolve(it, JSONObject().put("status", "cancelled")) }
+            pendingSignIn = null
+        }
+    }
 
     // --- in-app purchase -------------------------------------------------
     //
@@ -407,6 +491,11 @@ class MainActivity : AppCompatActivity() {
 
     companion object {
         const val ORIGIN = "https://appassets.androidplatform.net"
+
+        /** Matches `WEBAPP_ORIGIN` + `WEBAPP_LOGIN_PATH` in
+         *  `apps/desktop/src/lib/openapps.ts`. The real web origin, not
+         *  the bundled copy: an OAuth redirect can only land on https. */
+        const val LOGIN_URL = "https://openpdfedit.com/app/login"
         private const val TAG = "OpenPdfEdit"
     }
 }
