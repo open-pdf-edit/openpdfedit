@@ -54,6 +54,29 @@ class WebBridge(private val shell: MainActivity) {
                 shell.onMain { shell.startSave(id, name, mime, bytes) }
             }
 
+            // --- in-app purchase ---------------------------------
+            "products" -> shell.onMain { shell.billingProducts(id) }
+
+            "purchase" -> {
+                val productId = body.optString("productId")
+                if (productId.isBlank()) {
+                    shell.onMain { shell.reject(id, "purchase needs a productId") }
+                    return
+                }
+                shell.onMain { shell.billingPurchase(id, productId) }
+            }
+
+            "outstanding" -> shell.onMain { shell.billingOutstanding(id) }
+
+            "finish" -> {
+                val transactionId = body.optString("transactionId")
+                if (transactionId.isBlank()) {
+                    shell.onMain { shell.reject(id, "finish needs a transactionId") }
+                    return
+                }
+                shell.onMain { shell.billingFinish(id, transactionId) }
+            }
+
             "signIn" -> shell.onMain { shell.startSignIn(id) }
 
             else -> shell.onMain { shell.reject(id, "unknown action") }

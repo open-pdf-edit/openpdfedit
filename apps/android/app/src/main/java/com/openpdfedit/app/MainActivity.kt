@@ -18,6 +18,8 @@ import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.IntentCompat
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.launch
 import androidx.webkit.WebViewAssetLoader
 import androidx.webkit.WebViewCompat
 import androidx.webkit.WebViewFeature
@@ -38,6 +40,7 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var webView: WebView
     private val bridge = WebBridge(this)
+    private val billing by lazy { Billing(this) }
 
     /** True once the page has said it can accept a document. Until then
      *  a document that arrives is held rather than dropped — the OS
@@ -264,9 +267,51 @@ class MainActivity : AppCompatActivity() {
 
     fun startSignIn(callId: Int) = reject(callId, "sign-in is not available in this shell")
 
+    // --- in-app purchase -------------------------------------------------
+    //
+    // Each of these answers the promise the page is holding, including
+    // when the work throws: a bridge call that never resolves leaves the
+    // purchase panel spinning for the rest of the session, which is
+    // worse than an error the customer can read.
+
+    private fun billingCall(callId: Int, block: suspend () -> Any) {
+        lifecycleScope.launch {
+            runCatching { block() }
+                .onSuccess { value ->
+                    when (value) {
+                        is JSONObject -> resolve(callId, value)
+                        else -> answerRaw(callId, true, value.toString())
+                    }
+                }
+                .onFailure { reject(callId, it.message ?: "in-app purchase failed") }
+        }
+    }
+
+    fun billingProducts(callId: Int) = billingCall(callId) {
+        JSONObject().put("products", billing.products())
+    }
+
+    fun billingPurchase(callId: Int, productId: String) = billingCall(callId) {
+        billing.purchase(productId)
+    }
+
+    fun billingOutstanding(callId: Int) = billingCall(callId) {
+        JSONObject().put("receipts", billing.outstanding())
+    }
+
+    fun billingFinish(callId: Int, transactionId: String) = billingCall(callId) {
+        JSONObject().put("finished", billing.finish(transactionId))
+    }
+
+    /** A purchase Play delivered on its own — an Ask to Buy approval, a
+     *  purchase made on another device, an interrupted one completing. */
+    fun emitReceipt(detail: JSONObject) = onMain { emit("receipt", detail) }
+
     fun resolve(callId: Int, payload: JSONObject) = answer(callId, true, payload.toString())
 
     fun reject(callId: Int, message: String) = answer(callId, false, WebBridge.quote(message))
+
+    private fun answerRaw(callId: Int, ok: Boolean, payloadJson: String) = answer(callId, ok, payloadJson)
 
     private fun answer(callId: Int, ok: Boolean, payloadJson: String) {
         val js = "window.OpenPdfEditNative && window.OpenPdfEditNative._resolve($callId, $ok, $payloadJson);"
@@ -343,6 +388,11 @@ class MainActivity : AppCompatActivity() {
             }
             return true
         }
+    }
+
+    override fun onDestroy() {
+        billing.close()
+        super.onDestroy()
     }
 
     override fun onSaveInstanceState(outState: Bundle) {

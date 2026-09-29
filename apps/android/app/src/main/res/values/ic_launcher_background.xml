@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The icon's own red, sampled from the web app's maskable icon so
+         the three platforms show the same mark. The background is a
+         separate layer because the launcher masks it to whatever shape
+         the device uses; baking it into the foreground would show as a
+         square inside a circle. -->
+    <color name="ic_launcher_background">#FF4D4D</color>
+</resources>

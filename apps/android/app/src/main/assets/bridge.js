@@ -133,6 +133,56 @@
       });
     },
 
+    // --- in-app purchase --------------------------------------------
+
+    /** `[{id, name, description, price}]`, priced by Play in the
+     *  customer's own currency. Never reformat `price`. */
+    products: function () {
+      return call("products").then(function (r) {
+        return r.products;
+      });
+    },
+
+    /**
+     * Buys a product. Resolves one of:
+     *   {status:"purchased", transactionId, productId, receipt, verifiedLocally}
+     *   {status:"cancelled"}   — they changed their mind; say nothing
+     *   {status:"pending"}     — Ask to Buy, or a slow payment method
+     *
+     * A "purchased" result is not credits yet. Send `receipt` to the
+     * server, and only when it answers call `finish`.
+     */
+    purchase: function (productId) {
+      return call("purchase", { productId: productId });
+    },
+
+    /**
+     * Purchases Play still considers owing, including from previous
+     * launches.
+     *
+     * The recovery path for a purchase interrupted by a crash or a dead
+     * network. It runs at startup rather than behind a "restore
+     * purchases" button — someone whose payment went through should not
+     * have to know that word.
+     */
+    outstanding: function () {
+      return call("outstanding").then(function (r) {
+        return r.receipts;
+      });
+    },
+
+    /**
+     * Marks a purchase done, *after* the server has granted its credits.
+     *
+     * Early is the expensive mistake: a consumed purchase stops being
+     * returned by Play, so a redemption that never reached the server
+     * becomes money taken for credits nobody granted, with nothing left
+     * to retry from.
+     */
+    finish: function (transactionId) {
+      return call("finish", { transactionId: transactionId });
+    },
+
     // --- account ---------------------------------------------------
     //
     // No `signIn` here, deliberately. Sign-in on Android wants a Custom

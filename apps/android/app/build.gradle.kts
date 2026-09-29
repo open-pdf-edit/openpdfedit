@@ -1,6 +1,19 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
+}
+
+// Upload signing, kept out of the repository entirely: the keystore and
+// its passwords live in ~/.config/openpdfedit-android/. Play identifies
+// an app by this key forever, so losing it is not a build problem, it is
+// an "upload a new app" problem — back that directory up somewhere other
+// than this machine. A missing file is not an error, so a debug build
+// and CI both still work; only `bundleRelease` needs it.
+val signingProps = Properties().apply {
+    val f = File(System.getProperty("user.home"), ".config/openpdfedit-android/signing.properties")
+    if (f.exists()) f.inputStream().use { load(it) }
 }
 
 android {
@@ -32,8 +45,20 @@ android {
         noCompress += listOf("wasm", "traineddata")
     }
 
+    signingConfigs {
+        if (signingProps.getProperty("storeFile") != null) {
+            create("upload") {
+                storeFile = file(signingProps.getProperty("storeFile"))
+                storePassword = signingProps.getProperty("storePassword")
+                keyAlias = signingProps.getProperty("keyAlias")
+                keyPassword = signingProps.getProperty("keyPassword")
+            }
+        }
+    }
+
     buildTypes {
         release {
+            signingConfig = signingConfigs.findByName("upload")
             isMinifyEnabled = false
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
@@ -61,4 +86,11 @@ dependencies {
     // ASWebAuthenticationSession: a real address bar, and it shares the
     // browser's cookies so an already-signed-in account is one tap.
     implementation("androidx.browser:browser:1.8.0")
+    // Play Billing. Credits are consumables, and the discipline this
+    // library needs is the same one StoreKit needs on iOS: a purchase is
+    // consumed only after the server has put the credits in the ledger,
+    // never on the callback that reports it.
+    implementation("com.android.billingclient:billing-ktx:7.1.1")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
+    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.7")
 }

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+    <background android:drawable="@color/ic_launcher_background" />
+    <foreground android:drawable="@mipmap/ic_launcher_foreground" />
+    <!-- No <monochrome>. A themed icon is a silhouette the launcher
+         tints itself, and handing it a white-on-transparent foreground
+         renders a washed-out disc instead of the icon. Better none than
+         a wrong one: without it the launcher falls back to the real
+         icon, which is what we want. -->
+</adaptive-icon>
