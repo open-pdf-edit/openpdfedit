@@ -18,7 +18,7 @@ val signingProps = Properties().apply {
 
 android {
     namespace = "com.openpdfedit.app"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         // The same identifier the iOS and Mac App Store builds use. One
@@ -31,8 +31,8 @@ android {
         // enough to be a real risk, and the editor is not usable on that
         // hardware anyway.
         minSdk = 26
-        targetSdk = 35
-        versionCode = 1
+        targetSdk = 36
+        versionCode = 2
         versionName = "1.0.1"
     }
 
@@ -59,7 +59,8 @@ android {
     buildTypes {
         release {
             signingConfig = signingConfigs.findByName("upload")
-            isMinifyEnabled = false
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
     }
@@ -90,7 +91,7 @@ dependencies {
     // library needs is the same one StoreKit needs on iOS: a purchase is
     // consumed only after the server has put the credits in the ledger,
     // never on the callback that reports it.
-    implementation("com.android.billingclient:billing-ktx:7.1.1")
+    implementation("com.android.billingclient:billing-ktx:8.3.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.7")
 }
