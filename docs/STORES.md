@@ -341,10 +341,33 @@ has it. The steps to put in the instructions box:
 2. **Continue with Nostr** → **I only have a private key**.
 3. Paste the key and tap **Sign in**.
 
-Verified on the mobile layout of `/app/login`, which is the page the
-Android shell opens in a Custom Tab. No password, no second factor, and
-the account carries enough credits that both Supporter tools are already
-unlocked — a reviewer never has to buy anything to see them.
+No password, no second factor, and the account carries enough credits
+that both Supporter tools are already unlocked — a reviewer never has to
+buy anything to see them, which matters because the form says in so many
+words that reviewers cannot make purchases.
+
+What goes in each field, with the limits the form enforces:
+
+| Field | Value |
+|---|---|
+| Name (60) | `Supporter tools: OCR and Watermark` |
+| Username (100) | **leave empty** — there is no username to give |
+| Password (100) | the review key, 63 characters |
+| Any other information (500) | the steps above, plus "the key does not expire" and "there is no 2-step verification" |
+| Final checkbox | **tick it.** The account has credits, so it does give full access to paid content. |
+
+An empty username field is the right answer rather than a placeholder:
+the form's own guidance covers sign-in that is not a username and
+password, and a reviewer who pastes "see instructions" into a key field
+has been misled by us.
+
+**Before submitting, sign in once on a real device with the build being
+submitted.** The sign-in leaves the app for a Custom Tab and comes back
+through a deep link, which is the part that cannot be proved from a
+browser: the page itself is easy to verify anywhere, the return hop is
+not. An emulator is not good enough here — a throttled network makes
+the sign-in request time out and report "Could not reach the server",
+which looks exactly like a product bug and is not one.
 
 ### Data safety
 
