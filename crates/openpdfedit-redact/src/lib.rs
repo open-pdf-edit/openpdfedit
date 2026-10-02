@@ -37,6 +37,27 @@
 //!   actually still there). For a redaction tool, erring toward removing
 //!   too much is the correct failure direction; erring toward removing
 //!   too little is not.
+//!   Two things about that estimate are worth naming, because they are
+//!   the ones that bite. `char_count` is a **byte** count, so a 2-byte
+//!   CID font estimates at a full em per glyph rather than half — right
+//!   for CJK, twice too wide for latin text in an Identity-H font. And
+//!   a show operator does not advance the text matrix, so two runs on
+//!   one line are both measured from where the first one started. Both
+//!   err toward removing too much, which is why they are tolerated
+//!   rather than guessed at; the real fix for either is glyph widths,
+//!   which means carrying the font machinery this crate deliberately
+//!   does not have.
+//! - **Text state is graphics state.** Font size, leading, rise and
+//!   horizontal scaling are saved by `q` and restored by `Q` along with
+//!   the CTM, because PDF 32000-1 §9.3 says they are part of the state
+//!   that pair saves. Treating them as plain running values instead is
+//!   not a small error: a `q /F2 48 Tf … Q` around one phrase left
+//!   every later line in the paragraph measured 48pt tall, and a box
+//!   drawn on one of them reached several lines down and took text the
+//!   box never covered. `Tz` and `Ts` are tracked for the same reason —
+//!   unscaled width under-measures stretched text, which is the one
+//!   direction this crate must never err in, and a raised run drawn
+//!   30pt above its baseline was being looked for at the baseline.
 //! - **Path (non-text, non-image) geometry uses point-cloud bounding
 //!   boxes**, not exact curve extents: every coordinate operand of a
 //!   path-construction operator (`m`/`l`/`c`/`v`/`y`/`re`) contributes to
@@ -222,24 +243,62 @@ pub(crate) fn number(obj: &Object) -> f64 {
         .unwrap_or_else(|_| obj.as_i64().unwrap_or(0) as f64)
 }
 
+/// The parts of the text state this interpreter tracks.
+///
+/// These are *graphics* state (PDF 32000-1 §9.3), which is the whole
+/// reason this is a struct rather than four locals: `q` saves them and
+/// `Q` restores them, exactly like the CTM. Leaving them out of the
+/// stack is not a rounding error — a `q /F2 48 Tf … Q` around one
+/// stretch of a paragraph left every line after it measured at 48pt
+/// instead of 11, so a box drawn on one line reached four lines down
+/// and took text the box never touched.
+///
+/// The text and line matrices are deliberately *not* here: those are
+/// reset by `BT` and are not part of the graphics state.
+#[derive(Clone, Copy)]
+struct TextState {
+    font_size: f64,
+    leading: f64,
+    /// `Ts`. A baseline offset in unscaled text units — superscripts,
+    /// and some producers' way of positioning a whole line.
+    rise: f64,
+    /// `Tz`, as a multiplier rather than the percentage the operator
+    /// takes. Ignoring it under-measured stretched text, and under-
+    /// measuring is the one direction this crate must never err in.
+    horizontal_scale: f64,
+}
+
+impl Default for TextState {
+    fn default() -> Self {
+        Self {
+            font_size: 0.0,
+            leading: 0.0,
+            rise: 0.0,
+            horizontal_scale: 1.0,
+        }
+    }
+}
+
 /// Estimates whether a text-showing operator painting `char_count`
-/// characters at the current `text_matrix`/`ctm`/`font_size` overlaps
+/// characters at the current `text_matrix`/`ctm`/text state overlaps
 /// `rect` — see this crate's module doc for why the estimate is
 /// deliberately coarse (and safe in the direction it's coarse).
 fn text_overlaps(
     text_matrix: Matrix,
     ctm: Matrix,
-    font_size: f64,
+    text: TextState,
     char_count: usize,
     rect: Rect,
 ) -> bool {
     if char_count == 0 {
         return false;
     }
+    let font_size = text.font_size;
     let combined = multiply(text_matrix, ctm);
-    let width = font_size.max(1.0) * char_count as f64 * 0.5;
+    let width = font_size.max(1.0) * char_count as f64 * 0.5 * text.horizontal_scale.max(0.0);
     let height = font_size.max(1.0);
-    let corners = [(0.0, 0.0), (width, 0.0), (0.0, height), (width, height)];
+    let (y0, y1) = (text.rise, text.rise + height);
+    let corners = [(0.0, y0), (width, y0), (0.0, y1), (width, y1)];
     let device_points: Vec<(f64, f64)> = corners
         .iter()
         .map(|&(x, y)| transform_point(combined, x, y))
@@ -396,12 +455,11 @@ pub fn redact_content_resolving(
     let content =
         Content::decode(content_bytes).map_err(|e| RedactError::ContentDecode(e.to_string()))?;
 
-    let mut ctm_stack: Vec<Matrix> = Vec::new();
+    let mut ctm_stack: Vec<(Matrix, TextState)> = Vec::new();
     let mut ctm: Matrix = IDENTITY;
     let mut text_matrix: Matrix = IDENTITY;
     let mut text_line_matrix: Matrix = IDENTITY;
-    let mut font_size: f64 = 0.0;
-    let mut leading: f64 = 0.0;
+    let mut text = TextState::default();
 
     let mut path_points: Vec<(f64, f64)> = Vec::new();
     let mut pending_path_ops: Vec<Operation> = Vec::new();
@@ -413,12 +471,13 @@ pub fn redact_content_resolving(
     for op in content.operations {
         match op.operator.as_str() {
             "q" => {
-                ctm_stack.push(ctm);
+                ctm_stack.push((ctm, text));
                 out_ops.push(op);
             }
             "Q" => {
-                if let Some(m) = ctm_stack.pop() {
+                if let Some((m, saved)) = ctm_stack.pop() {
                     ctm = m;
+                    text = saved;
                 }
                 out_ops.push(op);
             }
@@ -436,7 +495,20 @@ pub fn redact_content_resolving(
             }
             "Tf" => {
                 if let Some(size) = op.operands.get(1) {
-                    font_size = number(size);
+                    text.font_size = number(size);
+                }
+                out_ops.push(op);
+            }
+            "Ts" => {
+                if let Some(v) = op.operands.first() {
+                    text.rise = number(v);
+                }
+                out_ops.push(op);
+            }
+            "Tz" => {
+                if let Some(v) = op.operands.first() {
+                    // The operator is a percentage; 100 is unscaled.
+                    text.horizontal_scale = number(v) / 100.0;
                 }
                 out_ops.push(op);
             }
@@ -453,7 +525,7 @@ pub fn redact_content_resolving(
                     let tx = number(&op.operands[0]);
                     let ty = number(&op.operands[1]);
                     if op.operator == "TD" {
-                        leading = -ty;
+                        text.leading = -ty;
                     }
                     text_line_matrix = multiply([1.0, 0.0, 0.0, 1.0, tx, ty], text_line_matrix);
                     text_matrix = text_line_matrix;
@@ -461,39 +533,39 @@ pub fn redact_content_resolving(
                 out_ops.push(op);
             }
             "T*" => {
-                text_line_matrix = multiply([1.0, 0.0, 0.0, 1.0, 0.0, -leading], text_line_matrix);
+                text_line_matrix = multiply([1.0, 0.0, 0.0, 1.0, 0.0, -text.leading], text_line_matrix);
                 text_matrix = text_line_matrix;
                 out_ops.push(op);
             }
             "TL" => {
                 if let Some(v) = op.operands.first() {
-                    leading = number(v);
+                    text.leading = number(v);
                 }
                 out_ops.push(op);
             }
             "Tj" => {
                 let len = string_operand_len(op.operands.first());
-                if scope.removes_text() && text_overlaps(text_matrix, ctm, font_size, len, rect) {
+                if scope.removes_text() && text_overlaps(text_matrix, ctm, text, len, rect) {
                     removed += 1;
                 } else {
                     out_ops.push(op);
                 }
             }
             "'" => {
-                text_line_matrix = multiply([1.0, 0.0, 0.0, 1.0, 0.0, -leading], text_line_matrix);
+                text_line_matrix = multiply([1.0, 0.0, 0.0, 1.0, 0.0, -text.leading], text_line_matrix);
                 text_matrix = text_line_matrix;
                 let len = string_operand_len(op.operands.first());
-                if scope.removes_text() && text_overlaps(text_matrix, ctm, font_size, len, rect) {
+                if scope.removes_text() && text_overlaps(text_matrix, ctm, text, len, rect) {
                     removed += 1;
                 } else {
                     out_ops.push(op);
                 }
             }
             "\"" => {
-                text_line_matrix = multiply([1.0, 0.0, 0.0, 1.0, 0.0, -leading], text_line_matrix);
+                text_line_matrix = multiply([1.0, 0.0, 0.0, 1.0, 0.0, -text.leading], text_line_matrix);
                 text_matrix = text_line_matrix;
                 let len = string_operand_len(op.operands.get(2));
-                if scope.removes_text() && text_overlaps(text_matrix, ctm, font_size, len, rect) {
+                if scope.removes_text() && text_overlaps(text_matrix, ctm, text, len, rect) {
                     removed += 1;
                 } else {
                     out_ops.push(op);
@@ -501,7 +573,7 @@ pub fn redact_content_resolving(
             }
             "TJ" => {
                 let len = tj_array_len(op.operands.first());
-                if scope.removes_text() && text_overlaps(text_matrix, ctm, font_size, len, rect) {
+                if scope.removes_text() && text_overlaps(text_matrix, ctm, text, len, rect) {
                     removed += 1;
                 } else {
                     out_ops.push(op);
@@ -664,6 +736,168 @@ mod tests {
             .into_iter()
             .map(|op| op.operator)
             .collect()
+    }
+
+    /// The literal strings still painted after a redaction, in order —
+    /// which is the only way to say *which* line survived rather than
+    /// how many did.
+    fn surviving_strings(bytes: &[u8]) -> Vec<String> {
+        Content::decode(bytes)
+            .expect("should decode")
+            .operations
+            .into_iter()
+            .filter(|op| matches!(op.operator.as_str(), "Tj" | "'"))
+            .filter_map(|op| {
+                op.operands
+                    .last()
+                    .and_then(|o| o.as_str().ok())
+                    .map(|s| String::from_utf8_lossy(s).into_owned())
+            })
+            .collect()
+    }
+
+    #[test]
+    fn a_bigger_font_inside_q_does_not_follow_the_text_out_of_it() {
+        // `Tf` sets graphics state, so `Q` puts the old size back. Until
+        // it did, a 48pt run anywhere in a paragraph left every line
+        // after it measured as 48pt tall, and a box drawn on one line
+        // reached down through the lines below and took them too.
+        let content = Content {
+            operations: vec![
+                Operation::new("BT", vec![]),
+                Operation::new("Tf", vec!["F1".into(), 11.0.into()]),
+                Operation::new(
+                    "Tm",
+                    vec![
+                        1.0.into(),
+                        0.0.into(),
+                        0.0.into(),
+                        1.0.into(),
+                        72.0.into(),
+                        700.0.into(),
+                    ],
+                ),
+                Operation::new("TL", vec![13.0.into()]),
+                Operation::new("Tj", vec![Object::string_literal("line one")]),
+                Operation::new("q", vec![]),
+                Operation::new("Tf", vec!["F2".into(), 48.0.into()]),
+                Operation::new("Tj", vec![Object::string_literal("BIG")]),
+                Operation::new("Q", vec![]),
+                Operation::new("T*", vec![]),
+                Operation::new("Tj", vec![Object::string_literal("line two")]),
+                Operation::new("ET", vec![]),
+            ],
+        };
+        let bytes = content.encode().unwrap();
+
+        // A box over the first baseline only: y 699–712 against a
+        // second line sitting at 687 with an 11pt ascent, so 698.
+        let redacted = redact_content(
+            &bytes,
+            Rect {
+                x0: 70.0,
+                y0: 699.0,
+                x1: 300.0,
+                y1: 712.0,
+            },
+        )
+        .expect("should succeed");
+        assert_eq!(
+            surviving_strings(&redacted.bytes),
+            vec!["line two".to_string()],
+            "only the line the box was drawn on may go"
+        );
+        assert_eq!(redacted.removed_operations, 2, "line one, and the 48pt run");
+    }
+
+    #[test]
+    fn horizontally_stretched_text_is_measured_at_the_width_it_is_drawn() {
+        // `Tz 200` doubles the width on the page. Measuring it unscaled
+        // left the right-hand half of the run outside every box, which
+        // is an under-removal — the one direction this crate must not
+        // err in.
+        let content = Content {
+            operations: vec![
+                Operation::new("BT", vec![]),
+                Operation::new("Tf", vec!["F1".into(), 10.0.into()]),
+                Operation::new("Tz", vec![200.0.into()]),
+                Operation::new(
+                    "Tm",
+                    vec![
+                        1.0.into(),
+                        0.0.into(),
+                        0.0.into(),
+                        1.0.into(),
+                        72.0.into(),
+                        700.0.into(),
+                    ],
+                ),
+                Operation::new("Tj", vec![Object::string_literal("abcdefghij")]),
+                Operation::new("ET", vec![]),
+            ],
+        };
+        let bytes = content.encode().unwrap();
+
+        // Ten characters at 10pt estimate to 50pt unstretched (72–122)
+        // and 100pt stretched (72–172). The box sits in the half that
+        // only exists once `Tz` is honoured.
+        let redacted = redact_content(
+            &bytes,
+            Rect {
+                x0: 140.0,
+                y0: 698.0,
+                x1: 160.0,
+                y1: 712.0,
+            },
+        )
+        .expect("should succeed");
+        assert_eq!(redacted.removed_operations, 1);
+        assert!(surviving_strings(&redacted.bytes).is_empty());
+    }
+
+    #[test]
+    fn raised_text_is_measured_at_the_height_it_is_drawn() {
+        // `Ts` moves the baseline without touching either matrix. A run
+        // raised 30pt was still measured at the baseline, so a box drawn
+        // over where it actually appears missed it entirely.
+        let content = Content {
+            operations: vec![
+                Operation::new("BT", vec![]),
+                Operation::new("Tf", vec!["F1".into(), 10.0.into()]),
+                Operation::new(
+                    "Tm",
+                    vec![
+                        1.0.into(),
+                        0.0.into(),
+                        0.0.into(),
+                        1.0.into(),
+                        72.0.into(),
+                        700.0.into(),
+                    ],
+                ),
+                Operation::new("Tj", vec![Object::string_literal("base")]),
+                Operation::new("Ts", vec![30.0.into()]),
+                Operation::new("Tj", vec![Object::string_literal("raised")]),
+                Operation::new("ET", vec![]),
+            ],
+        };
+        let bytes = content.encode().unwrap();
+
+        let redacted = redact_content(
+            &bytes,
+            Rect {
+                x0: 70.0,
+                y0: 725.0,
+                x1: 200.0,
+                y1: 735.0,
+            },
+        )
+        .expect("should succeed");
+        assert_eq!(
+            surviving_strings(&redacted.bytes),
+            vec!["base".to_string()],
+            "the raised run is the one under the box"
+        );
     }
 
     #[test]
