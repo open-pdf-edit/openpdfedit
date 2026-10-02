@@ -42,7 +42,14 @@
   import NumberingPanel from "$lib/NumberingPanel.svelte";
   import EncryptPanel from "$lib/EncryptPanel.svelte";
   import type { EncryptChoices, NumberPagesChoices, WatermarkChoices } from "$lib/backend/types";
-  import { showAlert, showChoice, showConfirm, showPrompt } from "$lib/dialog.svelte";
+  import {
+    activeDialog,
+    resolveDialog,
+    showAlert,
+    showChoice,
+    showConfirm,
+    showPrompt,
+  } from "$lib/dialog.svelte";
   import ToastHost from "$lib/ToastHost.svelte";
   import { showToast } from "$lib/toast.svelte";
   import { TOOL_GROUPS, type Tool } from "$lib/tools";
@@ -1256,6 +1263,55 @@
       void openInNewTab(offerExternalFile(file)).catch((e: unknown) => {
         error = `Couldn't open ${name}: ${formatError(e)}`;
       });
+    });
+  });
+
+  // Android's back gesture, which the shell hands to us rather than
+  // answering itself. It cannot know whether a dialog is up, a panel is
+  // open or a document is dirty, and its own answer — close the app —
+  // is the one that loses work: a back swipe used to discard every
+  // unsaved edit with no prompt at all. Nothing here runs on any other
+  // platform, because no other shell registers a handler.
+  //
+  // One press closes one thing, outermost last, which is what back means
+  // everywhere else on the platform. The dialog comes first because it
+  // is modal and sits above all of it — and because back arriving while
+  // the save prompt is up must cancel that prompt rather than stack a
+  // second one on top of it.
+  $effect(() => {
+    const shell = nativeShell();
+    if (!shell?.onBack) return;
+    return shell.onBack(async () => {
+      if (activeDialog()) {
+        resolveDialog(null);
+        return;
+      }
+      const overlays: [boolean, () => void][] = [
+        [moreOpen, () => (moreOpen = false)],
+        [showSignaturePad, () => (showSignaturePad = false)],
+        [showEncrypt, () => (showEncrypt = false)],
+        [showNumbering, () => (showNumbering = false)],
+        [showWatermark, () => (showWatermark = false)],
+        [showAccount, () => (showAccount = false)],
+        [showSearch, closeSearch],
+        [showComments, () => (showComments = false)],
+        [showForms, () => (showForms = false)],
+        [showSignatures, () => (showSignatures = false)],
+        [showPages, () => (showPages = false)],
+        [showOutline, () => (showOutline = false)],
+        [historyOpen, () => (historyOpen = false)],
+      ];
+      const open = overlays.find(([isOpen]) => isOpen);
+      if (open) {
+        open[1]();
+        return;
+      }
+      // Nothing left to close, so back means leave — and leaving loses
+      // unsaved work. Same two-step prompt the desktop uses when its
+      // window is closed, so the two platforms cannot drift apart.
+      if (await confirmProceedDespiteUnsavedChanges("close")) {
+        void shell.exit?.();
+      }
     });
   });
 
@@ -3648,6 +3704,14 @@
       gap: var(--space-1);
       padding: 0 var(--space-2);
       height: 56px;
+      /* One row, and it stays one row. The bar has a fixed height, so
+         `wrap` does not give a second row any space — it draws one on
+         top of the file strip below, which is how Account came to sit
+         across the filename on a 384dp phone the moment a Recent button
+         appeared and made the count eight. Eight 46px controls plus
+         their gaps want 426px; there are 384. So nothing wraps, and the
+         buttons give up a few pixels each instead. */
+      flex-wrap: nowrap;
     }
 
     /* Icon over name, the same arrangement the tool rail and the tools
@@ -3657,6 +3721,12 @@
       font-size: 9px;
       line-height: 1.1;
       color: inherit;
+      /* The name must not be what holds a shrunken button open, or the
+         row cannot give back the pixels it was asked for. */
+      max-width: 100%;
+      overflow: hidden;
+      white-space: nowrap;
+      text-overflow: ellipsis;
     }
 
     .topbar :global(.oa-icon-btn),
@@ -3675,7 +3745,8 @@
 
     .topbar__open {
       padding: 0;
-      min-width: 46px;
+      flex: 0 1 46px;
+      min-width: 38px;
     }
 
     .topbar :global(.oa-brandmark) {
@@ -3683,10 +3754,21 @@
     }
 
     /* Wide enough for the longest of these names, tall enough for a
-       glyph with one under it, and still the 44px a thumb wants. */
+       glyph with one under it, and still the 44px a thumb wants — in
+       the dimension a thumb actually misses in, which is the vertical
+       one in a row of adjacent targets. 46px is what each control asks
+       for; 38px is what it will accept when there are eight of them,
+       and eight at 38px plus gaps and padding fit inside 360dp, the
+       narrowest phone width still in wide use. */
     .topbar :global(.oa-icon-btn) {
-      width: 46px;
+      flex: 0 1 46px;
+      min-width: 38px;
       height: 44px;
+      /* The desktop's 6px each side is a third of a shrunken button,
+         and it is what turned "Recent" into "Recen…" once the row
+         started giving pixels back. The names need the room more than
+         the gaps do; the gap between buttons already separates them. */
+      padding-inline: 2px;
     }
 
     .topbar :global(.oa-btn) {
@@ -3941,6 +4023,26 @@
     .topbar__group--zoom,
     .topbar__meta {
       display: none;
+    }
+  }
+  /* Narrower than any current phone in portrait — a folded Galaxy's
+     cover screen, a split-screen half, a desktop window dragged very
+     small. Six named controls will not fit, so the names go and the
+     icons stay: the row still holds everything, which is the one thing
+     that must not break. The labels are the first thing to give,
+     because an icon with no name is understandable and a toolbar that
+     has pushed Account off the right-hand edge is not. */
+  @media (max-width: 359px) {
+    /* `:global` because the language picker is its own component and
+       its two-letter name carries the same class — hiding six of seven
+       names and leaving "EN" behind would look like a bug. */
+    .topbar :global(.topbar__label) {
+      display: none;
+    }
+
+    .topbar :global(.oa-icon-btn),
+    .topbar__open {
+      min-width: 32px;
     }
   }
 </style>

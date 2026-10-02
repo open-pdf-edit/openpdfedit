@@ -7,6 +7,7 @@ import android.graphics.Color
 import android.net.Uri
 import android.os.Bundle
 import android.util.Log
+import android.view.ViewGroup
 import android.webkit.ConsoleMessage
 import android.webkit.ValueCallback
 import android.webkit.WebChromeClient
@@ -155,6 +156,7 @@ class MainActivity : AppCompatActivity() {
             WebView.setWebContentsDebuggingEnabled(true)
         }
         setContentView(webView)
+        applyWindowInsets()
         injectBridge()
 
         if (savedInstanceState == null) {
@@ -164,7 +166,27 @@ class MainActivity : AppCompatActivity() {
 
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
-                if (webView.canGoBack()) webView.goBack() else finish()
+                if (webView.canGoBack()) {
+                    webView.goBack()
+                    return
+                }
+                // Ask the page before closing. Only it knows whether a
+                // panel is open or a document has unsaved edits, and
+                // `finish()` is the one answer that throws the work
+                // away — on a phone with gesture navigation, a swipe
+                // from the edge used to discard every unsaved change
+                // with no prompt at all.
+                webView.evaluateJavascript(
+                    "window.OpenPdfEditNative && window.OpenPdfEditNative._hasBack()" +
+                        " ? (window.OpenPdfEditNative._back(), 'handled') : 'none'",
+                ) { answer ->
+                    // A bundle too old to know about back, or a page
+                    // that failed to load, answers 'none' or null. Back
+                    // then means what it always did, because a back
+                    // button that does nothing is worse than one that
+                    // is too eager.
+                    if (answer == null || !answer.contains("handled")) finish()
+                }
             }
         })
     }
@@ -412,6 +434,93 @@ class MainActivity : AppCompatActivity() {
         webView.evaluateJavascript(js, null)
     }
 
+    /**
+     * Keeps the page clear of the status bar, the gesture bar and the
+     * keyboard.
+     *
+     * From Android 15 an app targeting SDK 35 or above is drawn edge to
+     * edge whether it asks to be or not, and nothing warns you: the
+     * toolbar simply moves up behind the status bar, where the system
+     * also takes the top ~95px of touches, so the upper half of every
+     * button stops responding. Raising `targetSdk` to 36 — which Play
+     * requires — is what turned this on here.
+     *
+     * Padding the WebView rather than asking the page to use
+     * `safe-area-inset-*`: the same bundle runs in a browser and in two
+     * other shells, and the page has no business knowing which one it
+     * is in. Measured insets are also the only ones that are right —
+     * the status bar is not a constant, and on this device it is 95px
+     * rather than the 24dp the documentation implies.
+     *
+     * `ime` is in the same mask deliberately. The keyboard is just
+     * another inset once the window is edge to edge, and
+     * `adjustResize` alone no longer moves anything, which is why the
+     * Cancel button on a note dialog sat behind the keyboard.
+     */
+    private fun applyWindowInsets() {
+        androidx.core.view.ViewCompat.setOnApplyWindowInsetsListener(webView) { view, insets ->
+            val bars = insets.getInsets(
+                androidx.core.view.WindowInsetsCompat.Type.systemBars() or
+                    androidx.core.view.WindowInsetsCompat.Type.displayCutout() or
+                    androidx.core.view.WindowInsetsCompat.Type.ime(),
+            )
+            // Margins, not padding. A WebView treats padding as part of
+            // its scrollable area rather than as a smaller viewport: the
+            // page still laid out 854dp tall and simply drew its first
+            // 136px of toolbar behind the status bar, which is the bug
+            // this is here to fix. Shrinking the view is what gives the
+            // page a viewport that ends where the system bars begin —
+            // and it is also what makes the keyboard inset work, since
+            // the dialog centres itself in whatever height it is given.
+            val lp = view.layoutParams as ViewGroup.MarginLayoutParams
+            if (lp.leftMargin != bars.left || lp.topMargin != bars.top ||
+                lp.rightMargin != bars.right || lp.bottomMargin != bars.bottom
+            ) {
+                lp.setMargins(bars.left, bars.top, bars.right, bars.bottom)
+                view.layoutParams = lp
+            }
+            insets
+        }
+        applySystemBarAppearance()
+    }
+
+    /**
+     * Keeps the system bars legible against whatever the page is
+     * showing behind them.
+     *
+     * Two halves of one answer: the strip behind each bar is the
+     * window background, and the icons drawn on it are the system's.
+     * Get one without the other and the clock vanishes — a dark icon
+     * set on a black strip is what the first attempt at this produced.
+     *
+     * It is re-applied on a configuration change because `uiMode` is in
+     * this activity's `configChanges`: the activity is deliberately not
+     * recreated when the system switches to dark, so that the open
+     * document and every unsaved edit survive it, which also means
+     * nothing re-reads the theme unless we do.
+     */
+    private fun applySystemBarAppearance() {
+        val night = resources.configuration.uiMode and
+            android.content.res.Configuration.UI_MODE_NIGHT_MASK ==
+            android.content.res.Configuration.UI_MODE_NIGHT_YES
+        window.setBackgroundDrawableResource(R.color.chrome_surface)
+        val controller = androidx.core.view.WindowCompat
+            .getInsetsController(window, window.decorView)
+        controller.isAppearanceLightStatusBars = !night
+        controller.isAppearanceLightNavigationBars = !night
+    }
+
+    override fun onConfigurationChanged(newConfig: android.content.res.Configuration) {
+        super.onConfigurationChanged(newConfig)
+        applySystemBarAppearance()
+    }
+
+    /** `AcceptTypes.kt`, with Android's own extension table behind it. */
+    private fun mimeTypesFor(acceptTypes: Array<String>): Array<String> {
+        val known = android.webkit.MimeTypeMap.getSingleton()
+        return mimeTypesFor(acceptTypes) { known.getMimeTypeFromExtension(it) }
+    }
+
     // --- webview clients -------------------------------------------------
 
     private inner class ShellChromeClient : WebChromeClient() {
@@ -423,10 +532,7 @@ class MainActivity : AppCompatActivity() {
         ): Boolean {
             pendingFileCallback?.onReceiveValue(null)
             pendingFileCallback = filePathCallback
-            val mimeTypes = fileChooserParams.acceptTypes
-                .filter { it.isNotBlank() }
-                .toTypedArray()
-                .ifEmpty { arrayOf("application/pdf") }
+            val mimeTypes = mimeTypesFor(fileChooserParams.acceptTypes)
             return runCatching { pickFile.launch(mimeTypes) }.isSuccess
         }
 

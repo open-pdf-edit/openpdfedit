@@ -94,4 +94,9 @@ dependencies {
     implementation("com.android.billingclient:billing-ktx:8.3.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.7")
+    // JVM unit tests, for the logic that does not need a device. The
+    // picker's MIME filter is the first of them: its bug was invisible
+    // on screen (every file simply greyed out) and a one-line table
+    // check would have caught it.
+    testImplementation("junit:junit:4.13.2")
 }

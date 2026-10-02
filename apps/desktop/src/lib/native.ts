@@ -68,6 +68,14 @@ export interface NativeShell {
   /// Absent on a shell that has no native sign-in of its own, in which
   /// case the account panel falls back to its own flow.
   signIn?(): Promise<NativeSignIn>;
+  /// Android only. The shell hands its back gesture to the page rather
+  /// than answering it, because only the page knows whether a panel is
+  /// open or a document is dirty. Returns an unsubscribe. A page that
+  /// never registers one still gets the shell's own answer, which is to
+  /// close the app.
+  onBack?(fn: () => void): () => void;
+  /// Closes the app. Only meaningful after `onBack` has decided.
+  exit?(): Promise<unknown>;
   /// The store half. Optional as a group: a shell can carry documents
   /// and files without selling anything, and `storeKit()` below is what
   /// decides whether purchases are available — not the shell's mere

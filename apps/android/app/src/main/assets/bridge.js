@@ -20,6 +20,7 @@
   var listeners = Object.create(null);
   var pending = Object.create(null);
   var nextId = 1;
+  var backHandler = null;
 
   function call(action, extra) {
     var id = nextId++;
@@ -81,6 +82,40 @@
     ready: function () {
       return call("ready");
     },
+
+    // --- going back --------------------------------------------------
+
+    /**
+     * Registers what should happen when Android's back gesture is used.
+     *
+     * The shell cannot answer this itself. Only the page knows whether a
+     * panel is open or a document has unsaved edits, and the shell's own
+     * answer — close the window — is the one answer that loses work. So
+     * back is offered to the page first, and the app exits only when the
+     * page says so by calling `exit()`.
+     *
+     * A shell running an older bundle that never calls this still exits
+     * on back, because the shell checks whether a handler was registered
+     * at all. Better a back button that is too eager than one that does
+     * nothing.
+     */
+    onBack: function (fn) {
+      backHandler = fn;
+      return function () { backHandler = null; };
+    },
+
+    /** Called by the shell. Not app-facing. */
+    _back: function () {
+      if (!backHandler) return false;
+      try { backHandler(); } catch (e) { console.error("back handler threw", e); }
+      return true;
+    },
+
+    /** Whether the page has taken responsibility for back. */
+    _hasBack: function () { return !!backHandler; },
+
+    /** Closes the app. Only meaningful once the page has decided. */
+    exit: function () { return call("exit"); },
 
     // --- documents from other apps ------------------------------------
 

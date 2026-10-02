@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The page's own toolbar colour (the surface-card token in the web
+         app's stylesheet). It fills the screen before the first paint,
+         and once the window draws edge to edge it is also what sits
+         behind the status and navigation bars — so it has to follow the
+         page into dark mode, or the status-bar clock ends up dark on
+         black. See values-night. -->
+    <color name="chrome_surface">#ffffff</color>
+</resources>

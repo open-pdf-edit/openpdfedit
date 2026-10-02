@@ -77,6 +77,12 @@ class WebBridge(private val shell: MainActivity) {
                 shell.onMain { shell.billingFinish(id, transactionId) }
             }
 
+            // The page has decided that back means leave.
+            "exit" -> shell.onMain {
+                shell.resolve(id, JSONObject().put("exiting", true))
+                shell.finish()
+            }
+
             "signIn" -> shell.onMain { shell.startSignIn(id) }
 
             else -> shell.onMain { shell.reject(id, "unknown action") }
