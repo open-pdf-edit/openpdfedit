@@ -81,7 +81,7 @@ grep -q "serviceWorker" "$DEST/index.html" &&
   { echo "sync-web.sh: index.html still registers a service worker" >&2; exit 1; }
 
 # The web build injects ~400 words of marketing copy into the page for
-# crawlers (APP-96), and the app moves it into the empty state, where on a
+# crawlers, and the app moves it into the empty state, where on a
 # phone it is the entire first screen: a wall of prose above the Open
 # button, with no editor in sight. In a browser that is the product page
 # doing its job. In an app binary it is the first thing a reviewer sees,

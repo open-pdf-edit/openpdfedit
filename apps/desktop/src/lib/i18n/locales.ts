@@ -1,8 +1,8 @@
 /**
  * The languages OpenPdfEdit ships in.
  *
- * Confirmed with jerry under APP-42. Deliberately a short list rather
- * than the thirty-odd a large competitor carries: every locale here is a
+ * Deliberately a short list rather than the thirty-odd a large competitor
+ * carries: every locale here is a
  * permanent commitment — each new string in the product needs a
  * translation in all of them, forever, and a half-translated interface
  * reads worse than an English one.

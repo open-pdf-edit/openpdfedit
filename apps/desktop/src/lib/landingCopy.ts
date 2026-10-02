@@ -1,5 +1,5 @@
 /**
- * The web build's page copy, shown in the empty state (APP-96).
+ * The web build's page copy, shown in the empty state.
  *
  * apps/webapp/scripts/build.sh writes an <h1> and ~400 words into the
  * served index.html itself — `#landing-copy` — because a crawler that runs

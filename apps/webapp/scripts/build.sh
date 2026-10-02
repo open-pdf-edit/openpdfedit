@@ -134,7 +134,7 @@ ROBOTS
 # the site's sitemap (the marketing repo's) already lists it; a second
 # file under /app/ listed the same URL with a different lastmod, and two
 # answers to "when did this change?" is how a search engine learns to
-# ignore the field for the whole site (APP-96). nginx answers 404 for
+# ignore the field for the whole site. nginx answers 404 for
 # /app/sitemap.xml explicitly, since the SPA fallback would otherwise
 # serve the app's HTML there with a 200.
 # The install icons. Separate from static/favicon.png, which is 256px and
@@ -182,12 +182,12 @@ const file = process.argv[2];
 const html = readFileSync(file, "utf8");
 if (html.includes("service-worker.js")) process.exit(0);
 // What a search engine or a link preview is told, before any script runs
-// (APP-96). The title leads with what people search for and ends with the
+// The title leads with what people search for and ends with the
 // name; og/twitter tags make a shared link a card instead of a bare URL.
 const TITLE = "Free Online PDF Editor & Viewer — No Upload | OpenPdfEdit";
 // Two descriptions, because the limits differ. A results page cuts the
 // meta one around 158 characters, and the old 212-character version lost
-// exactly the part that earns the click — "Free, no account" (APP-96,
+// exactly the part that earns the click — "Free, no account" (noted on a
 // second review). A social card has no such limit, so og:description
 // keeps the longer sentence.
 const DESCRIPTION = "Edit PDFs in your browser — annotate, edit text, fill forms, redact and sign. Nothing is uploaded; every edit saves on your own machine. Free, no account.";
@@ -313,7 +313,7 @@ writeFileSync(file, html
   .replace("</body>", landing + "</body>"));
 NODE
 
-# APP-96's acceptance, as part of the build rather than a checklist: each
+# the acceptance, as part of the build rather than a checklist: each
 # of these was a live defect, and each is cheap to break again without
 # noticing — a new <title> in app.html, a copy edit that runs long.
 log "Checking what a crawler sees in index.html"
@@ -344,7 +344,7 @@ const checks = [
   // in the app is scoped under `.landing-slot`, which does not exist
   // until the app has rendered. Without a rule in the head that matches
   // it on its own, the first thing anyone opening the editor sees is
-  // four hundred words of unstyled text (APP-187). This is cheap to
+  // four hundred words of unstyled text. This is cheap to
   // reintroduce — a build-config change, a component refactor — and it
   // throws no error when it breaks, it just looks broken.
   [/<style>[\s\S]*#landing-copy[\s\S]*<\/style>/.test(html.slice(0, html.indexOf("</head>"))),

@@ -1,7 +1,7 @@
 import { expect, test } from "./fixtures";
 
-// APP-36 / APP-42 — the product ships in eight languages, and the picker
-// is the control jerry's screenshots were asking for.
+// The product ships in eight languages, and the picker
+// is the control that was asked for.
 //
 // Asserted on what a reader sees, not on the catalogue: the catalogues
 // are already checked statically by i18n.spec.ts, and a translation that

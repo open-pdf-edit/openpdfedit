@@ -25,7 +25,7 @@ export const ORIGIN = process.env.WEBAPP_ORIGIN ?? `http://127.0.0.1:${WEBAPP_PO
  *
  * Components that exist only in the desktop build (the updater, above
  * all) render nowhere else, so until this server existed they had no
- * browser coverage at all. APP-29's popup that could not be closed is
+ * browser coverage at all. the popup that could not be closed is
  * what that gap shipped. With no Tauri runtime underneath, their plugin
  * calls fail — which is the same state an update check reaches on a build
  * whose release has no update manifest, so it is a real path, not a stub.

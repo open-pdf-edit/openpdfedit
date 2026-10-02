@@ -195,7 +195,7 @@ final class BridgeTests: XCTestCase {
         XCTAssertEqual(file["size"] as? Int, 15)
     }
 
-    /// The write direction, which did not exist until APP-168's sibling:
+    /// The write direction, which did not exist until the sibling:
     /// Save and Export Markdown both produced an `<a download>` at a
     /// blob: URL, which `AppWebView.policy(for:)` cancels, so every
     /// export did nothing and said nothing. Staging is tested rather than

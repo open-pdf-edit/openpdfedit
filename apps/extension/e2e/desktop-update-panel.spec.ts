@@ -1,4 +1,4 @@
-// APP-29, reopened by jerry: "点击更新后弹窗不能关闭" — after clicking
+// Reopened: the popup would not close after clicking
 // update, the popup could not be closed.
 //
 // The update popup's only exit was clicking its own icon a second time.

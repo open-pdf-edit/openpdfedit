@@ -3065,7 +3065,7 @@
         <InstallPrompt />
 
         <!-- The web build's page copy, moved here from the HTML a crawler
-             reads (APP-96, $lib/landingCopy). Empty in the desktop app
+             reads ($lib/landingCopy). Empty in the desktop app
              and the extension, which never carry it. -->
         <div class="landing-slot" use:landingCopy={getLocale()}></div>
       </div>

@@ -5,7 +5,7 @@
 // 2026 and its tests went with it; what stays here is about the app's
 // build.
 //
-// APP-96 is most of it. The served HTML used to be an empty <div> under a
+// That is most of it. The served HTML used to be an empty <div> under a
 // <title> that was only the brand — nothing for a crawler that runs no
 // JavaScript to read, and a bare URL wherever the link was shared — and
 // the build emitted a second sitemap that listed /app/ with a different

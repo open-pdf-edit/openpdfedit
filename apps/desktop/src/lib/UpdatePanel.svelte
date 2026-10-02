@@ -1,10 +1,10 @@
 <script lang="ts">
   // In-app updates, for the desktop build only.
   //
-  // APP-29 was filed as "app内部没有更新按钮" — no update button. There was
+  // It was filed as "app内部没有更新按钮" — no update button. There was
   // no button because there was no updater: the app had no way to learn a
   // newer version existed, so the only route was to find the site and
-  // download an installer again, which is also what APP-28 is about.
+  // download an installer again.
   //
   // Both plugins are imported dynamically. They exist only in the Tauri
   // build; a static import would pull `@tauri-apps/plugin-*` into the web
@@ -127,7 +127,7 @@
 
   // Close on an outside click or Escape, like the other topbar menus.
   //
-  // APP-29, reopened: "点击更新后弹窗不能关闭" — the popup would not close.
+  // Reopened: the popup would not close.
   // Its only exit was clicking the same icon a second time, which nobody
   // guesses, and on a build whose update check fails that left an error
   // and a "Try again" button stuck over the document. Closing only hides

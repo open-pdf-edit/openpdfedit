@@ -1,7 +1,7 @@
 <script lang="ts">
   // The language control, in the topbar beside Account.
   //
-  // APP-42 asked for this with two screenshots of competitors' pickers,
+  // The request was for this with two screenshots of competitors' pickers,
   // and the thing worth copying from them is that every language is
   // listed in its own script — 日本語, not "Japanese". A picker that
   // names languages in English is unusable by exactly the person who

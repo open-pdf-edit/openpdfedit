@@ -1,7 +1,7 @@
 import { expect, test } from "./fixtures";
 import { TEXT_PDF_BASE64 } from "./pdf-fixtures";
 
-// APP-30 — "iphone上不能打开pdf文档，safara和chrome都不行".
+// Reported as: a PDF cannot be opened on iPhone, in either Safari or Chrome.
 //
 // Every browser on iOS is WebKit, which is why Safari and Chrome failed
 // together: one engine, one bug. There is no `showOpenFilePicker` there,

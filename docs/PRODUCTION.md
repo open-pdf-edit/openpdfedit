@@ -18,7 +18,7 @@ copy, but it can share a hostname, so it lives at a path and the old subdomain
 updated, not left to the redirect** — a redirect crosses an origin, and a
 browser extension's host permission and content-script `matches` name the
 origin the tab *lands* on. That is precisely how the OpenCapture PDF handoff
-broke, silently, the same day (opencapture APP-37's sibling fix); it now points
+broke, silently, the same day (the sibling fix in opencapture); it now points
 at `openpdfedit.com/app/` and has a scheduled check that fails if these URLs
 ever start redirecting again.
 
@@ -226,7 +226,7 @@ systemctl list-timers | grep certbot
 
 ### 2b. `/app/sitemap.xml` answers 404 — a rule on the server, not in the build
 
-Added on 19 September 2026 for APP-96, on the live server's `openpdfedit`
+Added on 19 September 2026 on the live server's `openpdfedit`
 block, next to `location = /app`:
 
 ```nginx
