@@ -318,6 +318,85 @@ key and a signing identity in CI, and neither exists yet. It is worth
 doing once releases are frequent enough for the Organizer to be
 annoying — not before the first one has ever been made.
 
+## Google Play — the Android app
+
+Everything after the one-time console setup is `apps/android/scripts/play.py`
+(`status`, `upload`, `products`). What the console still has to do, because
+the API cannot, is below — and **App content is the gate**: the release
+button stays disabled until every declaration on that page is answered, and
+none of them are answerable from an API.
+
+### App access
+
+The app works with no account at all. Two Supporter tools — OCR and
+watermark — need credits, and credits need an account, so the answer is
+**"All or some functionality is restricted"** and a reviewer has to be
+given a way in.
+
+There is a shared review identity for exactly this, the same one Apple
+gets; it is not in this repository, and whoever is doing the submission
+has it. The steps to put in the instructions box:
+
+1. Open the app, tap **Account**, then **Sign in**.
+2. **Continue with Nostr** → **I only have a private key**.
+3. Paste the key and tap **Sign in**.
+
+Verified on the mobile layout of `/app/login`, which is the page the
+Android shell opens in a Custom Tab. No password, no second factor, and
+the account carries enough credits that both Supporter tools are already
+unlocked — a reviewer never has to buy anything to see them.
+
+### Data safety
+
+The honest answers are short, because the app collects nothing:
+
+| Question | Answer |
+|---|---|
+| Does your app collect or share any of the required user data types? | **No** |
+| Is all of the user data encrypted in transit? | Yes (the account service is https only) |
+| Do you provide a way for users to request that their data be deleted? | **Yes** — in the app, Account → Delete account |
+
+No document, filename, or the fact that one was opened, ever leaves the
+device: the engine is WebAssembly inside the app. The account service
+holds an identifier and a credit balance, which is account data a user
+creates deliberately and can delete from inside the app. There is no
+analytics, no telemetry and no crash reporting in the Android build —
+check `apps/android/app/src/main/AndroidManifest.xml`, which declares
+`INTERNET` and nothing else (the merged manifest adds
+`ACCESS_NETWORK_STATE` from the billing library).
+
+### The rest of App content
+
+| Declaration | Answer |
+|---|---|
+| Ads | **No ads** |
+| Content rating | Utility / Productivity; no violence, no user-generated content shared with others, no data sharing. Rates **Everyone / PEGI 3**. |
+| Target audience | 18+, and **not** appealing to children — a PDF editor is not |
+| News app | No |
+| COVID-19 contact tracing | No |
+| Government app | No |
+| Financial features | No |
+| Health | No |
+
+### In-app products, and the trap in testing them
+
+`credits_1000` and `credits_5000`, both consumable, created in the
+console. The legacy `inappproducts` endpoint now answers *"Please migrate
+to the new publishing API"* and the replacement is not reachable for this
+project, so `play.py products` cannot read them back: the console is the
+only source of truth for whether they exist, and it has to be looked at.
+
+**Add every tester to Settings → Licence testing.** An internal tester
+who is not a licence tester is charged real money for a real purchase;
+a licence tester's purchase is free and otherwise identical.
+
+Which creates the trap: because a licence tester's purchase is
+indistinguishable from a paid one, a server set to `production` refuses
+it. `[google_iap] environment` must therefore be `sandbox` while testing
+and **must become `production` before the app is public** — the same
+switch, in the opposite position, is why a TestFlight purchase could not
+be credited on iOS. See `deploy/play-billing-setup.md`.
+
 ## Version numbers
 
 One command sets all five places the version is written:
